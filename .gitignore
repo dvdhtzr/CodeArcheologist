@@ -1,0 +1,29 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+TestResults/
+# Node
+**/node_modules/
+**/dist/
+**/.vite/
+*.tsbuildinfo
+# Editor & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+# Local secrets, private workspace data
+**/appsettings.Local.json
+**/appsettings.local.json
+**/.env
+**/.env.*
+!**/.env.example
+*.sqlite
+*.sqlite3
+*.db
+workspaces/
+vaults/
+logs/
