@@ -12,6 +12,7 @@ builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(5127));
 
 builder.Services.AddSingleton<LocalAccessState>();
 builder.Services.AddSingleton<WorkspaceStore>();
+builder.Services.AddSingleton<SnapshotCaptureService>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -199,6 +200,82 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories",
         _ => Results.Conflict(
             new { error = "This Idempotency-Key was already used for another repository." })
     };
+}).RequireAuthorization();
+
+// Explicit read-only acquisition of a registered local folder. Files are
+// staged under app data, never executed or modified at their original path.
+// This is not a Git commit resolver or a semantic analyzer.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots",
+    (Guid workspaceId, Guid repositoryId, WorkspaceStore store) =>
+{
+    if (store.GetRepository(workspaceId, repositoryId) is null)
+        return Results.NotFound();
+
+    return Results.Ok(store.ListSnapshots(workspaceId, repositoryId));
+}).RequireAuthorization();
+
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, WorkspaceStore store) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    return snapshot is null ? Results.NotFound() : Results.Ok(snapshot);
+}).RequireAuthorization();
+
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/manifest",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     WorkspaceStore store, SnapshotCaptureService service) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+
+    try
+    {
+        return Results.Ok(service.ReadManifest(snapshot));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Snapshot manifest cannot be read." });
+    }
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots",
+    async (Guid workspaceId, Guid repositoryId, HttpContext context,
+        WorkspaceStore store, SnapshotCaptureService service, CancellationToken cancellationToken) =>
+{
+    if (store.GetRepository(workspaceId, repositoryId) is null)
+        return Results.NotFound();
+
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var idempotencyKey))
+    {
+        return Results.BadRequest(new { error = "A UUID Idempotency-Key header is required." });
+    }
+
+    try
+    {
+        var outcome = await service.CaptureAsync(
+            workspaceId, repositoryId, idempotencyKey, cancellationToken);
+        var uri = $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{outcome.Snapshot.Id:D}";
+        return outcome.Created
+            ? Results.Created(uri, outcome.Snapshot)
+            : Results.Ok(outcome.Snapshot);
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Repository changed or could not be read safely." });
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Json(new { error = "Access to the source was denied." }, statusCode: 422);
+    }
 }).RequireAuthorization();
 
 app.Run();
