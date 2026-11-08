@@ -4,16 +4,18 @@
 
 ## Initial slice: pending independent verification
 
-- [ ] Backend compiles with .NET 10 SDK.
+- [x] Backend compiles with .NET 10 SDK (owner-reported Windows local verification).
 - [ ] GET /api/v1/health serves non-sensitive JSON over loopback only.
-- [ ] React/TypeScript client typechecks and bundles successfully.
+- [x] React/TypeScript client typechecks and bundles successfully (owner-reported Windows local verification before switching to npm ci).
 - [ ] UI connectivity state reflects a real backend request, never fabricated agent progress.
 - [ ] Windows PowerShell and POSIX scripts launch and verify trusted application source correctly.
 - [ ] No sensitive or mutating API, code-import process execution, or plugin loader is exposed.
-- [ ] Frontend dependency lockfile generated, audited and committed for reproducible builds.
+- [x] Frontend dependency lockfile structurally reviewed and committed (valid JSON, matching direct manifest pins and package integrity fields). 
+- [ ] Clean `npm ci` install and subsequent typecheck/build verified after script changes.
+- [ ] Dependency vulnerability and licensing review completed before preview releases.
 - [ ] No GitHub Actions CI required.
 
-Checks remain unchecked until they have actually been run and independently confirmed.
+The checked build results above reflect owner-reported Windows verification; later changes to the install scripts still require a new run. Other checks remain unchecked until observed.
 
 ## Next foundation gates
 
