@@ -295,6 +295,20 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(endpoint + '/' + firstId + '/manifest', session)).status, 200);
     });
 
+    await t.test('captured content tampering invalidates the manifest view', async () => {
+      const capturedFile = join(data, 'snapshots', firstId,
+        'files', 'src', 'Example.cs');
+      const bytes = await readFile(capturedFile);
+      await writeFile(capturedFile, 'SAVED_CONTENT_HAS_BEEN_TAMPERED');
+      try {
+        const rejected = await get(endpoint + '/' + firstId + '/manifest', session);
+        assert.equal(rejected.status, 409);
+      } finally {
+        await writeFile(capturedFile, bytes);
+      }
+      assert.equal((await get(endpoint + '/' + firstId + '/manifest', session)).status, 200);
+    });
+
     await t.test('source registration did not mutate or execute the source tree', async () => {
       const after = await readdir(source);
       assert.deepEqual(after, originalDirectoryEntries);
