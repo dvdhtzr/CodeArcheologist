@@ -74,3 +74,46 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .repository-list code { color: #e6efff; font-size: 0.79rem; }
 .repository-kind { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: #a6c2e6; }
 .repository-panel .registration-notice { color: #7de5be; }
+
+.repository-list .repository-expand {
+  justify-self: start;
+  background: transparent;
+  border: 1px solid #6489b9;
+  color: #c9dcff;
+  border-radius: 7px;
+  padding: 7px 11px;
+  font-size: 0.82rem;
+}
+.snapshot-panel {
+  margin-top: 4px;
+  padding: 15px;
+  border: 1px solid #375377;
+  border-radius: 9px;
+  background: #152943;
+  min-width: 0;
+}
+.snapshot-panel h4 { margin: 0 0 8px; font-size: 1.05rem; }
+.snapshot-panel p { font-size: 0.86rem; line-height: 1.5; }
+.snapshot-panel > button {
+  background: #5486d2;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  font-weight: 650;
+  padding: 11px 14px;
+}
+.snapshot-panel :is(button, summary):focus-visible {
+  outline: 2px solid #b0cbff;
+  outline-offset: 3px;
+}
+.snapshot-list { list-style: none; padding: 0; display: grid; gap: 10px; margin-top: 16px; }
+.snapshot-list li { padding: 10px; display: grid; gap: 6px; border: 1px solid #436184; border-radius: 7px; background: #11223a; }
+.snapshot-list li button { justify-self: start; border: 1px solid #577cad; color: #cfe3ff; background: #1f3552; border-radius: 6px; padding: 7px 10px; }
+.snapshot-list span { font-size: 0.78rem; color: #b8cee8; }
+.snapshot-panel code { font-size: 0.75rem; overflow-wrap: anywhere; color: #e4efff; }
+.snapshot-manifest { margin-top: 20px; border-top: 1px solid #58799f; padding-top: 16px; }
+.snapshot-manifest ul { list-style: none; padding: 0; display: grid; gap: 6px; }
+.snapshot-manifest li { display: grid; gap: 3px; background: #0e1f36; padding: 6px 8px; border-radius: 5px; }
+.snapshot-manifest li span { color: #a8bbd9; font-size: 0.75rem; }
+.snapshot-manifest details { margin-top: 16px; }
+.snapshot-manifest summary { cursor: pointer; font-size: 0.85rem; }
