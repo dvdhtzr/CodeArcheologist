@@ -20,7 +20,7 @@ public sealed record SnapshotManifest(
     IReadOnlyList<SnapshotFile> Files,
     IReadOnlyList<SnapshotExclusion> Exclusions);
 
-public sealed class SnapshotCaptureException(string message, int statusCode = 409)
+public class SnapshotCaptureException(string message, int statusCode = 409)
     : Exception(message)
 {
     public int StatusCode { get; } = statusCode;
@@ -152,10 +152,6 @@ internal static class SnapshotPolicy
                 if (info.Length > MaxFileBytes)
                     throw Limit($"A source file exceeds the {MaxFileBytes} byte per-file limit.");
 
-                if (++totalBytes > MaxTotalBytes)
-                    throw Limit("Included source bytes exceed the snapshot size limit.");
-                // Only the actual file lengths, not entry count, contribute to this budget.
-                totalBytes--;
                 totalBytes = checked(totalBytes + info.Length);
                 if (totalBytes > MaxTotalBytes)
                     throw Limit("Included source bytes exceed the snapshot size limit.");
