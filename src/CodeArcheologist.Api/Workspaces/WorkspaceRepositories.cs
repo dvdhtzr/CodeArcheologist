@@ -68,6 +68,21 @@ public sealed partial class WorkspaceStore
         return new RepositoryPage(repositories, total, total > repositories.Count);
     }
 
+    public RepositorySourceRecord? GetRepository(Guid workspaceId, Guid repositoryId)
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, workspace_id, local_path, source_kind, added_at_unix_ms, version
+            FROM repository_sources
+            WHERE workspace_id = $workspace AND id = $repository;
+            """;
+        command.Parameters.AddWithValue("$workspace", workspaceId.ToString("D"));
+        command.Parameters.AddWithValue("$repository", repositoryId.ToString("D"));
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadRepository(reader) : null;
+    }
+
     public RepositoryRegistrationResult RegisterRepository(
         Guid workspaceId, RepositoryLocation location, Guid idempotencyKey)
     {
