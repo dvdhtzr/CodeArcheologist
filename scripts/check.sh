@@ -5,4 +5,5 @@ dotnet build "$ROOT/src/CodeArcheologist.Api/CodeArcheologist.Api.csproj" --conf
 npm ci --prefix "$ROOT/src/CodeArcheologist.Client" --no-audit --no-fund
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run typecheck
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run build
-echo 'Builds/typecheck completed. Runtime, security and packaging checks remain pending.'
+node --test "$ROOT/tests/security/local-access.test.mjs"
+echo 'Local trusted-source build, typecheck and security checks passed. Cross-platform packaging remains pending.'
