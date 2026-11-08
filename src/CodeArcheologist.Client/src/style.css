@@ -23,3 +23,15 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .notice { margin-top: 28px; padding-left: 18px; border-left: 3px solid #527cba; color: #b9c7dd; }
 .notice strong { color: #e6eeff; }
 .notice p { line-height: 1.7; }
+
+.auth-panel { margin-top: 24px; padding: 28px; background: #111d31; border: 1px solid #304563; border-radius: 17px; }
+.auth-panel h2 { font-size: 1.5rem; margin: 14px 0; }
+.auth-panel p { line-height: 1.65; color: #b9c7dd; }
+.auth-panel label { display: block; font-size: 0.89rem; margin: 18px 0 8px; }
+.pairing-controls { display: flex; flex-wrap: wrap; gap: 12px; }
+.pairing-controls input { min-width: min(320px, 100%); flex: 1; }
+.auth-panel input { padding: 12px 14px; background: #0b1729; border: 1px solid #536b8e; border-radius: 8px; color: #eef3ff; font: inherit; }
+.auth-panel button { background: #5486d2; border: none; border-radius: 8px; color: #fff; font: inherit; font-weight: 650; padding: 12px 20px; cursor: pointer; }
+.auth-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
+.auth-panel :is(input, button):focus-visible { outline: 2px solid #b0cbff; outline-offset: 3px; }
+.auth-panel .error { color: #ffacb7; }
