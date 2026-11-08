@@ -1,6 +1,6 @@
 # Phase 1 Acceptance Checklist
 
-**Current first PR scope:** developer-only .NET 10 and React shell plus architecture/governance baselines. This is *not* a working investigative product or a public preview.
+**Current development scope:** PR #1 established the developer shell and architecture baseline. PR #2 adds localhost browser pairing and negative security tests. Neither is a complete investigative product or a public preview.
 
 ## Initial slice: pending independent verification
 
@@ -16,6 +16,20 @@
 - [ ] No GitHub Actions CI required.
 
 The checked build results above reflect owner-reported Windows verification; later changes to the install scripts still require a new run. Other checks remain unchecked until observed.
+
+## PR #2 local-access security checks (pending owner-run verification)
+
+- [ ] Local test builds and runs from scripts/check.ps1 on Windows without errors or warnings.
+- [ ] Health works over loopback, while a forged Host header is rejected.
+- [ ] Unauthenticated session reads receive HTTP 401.
+- [ ] Pairing rejects incorrect codes, disallowed Origins and missing custom request headers.
+- [ ] Valid pairing sets a session cookie with HttpOnly and SameSite Strict.
+- [ ] Unauthenticated or missing/invalid-CSRF mutations are rejected.
+- [ ] Log out revokes the previous session even if the old cookie is replayed.
+- [ ] Developer browser flow displays pairing code entry and sign-out; launch scripts show the ephemeral code.
+- [ ] No sensitive workspace endpoints are reachable before the next security review.
+
+Note: tests are deterministic localhost HTTP probes, not a formal security penetration test. Local operating-system account compromise and remote deployment are outside the currently guaranteed threat boundary.
 
 ## Next foundation gates
 
