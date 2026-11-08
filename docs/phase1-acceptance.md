@@ -59,6 +59,23 @@ Backups, WAL/native packaging and schema migrations beyond v1 remain future vali
 Full snapshot ingestion, revision pinning, sandboxing and repository inventory
 remain mandatory before source-based conclusions are permitted.
 
+## PR #5 bounded read-only snapshots (pending owner-run verification)
+
+- [ ] .NET API and TypeScript/Vite compile on Windows; all four Node HTTP suites GREEN.
+- [ ] Existing saved workspaces and repository registrations survive schema-v2-to-v3 migration.
+- [ ] Only paired/CSRF-authorized explicit requests may capture source bytes.
+- [ ] Scanner never runs imported project/CLI/agent code and never modifies original source files.
+- [ ] Bounded file/size/depth/entry limits fail closed, rather than reporting partial success.
+- [ ] Known credential, generated and VCS paths are explicitly excluded in the manifest.
+- [ ] Symlink paths are not traversed; source inventory mismatches do not publish a snapshot.
+- [ ] Each included path has a hash and a captured immutable-by-app copy with stable snapshot identity.
+- [ ] Unchanged source reuses fingerprint/ID; changed source produces a new snapshot while retaining old bytes.
+- [ ] Idempotency/replay, auth scoping, saved-manifest/byte tamper detection and restart durability pass.
+- [ ] Browser can capture, inspect, restart, and reopen a saved snapshot without running source code.
+
+This is a bounded local source capture, not a race-free sandbox, Git commit
+resolver, secret detector, complete analyzer, backup system or public preview.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
