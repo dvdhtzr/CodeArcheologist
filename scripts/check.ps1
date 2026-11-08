@@ -24,4 +24,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Local security integration tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'SQLite workspace integration tests failed.' }
 & node --test (Join-Path $root 'tests/repositories/registration.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Local repository registration integration tests failed.' }
-Write-Host 'GREEN: Local build, frontend, security, workspace and repository-registration checks passed. Cross-platform packaging remains pending.'
+& node --test (Join-Path $root 'tests/snapshots/capture.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Read-only snapshot integration tests failed.' }
+Write-Host 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
