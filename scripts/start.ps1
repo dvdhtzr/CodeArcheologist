@@ -6,7 +6,7 @@ $client = Join-Path $root 'src/CodeArcheologist.Client'
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw '.NET 10 SDK is required.' }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Node.js and npm are required.' }
 if (-not (Test-Path (Join-Path $client 'node_modules'))) {
-  & npm install --prefix $client --no-audit --no-fund
+  & npm ci --prefix $client --no-audit --no-fund
   if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
 }
 # Quote project paths to support repository locations containing spaces.
