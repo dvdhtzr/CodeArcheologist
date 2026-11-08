@@ -6,7 +6,7 @@ CLIENT="$ROOT/src/CodeArcheologist.Client"
 command -v dotnet >/dev/null || { echo '.NET 10 SDK required for development' >&2; exit 1; }
 command -v npm >/dev/null || { echo 'Node.js and npm required for development' >&2; exit 1; }
 if [[ ! -d "$CLIENT/node_modules" ]]; then
-  npm install --prefix "$CLIENT" --no-audit --no-fund
+  npm ci --prefix "$CLIENT" --no-audit --no-fund
 fi
 dotnet run --project "$API" --no-launch-profile &
 api_pid=$!
