@@ -23,7 +23,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Events.OnValidatePrincipal = context =>
         {
             var state = context.HttpContext.RequestServices.GetRequiredService<LocalAccessState>();
-            if (context.Principal?.FindFirst("local_process")?.Value != state.InstanceId)
+            if (context.Principal?.FindFirst("local_process")?.Value != state.InstanceId ||
+                !state.IsSessionActive(context.Principal?.FindFirst("local_session")?.Value))
             {
                 context.RejectPrincipal();
             }
@@ -67,10 +68,12 @@ app.MapPost("/api/v1/auth/login", async (LoginRequest request, HttpContext conte
     }
 
     var csrf = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+    var sessionId = access.CreateSession();
     var identity = new ClaimsIdentity(
     [
         new Claim(ClaimTypes.Name, "local-owner"),
         new Claim("local_process", access.InstanceId),
+        new Claim("local_session", sessionId),
         new Claim(LocalRequestGuard.CsrfClaimType, csrf)
     ], CookieAuthenticationDefaults.AuthenticationScheme);
 
@@ -89,8 +92,10 @@ app.MapGet("/api/v1/auth/session", (HttpContext context) =>
     }))
     .RequireAuthorization();
 
-app.MapPost("/api/v1/auth/logout", async (HttpContext context) =>
+app.MapPost("/api/v1/auth/logout", async (HttpContext context,
+    LocalAccessState access) =>
 {
+    access.RevokeSession(context.User.FindFirst("local_session")?.Value);
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.NoContent();
 }).RequireAuthorization();
