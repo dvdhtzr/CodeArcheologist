@@ -142,10 +142,10 @@ test('local browser access rejects forged and unauthorized requests', async (t) 
 
     await t.test('valid authenticated logout removes the session', async () => {
       assert.equal((await authPost('/api/v1/auth/logout', { cookie, csrf })).status, 204);
-      // Sending the old cookie explicitly demonstrates that expiry or sign-out
-      // cannot be verified by absence of a new browser cookie alone. Current
-      // process-scoped cookie revocation is intentionally not yet global.
-      const ended = await fetch(base + '/api/v1/auth/session');
+      // The server must reject even a replayed, previously authenticated cookie.
+      const ended = await fetch(base + '/api/v1/auth/session', {
+        headers: { Cookie: cookie },
+      });
       assert.equal(ended.status, 401);
     });
   } finally {
