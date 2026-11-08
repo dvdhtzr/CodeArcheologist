@@ -18,3 +18,8 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 13. Registering a local source is metadata-only. Never read project files, invoke Git, restore packages, execute imported build targets or modify original source trees in this flow.
 14. Revalidate every directory entry and symlink when a future immutable snapshot is acquired; a successful registration check is not a trusted snapshot or proof of revision identity.
+
+15. Snapshot creation requires explicit paired browser consent per request, never implicit registration/background watching; captured bytes are untrusted and must never cause project/tool/script execution.
+16. Snapshot content must be recorded by immutable-by-app identity with exact relative paths, file hashes, exclusion list and capture policy version. Never equate a filesystem fingerprint with a verified Git commit.
+17. No silent partial capture: limits, unauthorized paths, content changes and missing source must fail closed, leaving no trusted record. Integration tests must verify source non-modification and saved-artifact integrity.
+18. Do not claim that revalidating paths or checking symlinks before file opens is an OS-enforced race-free sandbox; any elevated threat model requires restricted-handle acquisition and adversarial filesystem race tests.
