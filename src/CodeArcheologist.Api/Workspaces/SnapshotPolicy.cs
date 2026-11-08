@@ -58,12 +58,12 @@ internal static class SnapshotPolicy
         ".git", ".svn", ".hg", "node_modules", "bin", "obj", "dist", "build",
         "target", "vendor", "coverage", ".vs", ".idea", ".vscode", ".next",
         "__pycache__", ".venv", "venv", ".tox", ".cache", ".gradle",
-        ".terraform", ".aws", ".ssh", ".azure", ".nuget", ".config"
+        ".terraform", ".aws", ".ssh", ".azure", ".nuget", ".config", "secrets", ".env"
     };
 
     private static readonly HashSet<string> IgnoredFilenames = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".env", ".npmrc", ".pypirc", ".netrc", "credentials.json", "secrets.json",
+        ".env", ".git", ".svn", ".hg", ".npmrc", ".pypirc", ".netrc", "credentials.json", "secrets.json",
         "appsettings.local.json", "id_rsa", "id_ed25519", "known_hosts",
         "thumbs.db", ".ds_store"
     };
