@@ -8,12 +8,12 @@ The approved architectural baseline consists of [v0.1](docs/architecture/Code-Ar
 
 ## What this first PR adds
 
-- ASP.NET Core .NET 10 API bound only to loopback and exposing a public health endpoint.
+- ASP.NET Core .NET 10 API bound only to loopback, exposing a public health endpoint and a protected local browser session.
 - React + TypeScript development client that reports actual API health.
 - Local Windows PowerShell and Unix shell startup/build scripts.
 - Safety, contribution, acceptance and architecture documentation.
 
-**Not yet implemented:** repository import, local auth, SQLite, agents/MAF, quality engine, plugins, source sandbox, graph, vector retrieval, vault reconciliation, production packaging, or complete Mission Control. No user-repository content should be loaded into the current shell.
+**Not yet implemented:** repository import, production-grade hosted authentication, SQLite, agents/MAF, quality engine, plugins, source sandbox, graph, vector retrieval, vault reconciliation, production packaging, or complete Mission Control. No user-repository content should be loaded into the current shell.
 
 ## Development
 
@@ -21,9 +21,11 @@ Requires a .NET 10 SDK and Node.js 22.12+ with npm **for working on the source**
 
 Windows: run scripts/check.ps1 then scripts/start.ps1.
 macOS/Linux: run bash scripts/check.sh then bash scripts/start.sh.
+
+**Local pairing:** the start script prints a new 32-character pairing code. Enter it in the browser to unlock the current process-scoped local session. The API uses an HttpOnly SameSite=Strict cookie, a server-side revocation list and a CSRF header for state-changing requests. Sessions expire after 30 minutes and are invalid after restarting the API. The code is shown only in local terminal output and must not be shared. The pairing code can be retried until the API stops, with temporary lockouts after repeated failures. Pairing is for localhost-only development, **not remote or multi-user access**.
 Open http://127.0.0.1:5174/ ; the API is on http://127.0.0.1:5127/ and supports GET /api/v1/health.
 
-The committed `package-lock.json` pins the frontend dependency graph; local verification uses `npm ci` to reproduce it. This lockfile and installation behavior still require clean local re-verification. GitHub CI is intentionally absent. All local verification outcomes must be documented.
+The committed `package-lock.json` pins the frontend dependency graph; local verification uses `npm ci` to reproduce it. This lockfile and installation behavior still require clean local re-verification. GitHub CI is intentionally absent. The check scripts also run local security integration tests that launch a trusted API executable. Stop the development server before running the check script because both use API port 5127. All verification outcomes must be documented.
 
 See [AGENTS.md](AGENTS.md), [SECURITY.md](SECURITY.md) and [Phase 1 acceptance](docs/phase1-acceptance.md).
 

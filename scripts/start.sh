@@ -8,7 +8,9 @@ command -v npm >/dev/null || { echo 'Node.js and npm required for development' >
 if [[ ! -d "$CLIENT/node_modules" ]]; then
   npm ci --prefix "$CLIENT" --no-audit --no-fund
 fi
-dotnet run --project "$API" --no-launch-profile &
+code="$(node -e "process.stdout.write(require('node:crypto').randomBytes(16).toString('hex'))")"
+echo "Local browser pairing code: $code"
+CODE_ARCHEOLOGIST_BOOTSTRAP_CODE="$code" CODE_ARCHEOLOGIST_DEV_UI=1 dotnet run --project "$API" --no-launch-profile &
 api_pid=$!
 cleanup() { kill "$api_pid" 2>/dev/null || true; wait "$api_pid" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
