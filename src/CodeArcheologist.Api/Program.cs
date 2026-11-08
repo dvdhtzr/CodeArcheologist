@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using CodeArcheologist.Api.Security;
+using CodeArcheologist.Api.Workspaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(5127));
 
 builder.Services.AddSingleton<LocalAccessState>();
+builder.Services.AddSingleton<WorkspaceStore>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -47,6 +49,10 @@ var app = builder.Build();
 
 // The bootstrap secret is generated in memory and announced only on the local
 // process console; the start scripts provide an easier interactive path.
+// Initialize the versioned metadata database before accepting requests.
+// A migration failure stops startup rather than silently losing user data.
+app.Services.GetRequiredService<WorkspaceStore>().Initialize();
+
 var localAccess = app.Services.GetRequiredService<LocalAccessState>();
 app.Lifetime.ApplicationStarted.Register(() =>
     Console.WriteLine($"Code Archeologist local pairing code: {localAccess.BootstrapCode}"));
@@ -98,6 +104,45 @@ app.MapPost("/api/v1/auth/logout", async (HttpContext context,
     access.RevokeSession(context.User.FindFirst("local_session")?.Value);
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.NoContent();
+}).RequireAuthorization();
+
+// Workspace metadata only. No file paths, repository content or model output
+// are accepted by these endpoints. All routes require a paired browser session.
+app.MapGet("/api/v1/workspaces", (WorkspaceStore store) =>
+    Results.Ok(store.List(limit: 100)))
+    .RequireAuthorization();
+
+app.MapGet("/api/v1/workspaces/{id:guid}", (Guid id, WorkspaceStore store) =>
+{
+    var workspace = store.Get(id);
+    return workspace is null ? Results.NotFound() : Results.Ok(workspace);
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/workspaces", (CreateWorkspaceRequest request,
+    HttpContext context, WorkspaceStore store) =>
+{
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 120 ||
+        name.Any(char.IsControl))
+    {
+        return Results.BadRequest(new { error = "Workspace name must contain 1 to 120 printable characters." });
+    }
+
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var idempotencyKey))
+    {
+        return Results.BadRequest(new { error = "A UUID Idempotency-Key header is required." });
+    }
+
+    var outcome = store.Create(name, idempotencyKey);
+    if (outcome.Conflict)
+    {
+        return Results.Conflict(new { error = "This Idempotency-Key was used for a different request." });
+    }
+
+    return outcome.Created
+        ? Results.Created($"/api/v1/workspaces/{outcome.Workspace.Id:D}", outcome.Workspace)
+        : Results.Ok(outcome.Workspace);
 }).RequireAuthorization();
 
 app.Run();
