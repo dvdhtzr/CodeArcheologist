@@ -12,6 +12,7 @@ public sealed class LocalAccessState
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(1);
     private readonly object _gate = new();
     private readonly byte[] _secret;
+    private readonly Dictionary<string, DateTimeOffset> _sessions = new(StringComparer.Ordinal);
     private int _failedAttempts;
     private DateTimeOffset _lockedUntil;
 
@@ -33,6 +34,54 @@ public sealed class LocalAccessState
 
     public string BootstrapCode { get; }
     public string InstanceId { get; }
+
+    public string CreateSession()
+    {
+        lock (_gate)
+        {
+            ExpireSessions();
+            if (_sessions.Count >= 128)
+            {
+                throw new InvalidOperationException("Too many active local sessions.");
+            }
+
+            var sessionId = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            _sessions.Add(sessionId, DateTimeOffset.UtcNow.AddMinutes(30));
+            return sessionId;
+        }
+    }
+
+    public bool IsSessionActive(string? sessionId)
+    {
+        if (sessionId is null)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            ExpireSessions();
+            return _sessions.ContainsKey(sessionId);
+        }
+    }
+
+    public void RevokeSession(string? sessionId)
+    {
+        if (sessionId is null) return;
+        lock (_gate)
+        {
+            _sessions.Remove(sessionId);
+        }
+    }
+
+    private void ExpireSessions()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var entry in _sessions.Where(entry => entry.Value <= now).ToArray())
+        {
+            _sessions.Remove(entry.Key);
+        }
+    }
 
     public bool TryPair(string? candidate)
     {
