@@ -22,4 +22,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Frontend production bundle build failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Local security integration tests failed.' }
 & node --test (Join-Path $root 'tests/workspaces/workspaces.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'SQLite workspace integration tests failed.' }
-Write-Host 'GREEN: Local build, frontend and security/workspace persistence tests passed. Cross-platform packaging remains pending.'
+& node --test (Join-Path $root 'tests/repositories/registration.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Local repository registration integration tests failed.' }
+Write-Host 'GREEN: Local build, frontend, security, workspace and repository-registration checks passed. Cross-platform packaging remains pending.'
