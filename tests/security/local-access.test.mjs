@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -62,12 +64,14 @@ function authPost(path, { cookie, csrf, origin = expectedOrigin, code, addHeader
 
 test('local browser access rejects forged and unauthorized requests', async (t) => {
   const output = [];
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'code-archeologist-security-'));
   const api = spawn('dotnet', ['exec', appDll], {
     cwd: root,
     env: {
       ...process.env,
       CODE_ARCHEOLOGIST_BOOTSTRAP_CODE: bootstrap,
       CODE_ARCHEOLOGIST_DEV_UI: '1',
+      CODE_ARCHEOLOGIST_DATA_DIR: dataDirectory,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -152,7 +156,8 @@ test('local browser access rejects forged and unauthorized requests', async (t) 
     api.kill();
     await Promise.race([
       new Promise((resolve) => api.once('exit', resolve)),
-      delay(2000),
+      delay(3000),
     ]);
+    await rm(dataDirectory, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 });
   }
 });
