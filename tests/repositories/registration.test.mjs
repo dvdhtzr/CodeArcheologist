@@ -188,6 +188,11 @@ test('local repository registration is scoped, safe and restart-durable', async 
         throw error;
       }
       assert.equal((await post(endpoint, session, { localPath: alias })).status, 400);
+
+      const parentAlias = join(testRoot, 'link-to-parent');
+      await symlink(sources, parentAlias, 'dir');
+      assert.equal((await post(endpoint, session,
+        { localPath: join(parentAlias, 'git-repo') })).status, 400);
     });
 
     const key = randomUUID();
