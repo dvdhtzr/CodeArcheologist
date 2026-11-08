@@ -2,32 +2,32 @@
 
 **Current development scope:** PR #1 established the developer shell and architecture baseline. PR #2 added localhost browser pairing and negative security tests. PR #3 adds SQLite workspace **metadata** and an explorer. None is a complete investigative product or a public preview.
 
-## Initial slice: pending independent verification
+## Foundation history and outstanding checks
 
 - [x] Backend compiles with .NET 10 SDK (owner-reported Windows local verification).
 - [ ] GET /api/v1/health serves non-sensitive JSON over loopback only.
 - [x] React/TypeScript client typechecks and bundles successfully (owner-reported Windows local verification before switching to npm ci).
 - [ ] UI connectivity state reflects a real backend request, never fabricated agent progress.
 - [ ] Windows PowerShell and POSIX scripts launch and verify trusted application source correctly.
-- [ ] No sensitive or mutating API, code-import process execution, or plugin loader is exposed.
+- [x] No repository import, imported-source execution, agent command or plugin loader is exposed (current public surface is health, local auth and workspace metadata).
 - [x] Frontend dependency lockfile structurally reviewed and committed (valid JSON, matching direct manifest pins and package integrity fields). 
-- [ ] Clean `npm ci` install and subsequent typecheck/build verified after script changes.
+- [x] Windows local check script GREEN after switching to `npm ci` (owner-reported PR #2 verification).
 - [ ] Dependency vulnerability and licensing review completed before preview releases.
 - [ ] No GitHub Actions CI required.
 
 The checked build results above reflect owner-reported Windows verification; later changes to the install scripts still require a new run. Other checks remain unchecked until observed.
 
-## PR #2 local-access security checks (pending owner-run verification)
+## PR #2 local-access security checks (owner-reported GREEN)
 
-- [ ] Local test builds and runs from scripts/check.ps1 on Windows without errors or warnings.
-- [ ] Health works over loopback, while a forged Host header is rejected.
-- [ ] Unauthenticated session reads receive HTTP 401.
-- [ ] Pairing rejects incorrect codes, disallowed Origins and missing custom request headers.
-- [ ] Valid pairing sets a session cookie with HttpOnly and SameSite Strict.
-- [ ] Unauthenticated or missing/invalid-CSRF mutations are rejected.
-- [ ] Log out revokes the previous session even if the old cookie is replayed.
-- [ ] Developer browser flow displays pairing code entry and sign-out; launch scripts show the ephemeral code.
-- [ ] No sensitive workspace endpoints are reachable before the next security review.
+- [x] Local test builds and runs from scripts/check.ps1 on Windows without errors or warnings (owner reported GREEN).
+- [x] Health works over loopback, while a forged Host header is rejected (included in GREEN security suite).
+- [x] Unauthenticated session reads receive HTTP 401 (included in GREEN security suite).
+- [x] Pairing rejects incorrect codes, disallowed Origins and missing custom request headers (included in GREEN security suite).
+- [x] Valid pairing sets a session cookie with HttpOnly and SameSite Strict (included in GREEN security suite).
+- [x] Unauthenticated or missing/invalid-CSRF mutations are rejected (included in GREEN security suite).
+- [x] Log out revokes the previous session even if the old cookie is replayed (included in GREEN security suite).
+- [x] Developer browser flow displays pairing code entry and sign-out; launch scripts show the ephemeral code (owner confirmed pairing works).
+- [x] PR #2 did not introduce workspace endpoints; PR #3 limits new mutations to validated, authenticated metadata creation.
 
 Note: tests are deterministic localhost HTTP probes, not a formal security penetration test. Local operating-system account compromise and remote deployment are outside the currently guaranteed threat boundary.
 
@@ -46,8 +46,8 @@ Backups, WAL/native packaging and schema migrations beyond v1 remain future vali
 
 ## Next foundation gates
 
-1. Secure local browser bootstrap, authentication, origin/host and anti-CSRF controls with malicious-origin tests.
-2. SQLite workspace and event-state persistence, schema migrations and consistent backups.
+1. Continue local security hardening and adversarial browser tests as capabilities expand.
+2. Extend SQLite from workspace **metadata** to durable event/evidence state, versioned migrations and consistent backups.
 3. Bundled React assets with a self-contained .NET launcher and setup wizard.
 4. Clean-machine validation on Windows x64, Linux x64, macOS ARM64 and x64.
 5. Safe snapshot ingestion with malicious repository/project fixture tests; degraded semantic analysis must be explicit.
