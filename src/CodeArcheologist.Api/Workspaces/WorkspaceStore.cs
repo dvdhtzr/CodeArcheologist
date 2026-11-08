@@ -30,7 +30,7 @@ public sealed record CreateWorkspaceResult(
 /// </summary>
 public sealed partial class WorkspaceStore
 {
-    private const int CurrentSchemaVersion = 2;
+    private const int CurrentSchemaVersion = 3;
     private readonly string _connectionString;
 
     public WorkspaceStore()
@@ -124,6 +124,36 @@ public sealed partial class WorkspaceStore
                 CREATE INDEX ix_repository_sources_workspace
                     ON repository_sources(workspace_id, added_at_unix_ms DESC, id DESC);
                 PRAGMA user_version = 2;
+                """;
+            migration.ExecuteNonQuery();
+        }
+
+        if (current < 3)
+        {
+            using var migration = connection.CreateCommand();
+            migration.Transaction = transaction;
+            migration.CommandText = """
+                CREATE TABLE repository_snapshots (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+                    repository_id TEXT NOT NULL REFERENCES repository_sources(id),
+                    fingerprint_sha256 TEXT NOT NULL,
+                    manifest_sha256 TEXT NOT NULL,
+                    captured_at_unix_ms INTEGER NOT NULL,
+                    file_count INTEGER NOT NULL CHECK(file_count >= 0),
+                    total_bytes INTEGER NOT NULL CHECK(total_bytes >= 0),
+                    exclusion_count INTEGER NOT NULL CHECK(exclusion_count >= 0),
+                    policy_version TEXT NOT NULL,
+                    UNIQUE(repository_id, fingerprint_sha256)
+                );
+                CREATE INDEX ix_snapshots_by_repository
+                    ON repository_snapshots(repository_id, captured_at_unix_ms DESC, id DESC);
+                CREATE TABLE snapshot_requests (
+                    idempotency_key TEXT NOT NULL PRIMARY KEY,
+                    request_digest TEXT NOT NULL,
+                    snapshot_id TEXT NOT NULL REFERENCES repository_snapshots(id)
+                );
+                PRAGMA user_version = 3;
                 """;
             migration.ExecuteNonQuery();
         }
