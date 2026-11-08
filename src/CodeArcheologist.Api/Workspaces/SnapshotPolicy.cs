@@ -257,10 +257,10 @@ internal static class SnapshotPolicy
 
     private static void AppendRecord(IncrementalHash hash, params string[] fields)
     {
+        Span<byte> length = stackalloc byte[4];
         foreach (var field in fields)
         {
             var bytes = Encoding.UTF8.GetBytes(field);
-            Span<byte> length = stackalloc byte[4];
             BinaryPrimitives.WriteInt32LittleEndian(length, bytes.Length);
             hash.AppendData(length);
             hash.AppendData(bytes);
