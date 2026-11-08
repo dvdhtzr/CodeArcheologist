@@ -23,7 +23,7 @@ Windows: run scripts/check.ps1 then scripts/start.ps1.
 macOS/Linux: run bash scripts/check.sh then bash scripts/start.sh.
 Open http://127.0.0.1:5174/ ; the API is on http://127.0.0.1:5127/ and supports GET /api/v1/health.
 
-The npm lockfile is not yet committed; exact dependency versions are listed, but a reviewed package-lock.json must be added before claiming reproducible builds. GitHub CI is intentionally absent. All local verification outcomes must be documented.
+The committed `package-lock.json` pins the frontend dependency graph; local verification uses `npm ci` to reproduce it. This lockfile and installation behavior still require clean local re-verification. GitHub CI is intentionally absent. All local verification outcomes must be documented.
 
 See [AGENTS.md](AGENTS.md), [SECURITY.md](SECURITY.md) and [Phase 1 acceptance](docs/phase1-acceptance.md).
 
