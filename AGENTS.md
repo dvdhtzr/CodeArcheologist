@@ -15,3 +15,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 11. Any integration test involving application persistence MUST use a disposable, isolated data directory, never real user workspaces; verify restart/recovery using the same isolated directory.
 12. Workspace create endpoints require authenticated user, CSRF and a request-scoped idempotency key. Future update/delete mutations require optimistic concurrency and negative tests.
+
+13. Registering a local source is metadata-only. Never read project files, invoke Git, restore packages, execute imported build targets or modify original source trees in this flow.
+14. Revalidate every directory entry and symlink when a future immutable snapshot is acquired; a successful registration check is not a trusted snapshot or proof of revision identity.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { RepositoryRegistry } from './RepositoryRegistry';
 
 type Workspace = {
   id: string;
@@ -180,9 +181,14 @@ export function WorkspaceExplorer({ csrfToken }: Props) {
               <p>Created {new Date(selected.createdAtUtc).toLocaleString()}</p>
               <small>Workspace ID: {selected.id}</small>
               <p className="workspace-note">
-                Metadata is persistent. Repository sources, vault notes, analysis and
-                investigations are not implemented yet.
+                Workspace metadata and registered local directory locations are persistent.
+                No source snapshots, vault notes or analysis have been created.
               </p>
+              <RepositoryRegistry
+                key={selected.id}
+                workspaceId={selected.id}
+                csrfToken={csrfToken}
+              />
             </>
           ) : (
             <p>Select a saved workspace or create a new one to open its details.</p>

@@ -28,9 +28,9 @@ public sealed record CreateWorkspaceResult(
 /// The first, metadata-only SQLite slice. No repository bytes, credentials,
 /// analysis results or Obsidian notes are stored by this service.
 /// </summary>
-public sealed class WorkspaceStore
+public sealed partial class WorkspaceStore
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
     private readonly string _connectionString;
 
     public WorkspaceStore()
@@ -100,6 +100,30 @@ public sealed class WorkspaceStore
                 CREATE INDEX IF NOT EXISTS ix_workspaces_recent
                     ON workspaces(created_at_unix_ms DESC, id DESC);
                 PRAGMA user_version = 1;
+                """;
+            migration.ExecuteNonQuery();
+        }
+
+        if (current < 2)
+        {
+            using var migration = connection.CreateCommand();
+            migration.Transaction = transaction;
+            migration.CommandText = """
+                CREATE TABLE repository_sources (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                    local_path TEXT NOT NULL,
+                    path_key TEXT NOT NULL,
+                    source_kind TEXT NOT NULL CHECK(source_kind IN ('git', 'folder')),
+                    added_at_unix_ms INTEGER NOT NULL,
+                    version INTEGER NOT NULL CHECK(version >= 1),
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    request_digest TEXT NOT NULL,
+                    UNIQUE(workspace_id, path_key)
+                );
+                CREATE INDEX ix_repository_sources_workspace
+                    ON repository_sources(workspace_id, added_at_unix_ms DESC, id DESC);
+                PRAGMA user_version = 2;
                 """;
             migration.ExecuteNonQuery();
         }

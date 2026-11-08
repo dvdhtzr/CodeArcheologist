@@ -145,6 +145,62 @@ app.MapPost("/api/v1/workspaces", (CreateWorkspaceRequest request,
         : Results.Ok(outcome.Workspace);
 }).RequireAuthorization();
 
+// Repository registration records source locations but does not open, scan,
+// resolve Git revision, parse, build or execute imported repository contents.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories",
+    (Guid workspaceId, WorkspaceStore store) =>
+{
+    if (store.Get(workspaceId) is null)
+    {
+        return Results.NotFound();
+    }
+
+    return Results.Ok(store.ListRepositories(workspaceId));
+}).RequireAuthorization();
+
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}",
+    (Guid workspaceId, Guid repositoryId, WorkspaceStore store) =>
+{
+    var repository = store.GetRepository(workspaceId, repositoryId);
+    return repository is null ? Results.NotFound() : Results.Ok(repository);
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories",
+    (Guid workspaceId, RegisterRepositoryRequest request,
+     HttpContext context, WorkspaceStore store) =>
+{
+    if (store.Get(workspaceId) is null)
+    {
+        return Results.NotFound(new { error = "Workspace does not exist." });
+    }
+
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var idempotencyKey))
+    {
+        return Results.BadRequest(new { error = "A UUID Idempotency-Key header is required." });
+    }
+
+    var validated = RepositoryPathPolicy.Validate(request.LocalPath, store.DatabasePath);
+    if (!validated.IsValid)
+    {
+        return Results.BadRequest(new { error = validated.Error });
+    }
+
+    var result = store.RegisterRepository(workspaceId, validated.Location!, idempotencyKey);
+    return result.Status switch
+    {
+        RepositoryRegistrationStatus.Created =>
+            Results.Created(
+                $"/api/v1/workspaces/{workspaceId:D}/repositories/{result.Repository!.Id:D}",
+                result.Repository),
+        RepositoryRegistrationStatus.Replayed => Results.Ok(result.Repository),
+        RepositoryRegistrationStatus.DuplicatePath =>
+            Results.Conflict(new { error = "This local directory is already registered in the workspace." }),
+        _ => Results.Conflict(
+            new { error = "This Idempotency-Key was already used for another repository." })
+    };
+}).RequireAuthorization();
+
 app.Run();
 
 public sealed record LoginRequest(string? Code);
