@@ -40,16 +40,19 @@ public sealed class SnapshotCaptureService(WorkspaceStore store)
             }
 
             var allowed = RepositoryPathPolicy.Validate(source.LocalPath, store.DatabasePath);
-            if (!allowed.IsValid || allowed.Location?.PathKey !=
-                (OperatingSystem.IsWindows()
-                    ? source.LocalPath.ToUpperInvariant()
-                    : source.LocalPath))
-            {
+            var location = allowed.Location ??
                 throw new SnapshotCaptureException(
                     "Registered source path is no longer safe or accessible.");
+            var expectedPathKey = OperatingSystem.IsWindows()
+                ? source.LocalPath.ToUpperInvariant()
+                : source.LocalPath;
+            if (!string.Equals(location.PathKey, expectedPathKey, StringComparison.Ordinal))
+            {
+                throw new SnapshotCaptureException(
+                    "Registered source path no longer resolves to the same location.");
             }
 
-            var sourceRoot = allowed.Location.LocalPath;
+            var sourceRoot = location.LocalPath;
             var appDataRoot = Path.GetDirectoryName(store.DatabasePath)!;
             if (SnapshotPolicy.IsSameOrChildOf(appDataRoot, sourceRoot))
                 throw new SnapshotCaptureException(
