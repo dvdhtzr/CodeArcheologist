@@ -1,6 +1,6 @@
 # Phase 1 Acceptance Checklist
 
-**Current development scope:** PR #1 established the developer shell and architecture baseline. PR #2 adds localhost browser pairing and negative security tests. Neither is a complete investigative product or a public preview.
+**Current development scope:** PR #1 established the developer shell and architecture baseline. PR #2 added localhost browser pairing and negative security tests. PR #3 adds SQLite workspace **metadata** and an explorer. None is a complete investigative product or a public preview.
 
 ## Initial slice: pending independent verification
 
@@ -30,6 +30,19 @@ The checked build results above reflect owner-reported Windows verification; lat
 - [ ] No sensitive workspace endpoints are reachable before the next security review.
 
 Note: tests are deterministic localhost HTTP probes, not a formal security penetration test. Local operating-system account compromise and remote deployment are outside the currently guaranteed threat boundary.
+
+## PR #3 SQLite workspace metadata (pending owner-run verification)
+
+- [ ] Dependency restore and .NET 10 build with pinned Microsoft.Data.Sqlite complete on Windows.
+- [ ] React/TypeScript typecheck and bundle build pass.
+- [ ] Both security and workspace integration suites pass against disposable databases.
+- [ ] Workspace create/list/open requires authenticated browser session; writes enforce CSRF and idempotency.
+- [ ] Reusing an idempotency key returns one workspace, with a conflict on changed request content.
+- [ ] SQLite preserves workspace records through a clean API stop/start and rejects previous session cookies.
+- [ ] Real browser can create a workspace, refresh, restart application, and reopen it from the saved list.
+- [ ] Real user local app data remains unaffected by test runs; no imported-repository execution occurs.
+
+Backups, WAL/native packaging and schema migrations beyond v1 remain future validation work. Do not label all of Phase 1 complete after this PR.
 
 ## Next foundation gates
 
