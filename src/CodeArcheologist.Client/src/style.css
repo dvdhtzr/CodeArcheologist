@@ -35,3 +35,29 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .auth-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
 .auth-panel :is(input, button):focus-visible { outline: 2px solid #b0cbff; outline-offset: 3px; }
 .auth-panel .error { color: #ffacb7; }
+
+.workspace-panel { margin-top: 24px; padding: 28px; background: #111d31; border: 1px solid #304563; border-radius: 17px; }
+.workspace-panel h2 { margin: 12px 0; font-size: 1.7rem; }
+.workspace-panel h3 { font-size: 1.1rem; color: #e8f0ff; margin: 0 0 16px; }
+.workspace-panel h4 { margin: 0 0 8px; font-size: 1.3rem; overflow-wrap: anywhere; }
+.workspace-panel p { color: #b9c7dd; line-height: 1.6; }
+.workspace-panel label { display: block; margin: 18px 0 8px; font-size: 0.9rem; }
+.workspace-panel input { flex: 1; min-width: min(320px, 100%); background: #0b1729; border: 1px solid #536b8e; border-radius: 8px; padding: 12px 14px; color: #eef3ff; font: inherit; }
+.workspace-panel button { font: inherit; cursor: pointer; }
+.workspace-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
+.workspace-panel button:focus-visible, .workspace-panel input:focus-visible { outline: 2px solid #b0cbff; outline-offset: 3px; }
+.workspace-panel form button { border: 0; border-radius: 8px; background: #5486d2; font-weight: 650; color: white; padding: 12px 20px; }
+.workspace-panel .error { color: #ffacb7; }
+.workspace-columns { margin-top: 30px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.workspace-columns > section { padding: 20px; background: #17263f; border-radius: 12px; min-width: 0; }
+.workspace-list { padding: 0; margin: 0; list-style: none; display: grid; gap: 8px; }
+.workspace-list button { width: 100%; border: 1px solid #365276; border-radius: 8px; background: #0d1b30; color: #eef3ff; padding: 12px; display: flex; text-align: left; flex-direction: column; align-items: flex-start; gap: 6px; }
+.workspace-list button[aria-current="true"] { border-color: #9ec4ff; background: #1d3554; }
+.workspace-list button strong { overflow-wrap: anywhere; }
+.workspace-list button span { font-size: 0.79rem; color: #9eb6d4; }
+.workspace-detail small { font-size: 0.76rem; color: #8fa9cc; overflow-wrap: anywhere; }
+.workspace-panel .workspace-note { font-size: 0.83rem; color: #9eb5d5; }
+@media (max-width: 720px) {
+  .workspace-columns { grid-template-columns: 1fr; }
+  .workspace-panel { padding: 20px; }
+}

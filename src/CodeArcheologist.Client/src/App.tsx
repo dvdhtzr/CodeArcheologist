@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { WorkspaceExplorer } from './WorkspaceExplorer';
 
 type ApiStatus = 'checking' | 'connected' | 'unavailable';
 type Session =
@@ -183,11 +184,13 @@ export function App() {
         {error && <p className="error" role="alert">{error}</p>}
       </section>
 
+      {session.status === 'unlocked' && <WorkspaceExplorer csrfToken={session.csrfToken} />}
+
       <aside className="notice">
         <strong>Developer foundation</strong>
         <p>
-          Workspace persistence, ingestion, analysis, MAF investigations, plugins, and
-          Mission Control will arrive in independently verified, security-gated phases.
+          Workspace metadata is stored locally. Repository ingestion, analysis, MAF
+          investigations, plugins and Mission Control remain future milestones.
         </p>
       </aside>
     </main>
