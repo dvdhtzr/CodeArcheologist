@@ -44,6 +44,21 @@ Note: tests are deterministic localhost HTTP probes, not a formal security penet
 
 Backups, WAL/native packaging and schema migrations beyond v1 remain future validation work. Do not label all of Phase 1 complete after this PR.
 
+## PR #4 local repository registration (pending owner-run verification)
+
+- [ ] Existing PR #3 workspace records survive a schema-v1-to-v2 upgrade without data loss.
+- [ ] .NET and React compile, and all security/workspace/registration tests GREEN on Windows.
+- [ ] Reject unauthenticated and forged CSRF/Origin requests.
+- [ ] Reject invalid, relative, linked, unavailable, root and network paths where applicable.
+- [ ] Register at least two distinct folders in one workspace; read and reopen after app restart.
+- [ ] Reusing the same idempotency key does not create duplicates; path uniqueness is enforced within the workspace.
+- [ ] Same source can be linked to two independent workspaces without sharing record identity.
+- [ ] No source files, project/build scripts or Git CLI commands are read, executed or modified.
+- [ ] Browser UX clearly labels registrations as **not yet ingested or analyzed**.
+
+Full snapshot ingestion, revision pinning, sandboxing and repository inventory
+remain mandatory before source-based conclusions are permitted.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
