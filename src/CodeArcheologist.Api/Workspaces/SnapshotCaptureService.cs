@@ -97,16 +97,74 @@ public sealed class SnapshotCaptureService(WorkspaceStore store)
         if (!string.Equals(digest, record.ManifestSha256, StringComparison.Ordinal))
             throw new SnapshotCaptureException("Snapshot manifest hash mismatch.");
 
-        var manifest = JsonSerializer.Deserialize<SnapshotManifest>(bytes, ManifestJson);
+        SnapshotManifest? manifest;
+        try
+        {
+            manifest = JsonSerializer.Deserialize<SnapshotManifest>(bytes, ManifestJson);
+        }
+        catch (JsonException)
+        {
+            throw new SnapshotCaptureException("Saved snapshot manifest is not valid JSON.");
+        }
+
         if (manifest is null ||
             manifest.SnapshotId != record.Id ||
             manifest.RepositoryId != record.RepositoryId ||
             manifest.WorkspaceId != record.WorkspaceId ||
             manifest.FingerprintSha256 != record.FingerprintSha256 ||
-            manifest.PolicyVersion != record.PolicyVersion)
+            manifest.PolicyVersion != record.PolicyVersion ||
+            manifest.Files is null || manifest.Exclusions is null ||
+            manifest.Files.Count != record.FileCount ||
+            manifest.Exclusions.Count != record.ExclusionCount)
         {
-            throw new SnapshotCaptureException("Snapshot manifest identity mismatch.");
+            throw new SnapshotCaptureException("Snapshot manifest identity/count mismatch.");
         }
+
+        var contentRoot = Path.Combine(GetSnapshotRoot(),
+            record.Id.ToString("D"), "files");
+        try
+        {
+            foreach (var file in manifest.Files)
+            {
+                var segments = file.Path.Split('/');
+                if (segments.Any(segment => string.IsNullOrEmpty(segment) ||
+                    segment is "." or ".." || segment.Any(char.IsControl)))
+                {
+                    throw new SnapshotCaptureException("Unsafe path in saved snapshot manifest.");
+                }
+
+                var location = Path.GetFullPath(Path.Combine(
+                    contentRoot, file.Path.Replace('/', Path.DirectorySeparatorChar)));
+                if (!SnapshotPolicy.IsSameOrChildOf(location, contentRoot))
+                    throw new SnapshotCaptureException("A saved artifact escaped snapshot storage.");
+
+                SnapshotPolicy.VerifyDirectoryAncestry(
+                    Path.GetDirectoryName(location)!, contentRoot);
+                var info = new FileInfo(location);
+                if (!info.Exists ||
+                    (info.Attributes & (FileAttributes.ReparsePoint |
+                        FileAttributes.Directory | FileAttributes.Device)) != 0 ||
+                    info.LinkTarget is not null ||
+                    info.Length != file.SizeBytes)
+                {
+                    throw new SnapshotCaptureException(
+                        "A saved snapshot artifact was changed or replaced.");
+                }
+
+                using var stream = new FileStream(location, FileMode.Open,
+                    FileAccess.Read, FileShare.Read);
+                var actualHash = Convert.ToHexString(SHA256.HashData(stream))
+                    .ToLowerInvariant();
+                if (!string.Equals(actualHash, file.Sha256, StringComparison.Ordinal))
+                    throw new SnapshotCaptureException("Saved snapshot artifact hash mismatch.");
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new SnapshotCaptureException(
+                "Saved snapshot artifacts cannot be verified.");
+        }
+
         return manifest;
     }
 
