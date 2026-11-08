@@ -216,6 +216,14 @@ test('workspaces are durable, authenticated, validated and idempotent', async t 
       const original = await authorizedGet('/api/v1/workspaces/' + id, newSession);
       assert.equal(original.status, 200);
       assert.equal((await original.json()).name, 'Main codebase');
+
+      // The durable idempotency index survives an API restart as well.
+      const replay = await authorizedPost('/api/v1/workspaces', newSession,
+        { name: 'Main codebase', key });
+      assert.equal(replay.status, 200);
+      assert.equal((await replay.json()).id, id);
+      const afterReplay = await (await authorizedGet('/api/v1/workspaces', newSession)).json();
+      assert.equal(afterReplay.totalCount, 2);
     });
   } finally {
     await stopApi(api);
