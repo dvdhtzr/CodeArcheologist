@@ -19,4 +19,5 @@ npm --prefix "$ROOT/src/CodeArcheologist.Client" run typecheck
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run build
 node --test "$ROOT/tests/security/local-access.test.mjs"
 node --test "$ROOT/tests/workspaces/workspaces.test.mjs"
-echo 'GREEN: Local build, frontend and security/workspace persistence tests passed. Cross-platform packaging remains pending.'
+node --test "$ROOT/tests/repositories/registration.test.mjs"
+echo 'GREEN: Local build, frontend, security, workspace and repository-registration checks passed. Cross-platform packaging remains pending.'
