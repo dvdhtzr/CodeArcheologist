@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -105,6 +106,12 @@ internal static class SnapshotPolicy
                     throw new SnapshotCaptureException("A source path contains unsafe characters.");
 
                 var name = Path.GetFileName(full);
+                // A literal backslash is a valid filename character on Unix,
+                // but would be ambiguous with our portable '/' manifest separator.
+                if (name.Contains('\\'))
+                    throw new SnapshotCaptureException(
+                        "A source filename contains an ambiguous path separator.");
+
                 var attributes = File.GetAttributes(full);
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                 {
@@ -253,7 +260,9 @@ internal static class SnapshotPolicy
         foreach (var field in fields)
         {
             var bytes = Encoding.UTF8.GetBytes(field);
-            hash.AppendData(BitConverter.GetBytes(bytes.Length));
+            Span<byte> length = stackalloc byte[4];
+            BinaryPrimitives.WriteInt32LittleEndian(length, bytes.Length);
+            hash.AppendData(length);
             hash.AppendData(bytes);
         }
     }
