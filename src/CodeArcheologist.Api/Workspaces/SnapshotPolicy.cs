@@ -101,7 +101,8 @@ internal static class SnapshotPolicy
                     throw new SnapshotCaptureException("A source path escaped its registered root.");
 
                 var relative = RelativePath(root, full);
-                if (relative.Split('/').Any(part => part is "." or ".." or "" ||
+                if (relative.Split('/').Any(part =>
+                    string.IsNullOrEmpty(part) || part == "." || part == ".." ||
                     part.Any(char.IsControl)))
                     throw new SnapshotCaptureException("A source path contains unsafe characters.");
 
