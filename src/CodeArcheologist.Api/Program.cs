@@ -81,11 +81,11 @@ app.MapPost("/api/v1/auth/login", async (LoginRequest request, HttpContext conte
     return Results.Ok(new { authenticated = true, csrfToken = csrf });
 });
 
-app.MapGet("/api/v1/auth/session", (ClaimsPrincipal user) =>
+app.MapGet("/api/v1/auth/session", (HttpContext context) =>
     Results.Ok(new
     {
         authenticated = true,
-        csrfToken = user.FindFirst(LocalRequestGuard.CsrfClaimType)?.Value
+        csrfToken = context.User.FindFirst(LocalRequestGuard.CsrfClaimType)?.Value
     }))
     .RequireAuthorization();
 
