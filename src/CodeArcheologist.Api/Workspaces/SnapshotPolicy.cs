@@ -28,7 +28,9 @@ public class SnapshotCaptureException(string message, int statusCode = 409)
 }
 
 public sealed class SnapshotSourceChangedException(string message)
-    : SnapshotCaptureException(message);
+    : SnapshotCaptureException(message)
+{
+}
 
 internal sealed record InventoryFile(
     string FullPath,
