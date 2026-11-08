@@ -5,8 +5,8 @@ $apiProject = Join-Path $root 'src/CodeArcheologist.Api/CodeArcheologist.Api.csp
 $client = Join-Path $root 'src/CodeArcheologist.Client'
 & dotnet build $apiProject --configuration Release
 if ($LASTEXITCODE -ne 0) { throw 'API build failed.' }
-& npm install --prefix $client --no-audit --no-fund
-if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
+& npm ci --prefix $client --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation (npm ci) failed.' }
 & npm --prefix $client run typecheck
 if ($LASTEXITCODE -ne 0) { throw 'TypeScript typecheck failed.' }
 & npm --prefix $client run build
