@@ -60,7 +60,7 @@ public sealed class LocalRequestGuard(RequestDelegate next)
             return;
         }
 
-        var origin = context.Request.Headers.Origin.ToString();
+        var origin = context.Request.Headers["Origin"].ToString();
         var allowedOrigin = LocalOrigins.Contains(origin) ||
             (Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DEV_UI") == "1" &&
              DeveloperOrigins.Contains(origin));
@@ -88,7 +88,7 @@ public sealed class LocalRequestGuard(RequestDelegate next)
 
         // Pairing is the one unauthenticated mutation and requires an explicit
         // 128-bit bootstrap code. No cookies are accepted as pairing authority.
-        if (context.Request.Path.Equals("/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        if (string.Equals(context.Request.Path.Value, "/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) &&
             HttpMethods.IsPost(context.Request.Method))
         {
             await next(context);
