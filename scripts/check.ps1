@@ -11,4 +11,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation 
 if ($LASTEXITCODE -ne 0) { throw 'TypeScript typecheck failed.' }
 & npm --prefix $client run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend production bundle build failed.' }
-Write-Host 'Builds/typecheck completed. Runtime, security and packaging checks are not yet verified.'
+& node --test (Join-Path $root 'tests/security/local-access.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Local security integration tests failed.' }
+Write-Host 'Local trusted-source build, typecheck and security checks passed. Cross-platform packaging remains pending.'
