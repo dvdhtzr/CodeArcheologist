@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SnapshotExplorer } from './SnapshotExplorer';
 
 type RepositorySource = {
   id: string;
@@ -26,6 +27,7 @@ export function RepositoryRegistry({ workspaceId, csrfToken }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
   const retryKey = useRef<string | null>(null);
   const endpoint = '/api/v1/workspaces/' + encodeURIComponent(workspaceId) + '/repositories';
 
@@ -135,6 +137,24 @@ export function RepositoryRegistry({ workspaceId, csrfToken }: Props) {
           <li key={source.id}>
             <span className="repository-kind">{source.sourceKind === 'git' ? 'Git working tree' : 'Local folder'}</span>
             <code>{source.localPath}</code>
+            <button
+              type="button"
+              className="repository-expand"
+              aria-expanded={expandedSourceId === source.id}
+              onClick={() => setExpandedSourceId(
+                expandedSourceId === source.id ? null : source.id
+              )}
+            >
+              {expandedSourceId === source.id ? 'Hide snapshots' : 'View snapshots'}
+            </button>
+            {expandedSourceId === source.id && (
+              <SnapshotExplorer
+                key={source.id}
+                workspaceId={workspaceId}
+                repositoryId={source.id}
+                csrfToken={csrfToken}
+              />
+            )}
           </li>
         ))}
       </ul>
