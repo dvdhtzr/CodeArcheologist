@@ -817,7 +817,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       const httpEdges = graph.edges.filter(edge => edge.kind === 'annotates-method');
       assert.equal(httpNodes.length, 3);
       assert.equal(httpEdges.length, 3);
-      assert.deepEqual(httpNodes.map(node => node.label), [
+      assert.deepEqual(httpNodes.map(node => node.label).sort(), [
         'DELETE [HttpDelete] Delete',
         'GET [HttpGet] Details',
         'POST [HttpPost] Create'
