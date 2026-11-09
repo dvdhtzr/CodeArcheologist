@@ -333,3 +333,25 @@ coverage. Inspect both the deterministic finding and the AI-selected
 question for usefulness. Do not call this change GREEN until the owner
 reports these outputs. Provider-fault injection and real-repository
 diversity remain pending.
+
+## Gate B provider-failure classification checks (model-free)
+
+After the owner reported 5/5 accepted real MAF investigations for both
+a saved Minimal API snapshot and a disposable HTTP-attribute controller
+fixture, Gate B gained an explicit model-free fail-closed classification
+contract. The actual `agent.RunAsync` catch path delegates to a pure
+classifier which returns `inconclusive`, `null` findings and
+`not-checked` citations for caller cancellation, timeout,
+HTTP transport unavailability, malformed provider JSON and unexpected
+adapter failures. Exception messages, raw model output and URLs are
+never returned. These cases are covered by repeatable model-free tests
+in the existing `--gate-b-self-test` suite; no Ollama service is needed.
+
+**Scope:** These checks exercise the real exception-classification
+function used by the MAF Investigator but do not inject failures into a
+running Ollama transport. A real disconnected-provider experiment and
+a deadline-triggered cancellation experiment remain future work if
+full end-to-end failure-path coverage is required. The next owner
+checkpoint is a fresh `scripts/check.ps1` run. The successful real
+model runs were against the preceding commit and should not be
+misrepresented as verification of these new changes.
