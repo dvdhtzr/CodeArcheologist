@@ -162,6 +162,10 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-projects')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-link-context')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-evidence-graph')).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() +
+        '/evidence-tools/entry-point?entryPointId=anything')).status, 401);
+      assert.equal((await post(endpoint + '/' + randomUUID() +
+        '/evidence-tools/check-citations', null, {})).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -641,7 +645,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
          'public class Main : global::Shared.Contract { ' +
          'public void Call() { global::Shared.Contract.Ping(); } ' +
          'public void Run() { Call(); } ' +
-         '[HttpGet("items/{id}")] public int Details(int id) => id; ' +
+         '[HttpGet("items/{id}")] public int Details(int id) { Call(); return id; } ' +
          '[HttpPost] [Route("create")] public void Create() {} ' +
          '[HttpDelete(RouteToken)] public void Delete(int id) {} ' +
          '[CustomHttpGet("not-an-endpoint")] public void IgnoreThis() {} ' +
@@ -1007,6 +1011,167 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       }
       assert.ok(graph.limitations.some(message =>
         message.includes('AddScoped/AddSingleton/AddTransient')));
+
+      await t.test('typed agent-ready evidence contracts and citation gates', async () => {
+        const toolsBase = endpoint + '/' + snapshot.id + '/evidence-tools';
+        const httpEntry = graph.nodes.find(node =>
+          node.kind === 'http-endpoint-attribute' &&
+          node.label === 'GET [HttpGet] Details');
+        const minimalEntry = graph.nodes.find(node =>
+          node.kind === 'http-minimal-mapping' &&
+          node.label === 'GET MapGet /catalog');
+        const diEntry = graph.nodes.find(node =>
+          node.kind === 'di-registration-candidate');
+        assert.ok(httpEntry && minimalEntry && diEntry);
+
+        assert.equal((await get(toolsBase + '/entry-point', session)).status, 400);
+        assert.equal((await get(toolsBase + '/entry-point?entryPointId=' +
+          encodeURIComponent('invented:never-captured'), session)).status, 404);
+        assert.equal((await get(toolsBase + '/entry-point?entryPointId=' +
+          encodeURIComponent(diEntry.id), session)).status, 404,
+          'DI nodes are not silently promoted to HTTP entry points');
+        assert.equal((await get(endpoint + '/' + randomUUID() +
+          '/evidence-tools/entry-point?entryPointId=' +
+          encodeURIComponent(httpEntry.id), session)).status, 404);
+
+        const httpUrl = toolsBase + '/entry-point?entryPointId=' +
+          encodeURIComponent(httpEntry.id);
+        const httpResponse = await get(httpUrl, session);
+        assert.equal(httpResponse.status, 200,
+          'entrypoint evidence: ' + (httpResponse.status === 200
+            ? 'OK' : await httpResponse.clone().text()));
+        const tool = await httpResponse.json();
+        assert.equal(tool.contractVersion, 'snapshot-agent-evidence-tools-v1');
+        assert.equal(tool.snapshotId, snapshot.id);
+        assert.equal(tool.workspaceId, wid);
+        assert.equal(tool.repositoryId, rid);
+        assert.equal(tool.fingerprintSha256, snapshot.fingerprintSha256);
+        assert.equal(tool.entryPointId, httpEntry.id);
+        assert.equal(tool.entryPointKind, 'http-endpoint-attribute');
+        assert.equal(tool.graphAnalyzerVersion, graph.analyzerVersion);
+        assert.ok(tool.sourceExcerpt.includes('Call(); return id;'));
+        assert.equal(tool.sourceExcerptTruncated, false);
+        assert.equal(tool.totalDirectInvocationCount, 1);
+        assert.equal(tool.returnedDirectInvocationCount, 1);
+        assert.equal(tool.unresolvedSnapshotCalleeCount,
+          graph.unresolvedCalleeCount);
+        assert.ok(tool.references.every(ref =>
+          graph.nodes.some(node => node.id === ref.id &&
+            node.fileSha256 === ref.fileSha256)));
+        assert.ok(tool.relations.every(link =>
+          graph.edges.some(edge => edge.id === link.id &&
+            edge.evidenceSha256 === link.evidenceSha256)));
+        assert.ok(tool.relations.some(link =>
+          link.kind === 'annotates-method' && link.evidenceStatus === 'candidate'));
+        assert.ok(tool.relations.some(link =>
+          link.kind === 'contains-invocation' &&
+          link.evidenceStatus === 'observed-syntax'));
+        assert.ok(tool.relations.some(link =>
+          link.kind === 'candidate-callee' &&
+          link.evidenceStatus === 'provisional-local'));
+        assert.ok(tool.unknowns.some(item =>
+          item.includes('not proof of compiled or executed calls')));
+        assert.deepEqual(await (await get(httpUrl, session)).json(), tool,
+          'same saved snapshot and node must yield a stable typed evidence package');
+        const observedRef = tool.references.find(ref =>
+          ref.kind === 'syntax-declaration' &&
+          ref.evidenceStatus === 'observed-syntax');
+        const candidateLink = tool.relations.find(link =>
+          link.kind === 'annotates-method' &&
+          link.evidenceStatus === 'candidate');
+        assert.ok(observedRef && candidateLink);
+        const checkEndpoint = toolsBase + '/check-citations';
+        const goodClaim = {
+          entryPointId: httpEntry.id,
+          fingerprintSha256: snapshot.fingerprintSha256,
+          claims: [
+            { claimKind: 'source-observation', statement:
+              'A saved method declaration was observed.',
+              evidenceIds: [observedRef.id] },
+            { claimKind: 'candidate-relationship', statement:
+              'A written HTTP annotation is linked to this method as a candidate.',
+              evidenceIds: [candidateLink.id] },
+          ],
+        };
+        assert.equal((await post(checkEndpoint, session, goodClaim,
+          { csrf: null })).status, 403);
+        const goodResponse = await post(checkEndpoint, session, goodClaim);
+        assert.equal(goodResponse.status, 200);
+        const good = await goodResponse.json();
+        assert.equal(good.outcome, 'all-reference-checks-passed');
+        assert.ok(good.claims.every(item =>
+          item.outcome === 'references-valid-not-semantic-verification'));
+        assert.ok(good.limitations.some(item =>
+          item.includes('not that a written claim is factually')));
+
+        const badIds = await (await post(checkEndpoint, session, {
+          ...goodClaim,
+          claims: [{ claimKind: 'candidate-relationship', statement:
+            'An invented edge should be rejected.',
+            evidenceIds: ['invented:edge-that-was-never-captured'] }],
+        })).json();
+        assert.equal(badIds.outcome, 'reference-checks-rejected');
+        assert.equal(badIds.claims[0].outcome, 'invalid-citation-reference');
+        assert.deepEqual(badIds.claims[0].invalidIds,
+          ['invented:edge-that-was-never-captured']);
+        const wrongKind = await (await post(checkEndpoint, session, {
+          ...goodClaim,
+          claims: [{ claimKind: 'registered-runtime-endpoint', statement:
+            'The endpoint is definitely reachable.',
+            evidenceIds: [candidateLink.id] }],
+        })).json();
+        assert.equal(wrongKind.claims[0].outcome, 'unsupported-claim-kind');
+        const wrongType = await (await post(checkEndpoint, session, {
+          ...goodClaim,
+          claims: [{ claimKind: 'source-observation', statement:
+            'A candidate-only edge is not observed source containment.',
+            evidenceIds: [candidateLink.id] }],
+        })).json();
+        assert.equal(wrongType.claims[0].outcome,
+          'observed-source-evidence-required');
+        const duplicate = await (await post(checkEndpoint, session, {
+          ...goodClaim,
+          claims: [{ claimKind: 'candidate-relationship', statement:
+            'Duplicate citation IDs are invalid.',
+            evidenceIds: [candidateLink.id, candidateLink.id] }],
+        })).json();
+        assert.equal(duplicate.claims[0].outcome, 'duplicate-citations');
+        const stale = await post(checkEndpoint, session, {
+          ...goodClaim, fingerprintSha256: '0'.repeat(64),
+        });
+        assert.equal(stale.status, 409);
+        assert.equal((await post(checkEndpoint, session, {
+          ...goodClaim, claims: [],
+        })).status, 400);
+        assert.equal((await post(checkEndpoint, session, {
+          ...goodClaim,
+          claims: Array.from({ length: 9 }, (_, i) => ({
+            claimKind: 'source-observation',
+            statement: 'Too many claims ' + i,
+            evidenceIds: [observedRef.id],
+          })),
+        })).status, 400);
+
+        const minimalUrl = toolsBase + '/entry-point?entryPointId=' +
+          encodeURIComponent(minimalEntry.id);
+        const minimalResponse = await get(minimalUrl, session);
+        assert.equal(minimalResponse.status, 200);
+        const minimal = await minimalResponse.json();
+        assert.equal(minimal.entryPointKind, 'http-minimal-mapping');
+        assert.ok(minimal.sourceExcerpt.includes('app.MapGet("/catalog"'));
+        assert.equal(minimal.totalDirectInvocationCount, 0,
+          'the mapping invocation must not be misrepresented as its handler');
+        assert.ok(minimal.relations.some(link =>
+          link.kind === 'candidate-http-mapping' &&
+          link.evidenceStatus === 'candidate'));
+        assert.ok(minimal.relations.some(link =>
+          link.kind === 'contains-invocation' &&
+          link.evidenceStatus === 'observed-syntax'));
+        assert.ok(minimal.unknowns.some(item => item.includes('runtime handler')));
+        assert.ok(minimal.references.every(ref =>
+          graph.nodes.some(node => node.id === ref.id)));
+      });
+
 
 
 
