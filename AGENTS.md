@@ -56,3 +56,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 39. Direct change-impact views may reverse existing `candidate-callee` / `provisional-local` edges by exact graph node ID and attach source-observed caller containment. Never construct method callers from written names, similar labels, project heuristics or external text.
 40. One-hop candidate review is NOT a verified call graph, a breaking-change risk estimate or transitive impact propagation. Unresolved invocation targets and empty inbound candidate sets must remain explicitly unknown; show bounded counts and SHA-256 anchors without implying completeness.
+
+41. A written C# HTTP verb attribute is a syntax-level **candidate** entry point, not a verified ASP.NET attribute symbol, registered HTTP endpoint, effective URL or reachable runtime behavior. Match only explicitly supported simple-name spellings and retain precise source/attribute/method spans and SHA-256 evidence.
+42. Report type-, method- and HTTP-attribute route literals separately. Do not compose full URLs, resolve tokens, infer auth policies or register endpoints based on source text. Dynamic/qualified/aliased and minimal-API routes remain explicitly unsupported until independent evidence exists.
