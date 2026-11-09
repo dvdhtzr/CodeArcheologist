@@ -15,6 +15,7 @@ builder.Services.AddSingleton<WorkspaceStore>();
 builder.Services.AddSingleton<SnapshotCaptureService>();
 builder.Services.AddSingleton<CSharpSyntaxInspector>();
 builder.Services.AddSingleton<CSharpTypeRelationshipInspector>();
+builder.Services.AddSingleton<StaticCSharpProjectInspector>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -315,6 +316,29 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     catch (IOException)
     {
         return Results.Conflict(new { error = "Saved C# source could not be verified." });
+    }
+}).RequireAuthorization();
+
+// Static, project-file-scoped source membership candidates. Never evaluates
+// MSBuild, imports, targets, props, scripts, restore or imported binaries.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/csharp-projects",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, WorkspaceStore store,
+     StaticCSharpProjectInspector inspector, CancellationToken cancellationToken) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+
+    try
+    {
+        return Results.Ok(inspector.Inspect(snapshot, cancellationToken));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved project XML could not be verified." });
     }
 }).RequireAuthorization();
 
