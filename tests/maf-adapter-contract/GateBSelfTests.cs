@@ -177,7 +177,34 @@ internal static class GateBSelfTests
         if (secondResult.Result?.Findings.Single().RelationId != secondRelation)
             throw new InvalidOperationException("Second host handle resolved wrong relation.");
 
-        Console.WriteLine("GREEN: Gate B handle mapping, scope, invalid selections, and model-free trust checks passed.");
+        // Controlled, model-free failure classification. Never return
+        // accepted findings, citation success, or raw provider diagnostics.
+        CheckFailure(new OperationCanceledException("private model text"),
+            callerCancelled: true, "cancelled");
+        CheckFailure(new OperationCanceledException("private model text"),
+            callerCancelled: false, "provider-timeout");
+        CheckFailure(new HttpRequestException("private URL and secret"),
+            callerCancelled: false, "provider-unavailable");
+        CheckFailure(new JsonException("private malformed provider output"),
+            callerCancelled: false, "provider-invalid-response");
+        CheckFailure(new InvalidOperationException("private adapter details"),
+            callerCancelled: false, "provider-or-adapter-failure");
+
+        Console.WriteLine("GREEN: Gate B handle mapping, scope, invalid selections, and model-free trust and provider-failure classification checks passed.");
+
+        void CheckFailure(Exception failure, bool callerCancelled, string expected)
+        {
+            var report = GateBInvestigator.ClassifyProviderFailure(
+                failure, callerCancelled, package.ContractVersion);
+            if (report.Outcome != "inconclusive" ||
+                report.Diagnostic != expected ||
+                report.Result is not null ||
+                report.CitationStatus != "not-checked" ||
+                report.EvidenceContractVersion != package.ContractVersion ||
+                report.Diagnostic.Contains("private", StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Provider failures must fail closed without evidence or secrets.");
+        }
 
         void Expect(string? text, string expected)
         {
