@@ -82,3 +82,48 @@ dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj
 ```
 
 The adapter project is intentionally not part of `scripts/check.ps1` until the pinned package signatures have been confirmed on the owner's Windows installation. A compile failure is a gate failure, not permission to improvise a replacement API. A valid run proves schema adherence for this minimal two-field contract, not source grounding, agent reasoning, or reliability at scale. No raw model response or user source is printed.
+
+## Gate B implementation candidate (awaiting owner Windows GREEN)
+
+Gate A native Ollama and real MAF/OllamaSharp each passed 5/5 independent
+local attempts on November 9, 2026. The earlier text above recording
+adapter verification as pending is superseded by this result.
+
+The approved first Gate B slice adds a single genuine MAF
+`FunctionalInvestigator` inside the existing ASP.NET Core API, using
+the exact pinned, compile-verified Gate A packages. It does not reuse the
+experimental PR #25 orchestration, add roles, expand UI, introduce a
+new application, or expose arbitrary model-selected tools.
+
+Authenticated/CSRF-protected POST:
+`/api/v1/workspaces/{workspaceId}/repositories/{repositoryId}/snapshots/{snapshotId}/investigations/gate-b`
+with body `{"entryPointId":"<saved graph candidate ID>"}`.
+
+The application first calls `ReadEntryPoint` on an exact saved snapshot
+and verifies its source integrity. The agent gets a bounded, host-selected
+evidence package, and must supply schema-constrained JSON including
+snapshot/fingerprint IDs, 1-3 candidate relationships, their exact edge
+and endpoint IDs, and unknowns. The host independently checks the schema,
+scope, candidate relation kind/status/endpoints, evidence-package membership,
+and `CheckCitations`. Passing results are explicitly
+`accepted-reference-valid-not-semantic-proof`, not proof of narrative
+accuracy or runtime reachability. Provider, adapter, scope, citation and
+timeout errors remain explicit inconclusive categories. No retries.
+
+Model-free negative cases run via `scripts/check.ps1` and the existing
+MAF adapter harness with `--gate-b-self-test`. The existing snapshot HTTP
+suite also asserts unauthorized, wrong origin, CSRF, wrong snapshot,
+invented entry-point and DI-only entry-point rejection without Ollama.
+Real model tests remain manual and must use a pre-existing captured snapshot.
+
+After switching to this branch, the owner first runs:
+```powershell
+.\scripts\check.ps1
+```
+Do not call this GREEN based on GitHub commit or review alone. A real-model
+Gate B result must be run five independent times on an actual saved
+candidate snapshot via the protected API (or an agreed local harness).
+Gate B remains pending until both deterministic and real-model gates pass
+and the owner explicitly accepts. The result's free-text statement is
+not independently semantically proven merely because the structural edge
+and citations are validated.
