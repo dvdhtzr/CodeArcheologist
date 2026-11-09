@@ -3,6 +3,7 @@ import { CSharpSyntaxView } from './CSharpSyntaxView';
 import { CSharpTypeLinksView } from './CSharpTypeLinksView';
 import { CSharpProjectsView } from './CSharpProjectsView';
 import { CSharpLinkContextView } from './CSharpLinkContextView';
+import { CSharpEvidenceGraphView } from './CSharpEvidenceGraphView';
 
 type Snapshot = {
   id: string;
@@ -76,6 +77,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
   const [typeLinksSnapshotId, setTypeLinksSnapshotId] = useState<string | null>(null);
   const [projectsSnapshotId, setProjectsSnapshotId] = useState<string | null>(null);
   const [contextSnapshotId, setContextSnapshotId] = useState<string | null>(null);
+  const [graphSnapshotId, setGraphSnapshotId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -95,6 +97,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setTypeLinksSnapshotId(null);
       setProjectsSnapshotId(null);
       setContextSnapshotId(null);
+      setGraphSnapshotId(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
@@ -164,6 +167,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setTypeLinksSnapshotId(null);
     setProjectsSnapshotId(null);
     setContextSnapshotId(null);
+    setGraphSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/manifest', {
         credentials: 'same-origin',
@@ -187,6 +191,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setTypeLinksSnapshotId(null);
     setProjectsSnapshotId(null);
     setContextSnapshotId(null);
+    setGraphSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/inventory', {
         credentials: 'same-origin',
@@ -245,6 +250,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                   setTypeLinksSnapshotId(null);
                   setProjectsSnapshotId(null);
                   setContextSnapshotId(null);
+                  setGraphSnapshotId(null);
                   setSyntaxSnapshotId(snapshot.id);
                 }}
               >
@@ -260,6 +266,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                   setSyntaxSnapshotId(null);
                   setProjectsSnapshotId(null);
                   setContextSnapshotId(null);
+                  setGraphSnapshotId(null);
                   setTypeLinksSnapshotId(snapshot.id);
                 }}
               >
@@ -274,6 +281,8 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                   setInventory(null);
                   setSyntaxSnapshotId(null);
                   setTypeLinksSnapshotId(null);
+                  setContextSnapshotId(null);
+                  setGraphSnapshotId(null);
                   setProjectsSnapshotId(snapshot.id);
                 }}
               >
@@ -289,10 +298,27 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                   setSyntaxSnapshotId(null);
                   setTypeLinksSnapshotId(null);
                   setProjectsSnapshotId(null);
+                  setGraphSnapshotId(null);
                   setContextSnapshotId(snapshot.id);
                 }}
               >
                 Inspect link context
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError('');
+                  setManifest(null);
+                  setInventory(null);
+                  setSyntaxSnapshotId(null);
+                  setTypeLinksSnapshotId(null);
+                  setProjectsSnapshotId(null);
+                  setContextSnapshotId(null);
+                  setGraphSnapshotId(snapshot.id);
+                }}
+              >
+                Explore C# evidence graph
               </button>
             </div>
             <span>
@@ -308,6 +334,12 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       {list?.hasMore && <p className="workspace-note">
         Showing the newest {list.items.length} of {list.totalCount} snapshots.
       </p>}
+      {graphSnapshotId && (
+        <CSharpEvidenceGraphView
+          key={graphSnapshotId}
+          endpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/csharp-evidence-graph'}
+        />
+      )}
       {contextSnapshotId && (
         <CSharpLinkContextView
           key={contextSnapshotId}
