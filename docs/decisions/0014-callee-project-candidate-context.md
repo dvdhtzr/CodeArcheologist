@@ -74,6 +74,15 @@ source/target/shared candidate projects with individual SHA-256,
 inclusion basis and unresolved-rule count. Search, navigation, and all
 existing evidence anchors remain unchanged.
 
+Browser discoverability: a dedicated **Find callee project evidence**
+section lists the actual candidate edges before the generic graph-node
+picker. It supports filtering to all/shared/disjoint/unknown classifications
+and expandable source/target/shared project details. If no candidate edges
+exist in the selected saved snapshot, it explicitly explains that there are
+no matching callee project classifications to inspect. This is not a
+compilation, execution or project-membership verdict. Each list is
+bounded to its first 25 matching links with the total count disclosed.
+
 ## Limits, exclusions and integrity
 
 - No additional I/O, NuGet package, model, network call, build or source
