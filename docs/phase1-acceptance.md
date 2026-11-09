@@ -166,6 +166,22 @@ real solution compilation, call graph or proof of architectural behavior.
 
 No resolved compiler symbols, project evaluation, call graph, durable graph persistence or source execution is introduced.
 
+## PR #14 — observed C# invocation sites (pending owner verification)
+
+- [ ] Windows .NET 10 build, TypeScript/Vite build, and localhost HTTP integration suites GREEN.
+- [ ] Invocation observations use only SHA-256-verified, saved C# text, no project loading or source execution.
+- [ ] Graph v3 reports invocation inspector version, total invocation sites and directly method-contained sites.
+- [ ] Syntax invocation nodes and `observed-syntax` containment edges preserve exact source path/hash/line/column.
+- [ ] Two same-named method overloads each own their direct invocation occurrences with distinct source-span IDs.
+- [ ] Nested lambda and local-function invocations remain file-scoped, not incorrectly assigned to outer methods.
+- [ ] Written method names never create fabricated callee or verified call/dependency edges.
+- [ ] 4,501 invocation-site fixture fails HTTP 413 while saved manifest stays accessible.
+- [ ] Existing auth/scope, snapshot tamper 409, unsafe project DTD 422, restart stability and previous graph claims pass.
+- [ ] Graph browser supports the **Invocation sites (callee unresolved)** filter and one-hop navigation from caller/file to occurrence.
+
+This slice creates a **call-site syntax inventory**, not a compiler-bound
+method-to-method call graph or execution proof.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
