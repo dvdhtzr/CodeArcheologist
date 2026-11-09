@@ -339,6 +339,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
           key={graphSnapshotId}
           endpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/csharp-evidence-graph'}
           evidenceToolEndpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/evidence-tools/entry-point'}
+          localMafEndpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/investigations/local-maf'}
           csrfToken={csrfToken}
         />
       )}
