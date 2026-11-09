@@ -49,15 +49,15 @@ internal static class GateBSelfTests
             GateBInvestigator.BuildAgentEvidenceJson(package)))
         {
             var root = projection.RootElement;
-            if (root.TryGetProperty("relations", out _) ||
+            if (root.TryGetProperty("Relations", out _) ||
                 root.GetProperty("eligibleRelations").GetArrayLength() != 1)
                 throw new InvalidOperationException(
                     "The model must only receive a selectable candidate relationship list.");
             var edge = root.GetProperty("eligibleRelations")[0];
-            if (edge.GetProperty("id").GetString() != relationId ||
-                edge.GetProperty("evidenceStatus").GetString() != "candidate")
+            if (edge.GetProperty("Id").GetString() != relationId ||
+                edge.GetProperty("EvidenceStatus").GetString() != "candidate")
                 throw new InvalidOperationException("Eligible relation was not correctly scoped.");
-            if (root.GetProperty("references").GetArrayLength() != 2)
+            if (root.GetProperty("References").GetArrayLength() != 2)
                 throw new InvalidOperationException("Source-context references were removed.");
         }
         var validJson = JsonSerializer.Serialize(accepted);
