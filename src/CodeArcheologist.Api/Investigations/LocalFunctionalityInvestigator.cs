@@ -126,7 +126,7 @@ public sealed class LocalFunctionalityInvestigator(
                     edge.FromId == containment.ToId &&
                     edge.Kind == "candidate-callee" &&
                     edge.Status == "provisional-local"))
-                .Where(edge => edge is not null)
+                .OfType<EvidenceGraphEdge>()
                 .Take(12)
                 .ToArray();
             var permittedIds = new HashSet<string>(StringComparer.Ordinal)
@@ -142,7 +142,7 @@ public sealed class LocalFunctionalityInvestigator(
 
             var tools = new SnapshotInvestigationTools(
                 entry, method, sourceMethod, snippet,
-                calleeSites!, graph, permittedIds);
+                calleeSites, graph, permittedIds);
             var model = configuration["LocalAgents:Model"] ?? "qwen3.5:9b";
             if (model.Length is < 1 or > 100 ||
                 !Regex.IsMatch(model, @"^[A-Za-z0-9_.:/-]+$"))
