@@ -208,6 +208,7 @@ This is **not** a verified method-to-method call graph, execution proof, project
 - [ ] Unresolved callees have no candidate edge or fabricated project-context evidence.
 - [ ] Existing snapshot provenance, authorization/scope, tamper 409, XML DTD 422, bounds 413 and restart stability remain intact.
 - [ ] Browser displays project-context counts and exact candidate evidence on selected callee links.
+- [ ] Browser provides **Find callee project evidence** with direct candidate links, all/shared/disjoint/unknown filtering, expandable project evidence and a useful explicit empty state when a snapshot has zero candidates.
 - [ ] Owner browser acceptance confirms honest confidence labels and existing graph navigation.
 
 This enriches existing synthetic call edges with **unevaluated static
