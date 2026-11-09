@@ -1012,7 +1012,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.ok(graph.limitations.some(message =>
         message.includes('AddScoped/AddSingleton/AddTransient')));
 
-      await t.test('typed agent-ready evidence contracts and citation gates', async () => {
+      { // Typed agent-ready evidence and citation gate assertions.
         const toolsBase = endpoint + '/' + snapshot.id + '/evidence-tools';
         const httpEntry = graph.nodes.find(node =>
           node.kind === 'http-endpoint-attribute' &&
@@ -1170,7 +1170,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.ok(minimal.unknowns.some(item => item.includes('runtime handler')));
         assert.ok(minimal.references.every(ref =>
           graph.nodes.some(node => node.id === ref.id)));
-      });
+      }
 
 
 
