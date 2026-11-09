@@ -550,14 +550,21 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(inherited.target?.filePath, 'src/TypesBase.cs');
       assert.equal(inherited.target?.line, 2);
       assert.equal(inherited.target?.fileSha256,
-        sha256(await readFile(join(source, 'src', 'TypesBase.cs'))));
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'src', 'TypesBase.cs'))));
       assert.equal(inherited.fileSha256,
-        sha256(await readFile(join(source, 'src', 'TypesUse.cs'))));
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'src', 'TypesUse.cs'))));
       assert.equal(createdType?.status, 'provisional-local');
       assert.equal(createdType?.target?.fileSha256, inherited.target.fileSha256);
       assert.equal(missing?.status, 'unresolved');
       assert.equal(missing?.target, null);
       assert.ok(report.limitations.some(text => text.includes('NOT a verified')));
+      assert.deepEqual((await (await get(url, session)).json()).usages, report.usages);
+
+      // An edit to the LIVE repository cannot rewrite captured relationships.
+      await writeFile(join(source, 'src', 'TypesBase.cs'),
+        'namespace Bridge; public class Unrelated {}\n');
       assert.deepEqual((await (await get(url, session)).json()).usages, report.usages);
 
       const original = await get(endpoint + '/' + firstId + '/csharp-type-links', session);
