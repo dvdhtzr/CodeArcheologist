@@ -6,6 +6,8 @@ To report a vulnerability, use the repository's **Report a vulnerability** / pri
 
 **One-hop change-impact review** is a read-only reversal of existing authenticated, snapshot-scoped evidence graph links in the React client. It does not execute, evaluate or re-open imported source and does not make additional API calls. It inspects only direct `candidate-callee` edges to already captured method declarations, joins each site to its `observed-syntax` containing method/file, and retains `provisional-local` confidence and project candidate hashes. A lack of inbound links is never proof of safety; unresolved and transitive relationships remain unassigned. See [ADR 0015](docs/decisions/0015-one-hop-provisional-change-impact.md).
 
+**HTTP entry-point attribute inventory** inspects only syntax trees constructed from verified saved C# snapshot bytes. It never loads/evaluates imported projects, imports attribute assemblies, resolves effective ASP.NET routes, executes source code or invokes imported analyzers/generators. Conventional unqualified HTTP verb attribute spellings yield `candidate` edges to exact observed method declarations, not verified runtime endpoints. Raw route string literals are separate; unsupported route expressions remain unresolved. Graph hash/provenance/limit errors fail closed. See [ADR 0016](docs/decisions/0016-csharp-http-attribute-entrypoint-candidates.md).
+
 ## Security commitments
 
 - Default analysis never executes imported source, MSBuild targets, dependency lifecycle scripts or tests.
