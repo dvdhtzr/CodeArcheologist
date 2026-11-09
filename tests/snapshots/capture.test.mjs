@@ -391,6 +391,37 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(retry.status, 200);
       assert.equal((await retry.json()).id, secondId);
     });
+
+    await t.test('mixed-language inventory labels remain explicitly heuristic', async () => {
+      await mkdir(join(source, 'tests'));
+      await mkdir(join(source, 'db'));
+      await writeFile(join(source, 'tests', 'Widget.test.tsx'),
+        'export function Widget() { return null; }\n');
+      await writeFile(join(source, 'db', 'schema.sql'),
+        'CREATE TABLE Demo (Id INT);\n');
+      await writeFile(join(source, 'package.json'), '{"private":true}\n');
+
+      const created = await post(endpoint, session);
+      assert.equal(created.status, 201);
+      const snapshot = await created.json();
+
+      const response = await get(endpoint + '/' + snapshot.id + '/inventory', session);
+      assert.equal(response.status, 200);
+      const report = await response.json();
+      const typeScriptTest = report.files.find(file =>
+        file.path === 'tests/Widget.test.tsx');
+      const sql = report.files.find(file => file.path === 'db/schema.sql');
+      const dependencies = report.files.find(file =>
+        file.path === 'package.json');
+
+      assert.equal(typeScriptTest?.language, 'TypeScript');
+      assert.equal(typeScriptTest?.role, 'test-source-candidate');
+      assert.equal(sql?.language, 'SQL');
+      assert.equal(sql?.role, 'database-script');
+      assert.equal(dependencies?.role, 'dependency-manifest');
+      assert.ok(report.limitations.some(text => text.includes('not parsed')));
+      assert.notEqual(snapshot.id, firstId);
+    });
   } finally {
     await stopApi(api);
     await rm(testRoot, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 });
