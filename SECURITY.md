@@ -4,6 +4,8 @@ Code Archeologist is an early-stage development project. The local-development s
 
 To report a vulnerability, use the repository's **Report a vulnerability** / private GitHub Security Advisory channel where enabled. If it is unavailable, ask a maintainer to enable a private reporting channel without publicly disclosing exploit details.
 
+**One-hop change-impact review** is a read-only reversal of existing authenticated, snapshot-scoped evidence graph links in the React client. It does not execute, evaluate or re-open imported source and does not make additional API calls. It inspects only direct `candidate-callee` edges to already captured method declarations, joins each site to its `observed-syntax` containing method/file, and retains `provisional-local` confidence and project candidate hashes. A lack of inbound links is never proof of safety; unresolved and transitive relationships remain unassigned. See [ADR 0015](docs/decisions/0015-one-hop-provisional-change-impact.md).
+
 ## Security commitments
 
 - Default analysis never executes imported source, MSBuild targets, dependency lifecycle scripts or tests.
