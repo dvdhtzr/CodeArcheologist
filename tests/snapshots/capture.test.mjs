@@ -970,7 +970,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         node.detail.includes('lambda-factory-syntax-unresolved')));
       assert.ok(diNodes.some(node =>
         node.detail.includes('Written receiver: custom') &&
-        node.detail.includes('source-syntax candidate'),
+        node.detail.includes('source-syntax candidate')),
         'unrelated same-name custom method remains a candidate, not a verified registration');
       assert.ok(diNodes.some(node =>
         node.detail.includes('registration shape: unresolved')));
