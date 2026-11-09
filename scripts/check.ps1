@@ -15,6 +15,9 @@ if ($LASTEXITCODE -ne 0) { throw 'API build failed.' }
 $contractProject = Join-Path $root 'tests/ollama-contract/OllamaContractProbe.csproj'
 & dotnet run --project $contractProject --configuration Release -- --self-test
 if ($LASTEXITCODE -ne 0) { throw 'Model-free Ollama structured-output contract checks failed.' }
+$adapterProject = Join-Path $root 'tests/maf-adapter-contract/MafAdapterContractProbe.csproj'
+& dotnet run --project $adapterProject --configuration Release -- --gate-b-self-test
+if ($LASTEXITCODE -ne 0) { throw 'Gate B model-free structural contract checks failed.' }
 & npm ci --prefix $client --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation (npm ci) failed.' }
 & npm --prefix $client run typecheck
@@ -29,4 +32,4 @@ if ($LASTEXITCODE -ne 0) { throw 'SQLite workspace integration tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Local repository registration integration tests failed.' }
 & node --test (Join-Path $root 'tests/snapshots/capture.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Read-only snapshot integration tests failed.' }
-Write-Host 'GREEN: Local build, model-free Ollama contract, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'
+Write-Host 'GREEN: Local build, model-free Ollama and Gate B contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'
