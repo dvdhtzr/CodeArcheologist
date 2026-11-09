@@ -31,6 +31,8 @@ type EvidenceGraphReport = {
   analyzerVersion: string;
   linkContextAnalyzerVersion: string;
   projectAnalyzerVersion: string;
+  syntaxAnalyzerVersion: string;
+  syntaxDeclarationCount: number;
   nodeCount: number;
   edgeCount: number;
   nodes: GraphNode[];
@@ -137,10 +139,12 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
       {error && <p role="alert" className="error">{error}</p>}
       {report && (
         <>
-          <p>{report.nodeCount} evidence nodes · {report.edgeCount} typed edges</p>
+          <p>{report.nodeCount} evidence nodes · {report.edgeCount} typed edges ·
+            {' '}{report.syntaxDeclarationCount} syntax-only declarations</p>
           <p className="workspace-note">
             {report.analyzerVersion}. Every project membership is a candidate;
-            every type reference is provisional or unresolved. This is not a verified dependency graph.
+            every type reference is provisional or unresolved. Parsed declaration nodes
+            are observed source syntax, not proven compiler symbols. This is not a verified dependency graph.
           </p>
           <div className="graph-controls">
             <label>
@@ -158,6 +162,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                 <option value="project-file">Project files</option>
                 <option value="csharp-file">C# source files</option>
                 <option value="target-declaration">Referenced declarations</option>
+                <option value="syntax-declaration">Parsed declarations (unreferenced)</option>
                 <option value="unresolved-use">Unresolved occurrences</option>
               </select>
             </label>
@@ -225,7 +230,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                           <text x={item.x} y={item.y + 5} textAnchor="middle" fontSize="12" fill="#fff">
                             {item.other.kind === 'project-file' ? 'P' :
                               item.other.kind === 'csharp-file' ? 'F' :
-                              item.other.kind === 'target-declaration' ? 'T' : '?'}
+                              item.other.kind === 'target-declaration' ? 'T' :
+                              item.other.kind === 'syntax-declaration' ? 'D' : '?'}
                           </text>
                           <text x={item.x} y={item.y + (item.y < center.y ? -32 : 39)}
                             textAnchor="middle" fontSize="10" fill="currentColor">
@@ -239,7 +245,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                       <text x={center.x} y={center.y + 5} textAnchor="middle" fontSize="15" fill="#fff">
                         {selectedNode.kind === 'project-file' ? 'P' :
                           selectedNode.kind === 'csharp-file' ? 'F' :
-                          selectedNode.kind === 'target-declaration' ? 'T' : '?'}
+                          selectedNode.kind === 'target-declaration' ? 'T' :
+                          selectedNode.kind === 'syntax-declaration' ? 'D' : '?'}
                       </text>
                     </svg>
                   )}

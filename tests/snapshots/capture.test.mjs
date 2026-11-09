@@ -655,6 +655,16 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       await writeFile(join(source, 'src', 'Orphan.cs'),
         'namespace Orphans; public class Orphan { ' +
         'public object Build() => new global::Shared.Contract(); }\n');
+      // No type usages inside this declaration fixture: these nodes must
+      // appear solely because syntax declarations are now in the graph.
+      await writeFile(join(source, 'src', 'ExtraMembers.cs'),
+        'namespace Structure;\n' +
+        'public class Parent {\n' +
+        ' public sealed class Child {}\n' +
+        ' public void Act() {}\n' +
+        ' public void Act(int value) {}\n' +
+        ' public int Count { get; set; }\n' +
+        '}\n');
 
       const created = await post(endpoint, session);
       assert.equal(created.status, 201);
@@ -759,7 +769,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v1');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v2');
+      assert.equal(graph.syntaxAnalyzerVersion, 'roslyn-csharp-syntax-v1');
+      assert.ok(graph.syntaxDeclarationCount >= 6);
       assert.equal(graph.linkContextAnalyzerVersion, 'project-type-link-context-v1');
       assert.equal(graph.projectAnalyzerVersion, 'static-csproj-membership-v1');
       assert.equal(graph.nodeCount, graph.nodes.length);
@@ -791,6 +803,43 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         node.filePath === 'ProjectTwo/Conditional.cs' &&
         node.label === 'MissingDependency');
       assert.ok(sourceNode && targetNode && projectNode && unresolvedNode);
+      const parsedFilePath = 'src/ExtraMembers.cs';
+      const parsedFileSha = sha256(await readFile(join(data, 'snapshots',
+        snapshot.id, 'files', 'src', 'ExtraMembers.cs')));
+      const parsedFile = graph.nodes.find(node =>
+        node.kind === 'csharp-file' && node.filePath === parsedFilePath);
+      assert.ok(parsedFile);
+      assert.equal(parsedFile.fileSha256, parsedFileSha);
+      const syntaxOnly = graph.nodes.filter(node =>
+        node.kind === 'syntax-declaration' && node.filePath === parsedFilePath);
+      assert.ok(syntaxOnly.length >= 5,
+        'class, nested class, overloads and property require syntax declarations');
+      assert.ok(syntaxOnly.some(node => node.label === 'Structure.Parent'));
+      assert.ok(syntaxOnly.some(node => node.label === 'Structure.Parent.Child'));
+      assert.ok(syntaxOnly.some(node => node.label === 'Structure.Parent.Count'));
+      const overloads = syntaxOnly.filter(node =>
+        node.label === 'Structure.Parent.Act');
+      assert.equal(overloads.length, 2,
+        'overloads have distinct source spans and cannot collapse by name');
+      assert.notEqual(overloads[0].id, overloads[1].id);
+      assert.ok(overloads.every(node =>
+        node.fileSha256 === parsedFileSha && node.line > 0 && node.column > 0 &&
+        node.detail.includes('syntax declaration')));
+      for (const declaration of syntaxOnly) {
+        const containment = graph.edges.find(edge =>
+          edge.kind === 'declared-in' && edge.fromId === declaration.id &&
+          edge.toId === parsedFile.id);
+        assert.ok(containment,
+          'each parsed declaration must link to its exact captured source file');
+        assert.equal(containment.status, 'observed-location');
+        assert.equal(containment.evidenceSha256, parsedFileSha);
+        assert.ok(containment.line > 0);
+      }
+      assert.equal(graph.nodes.filter(node => node.id === targetNode.id).length, 1);
+      assert.equal(graph.edges.filter(edge =>
+        edge.kind === 'declared-in' && edge.fromId === targetNode.id).length, 1,
+        'linked target declaration must not duplicate the same syntax containment edge');
+
       assert.equal(sourceNode.fileSha256,
         sha256(await readFile(join(data, 'snapshots', snapshot.id,
           'files', 'ProjectOne', 'Main.cs'))));

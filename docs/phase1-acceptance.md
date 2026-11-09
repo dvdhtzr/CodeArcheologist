@@ -151,6 +151,21 @@ No project evaluation, resolved dependency graph, method-call graph or automatic
 This is an in-memory on-demand evidence graph, **not** durable typed graph persistence,
 real solution compilation, call graph or proof of architectural behavior.
 
+## PR #13 — syntax-observed C# declarations in graph (pending owner verification)
+
+- [ ] Existing .NET 10 API, TypeScript/Vite build and localhost HTTP suites GREEN.
+- [ ] Graph combines syntax report with candidate project/link observations from the exact saved snapshot.
+- [ ] Graph reports syntax analyzer version, syntax declaration count and updated graph analyzer version.
+- [ ] Unreferenced classes, nested classes, method overloads, and properties appear as source-located nodes.
+- [ ] Syntax-only declarations link to saved source files with exact captured SHA-256 and source line/column.
+- [ ] Referenced target declarations reuse exact file/hash/span graph identity and containment edge.
+- [ ] Overload source spans preserve separate identities despite identical display names.
+- [ ] The graph remains deterministic after repeated requests, live tree edits and API restart.
+- [ ] Existing authentication, snapshot 404, tamper 409, unsafe XML 422 and bounds 413 remain functional.
+- [ ] Graph browser exposes **Parsed declarations (unreferenced)** and source syntax count; confidence labels remain honest.
+
+No resolved compiler symbols, project evaluation, call graph, durable graph persistence or source execution is introduced.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
