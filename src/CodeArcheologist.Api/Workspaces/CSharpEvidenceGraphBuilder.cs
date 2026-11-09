@@ -31,6 +31,8 @@ public sealed record CSharpEvidenceGraphReport(
     string AnalyzerVersion,
     string LinkContextAnalyzerVersion,
     string ProjectAnalyzerVersion,
+    string SyntaxAnalyzerVersion,
+    int SyntaxDeclarationCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -46,9 +48,10 @@ public sealed record CSharpEvidenceGraphReport(
 public sealed class CSharpEvidenceGraphBuilder(
     SnapshotCaptureService capture,
     StaticCSharpProjectInspector projectInspector,
-    CSharpProjectLinkContextInspector linkContextInspector)
+    CSharpProjectLinkContextInspector linkContextInspector,
+    CSharpSyntaxInspector syntaxInspector)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v1";
+    public const string Version = "csharp-snapshot-evidence-graph-v2";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -57,6 +60,7 @@ public sealed class CSharpEvidenceGraphBuilder(
     {
         var context = linkContextInspector.Inspect(snapshot, cancellationToken);
         var projects = projectInspector.Inspect(snapshot, cancellationToken);
+        var syntax = syntaxInspector.Inspect(snapshot, cancellationToken);
         var manifest = capture.ReadManifest(snapshot);
         if (context.WorkspaceId != snapshot.WorkspaceId ||
             context.RepositoryId != snapshot.RepositoryId ||
@@ -64,6 +68,11 @@ public sealed class CSharpEvidenceGraphBuilder(
             projects.WorkspaceId != snapshot.WorkspaceId ||
             projects.RepositoryId != snapshot.RepositoryId ||
             projects.SnapshotId != snapshot.Id ||
+            syntax.WorkspaceId != snapshot.WorkspaceId ||
+            syntax.RepositoryId != snapshot.RepositoryId ||
+            syntax.SnapshotId != snapshot.Id ||
+            !string.Equals(syntax.FingerprintSha256,
+                snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(context.FingerprintSha256,
                 snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(projects.FingerprintSha256,
@@ -206,6 +215,51 @@ public sealed class CSharpEvidenceGraphBuilder(
             }
         }
 
+        // The syntax-only Roslyn inspector supplies ALL supported declaration
+        // locations, not only those named by provisional type usages.
+        // Target declarations already indexed by type links share the same
+        // exact saved file hash and source span; reuse their graph nodes.
+        // This avoids representing one physical declaration twice.
+        foreach (var declaration in syntax.Declarations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var declarationId = "declaration:" + declaration.FilePath + ":" +
+                declaration.FileSha256 + ":" + declaration.SpanStart +
+                ":" + declaration.SpanLength;
+
+            if (!nodes.ContainsKey(declarationId))
+            {
+                var qualifiedName = string.Join(".", new[]
+                {
+                    declaration.ContainingNamespace,
+                    declaration.ContainingType,
+                    declaration.Name
+                }.Where(part => !string.IsNullOrEmpty(part)));
+
+                AddNode(new EvidenceGraphNode(
+                    declarationId, "syntax-declaration",
+                    qualifiedName, declaration.FilePath, declaration.FileSha256,
+                    declaration.StartLine, declaration.StartColumn,
+                    declaration.Kind + " syntax declaration" +
+                    (declaration.ParameterCount is int count
+                        ? " (" + count + " parameters)" : "") +
+                    "; not a resolved compiler symbol"));
+            }
+
+            var containmentId = "declared-in:" + declarationId;
+            if (!edges.ContainsKey(containmentId))
+            {
+                AddEdge(new EvidenceGraphEdge(
+                    containmentId,
+                    declarationId, "file:" + declaration.FilePath,
+                    "declared-in", "observed-location", null,
+                    declaration.FilePath, declaration.FileSha256,
+                    declaration.StartLine, declaration.StartColumn,
+                    "Roslyn parsed a " + declaration.Kind +
+                    " declaration from the saved source; this is not evidence that it compiles."));
+            }
+        }
+
         return new CSharpEvidenceGraphReport(
             snapshot.WorkspaceId,
             snapshot.RepositoryId,
@@ -214,6 +268,8 @@ public sealed class CSharpEvidenceGraphBuilder(
             Version,
             context.AnalyzerVersion,
             projects.AnalyzerVersion,
+            syntax.AnalyzerVersion,
+            syntax.Declarations.Count,
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -223,7 +279,9 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "This is an on-demand evidence graph projection, not a verified compiler dependency graph or persistent graph database.",
                 "Project-to-file edges are candidate-only; imports, conditions, SDK excludes and real compilation inputs were not evaluated.",
                 "C# type-use edges are provisional-local even when both files share a project candidate.",
-                "Target-declaration nodes are limited to declarations encountered by the prior type-use inspector; this is not a complete symbol graph.",
+                "Syntax declaration nodes cover the supported C# parser kinds; these are parsed source locations, not resolved compiler symbols.",
+                "Existing target-declaration nodes are reused when their saved file hash and source span match a syntax declaration.",
+                "Preprocessor conditions, partial types, generated code and overloads may prevent a complete semantic symbol inventory.",
                 "An unresolved-use node records the written source occurrence and never fabricates a declaration or external dependency.",
                 "Only base-type clauses and explicit object creations are covered, not method calls, DI, data flow or runtime behavior.",
                 "The nodes and links are derived entirely from verified saved snapshot file paths, hashes and source spans."
