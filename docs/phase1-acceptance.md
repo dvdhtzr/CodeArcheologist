@@ -233,6 +233,23 @@ This is an **on-demand direct candidate review checklist**. No
 new persistence, analyzer, real call graph, transitive inference or
 tested breakage prediction is part of PR #17.
 
+## PR #18 — C# HTTP attribute entry-point candidates (pending owner verification)
+
+- [ ] Windows .NET 10, React/TypeScript/Vite, and local HTTP/security integration tests GREEN.
+- [ ] The new bounded Roslyn HTTP attribute inspector reads only hash-verified saved C# source; no imported source/project/restore/analyzer execution.
+- [ ] Graph v6 reports HTTP candidate analyzer version, total annotations, and nonliteral attribute route count.
+- [ ] Exact simple-name `HttpGet`, `HttpPost`, `HttpPut`, `HttpPatch`, `HttpDelete` method attributes create `http-endpoint-attribute` nodes and `annotates-method` edges marked `candidate`.
+- [ ] Every target method is an existing captured declaration joined by exact path/file SHA-256/source span. Mismatches fail HTTP 409, not an imaginary method.
+- [ ] Literal HTTP, method `[Route]` and containing type `[Route]` strings are preserved as **separate source observations**, not composed URLs.
+- [ ] Nonliteral route argument remains unresolved; custom and qualified/aliased attributes do not produce a false conventional simple-name match.
+- [ ] Existing snapshot auth, tamper 409, invalid UTF-8 422, unsafe DTD 422, analyzer/graph limit 413, original source immutability and restart determinism hold.
+- [ ] Browser **Find HTTP attribute entry-point candidates** panel displays evidence and links to methods/one-hop impact explorer, or honestly reports no candidates.
+- [ ] Owner browser acceptance confirms no verified runtime endpoint or resolved route claims.
+
+This milestone seeds a **source-level entry-point inventory** toward
+the functionality map; it does not establish complete application
+operations, actual HTTP registration, or functional behavior.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.

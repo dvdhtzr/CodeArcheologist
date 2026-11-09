@@ -45,6 +45,9 @@ public sealed record CSharpEvidenceGraphReport(
     int CalleeSharedCandidateCount,
     int CalleeDisjointCandidateCount,
     int CalleeUnknownProjectCount,
+    string HttpAttributeAnalyzerVersion,
+    int HttpAttributeCandidateCount,
+    int NonliteralHttpAttributeRouteCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -63,9 +66,10 @@ public sealed class CSharpEvidenceGraphBuilder(
     CSharpProjectLinkContextInspector linkContextInspector,
     CSharpSyntaxInspector syntaxInspector,
     CSharpInvocationSyntaxInspector invocationInspector,
-    CSharpProvisionalInvocationBinder calleeBinder)
+    CSharpProvisionalInvocationBinder calleeBinder,
+    CSharpHttpAttributeInspector httpInspector)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v5";
+    public const string Version = "csharp-snapshot-evidence-graph-v6";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -77,6 +81,7 @@ public sealed class CSharpEvidenceGraphBuilder(
         var syntax = syntaxInspector.Inspect(snapshot, cancellationToken);
         var invocations = invocationInspector.Inspect(snapshot, cancellationToken);
         var callees = calleeBinder.Inspect(snapshot, cancellationToken);
+        var http = httpInspector.Inspect(snapshot, cancellationToken);
         var manifest = capture.ReadManifest(snapshot);
         if (context.WorkspaceId != snapshot.WorkspaceId ||
             context.RepositoryId != snapshot.RepositoryId ||
@@ -94,6 +99,11 @@ public sealed class CSharpEvidenceGraphBuilder(
             callees.RepositoryId != snapshot.RepositoryId ||
             callees.SnapshotId != snapshot.Id ||
             callees.InvocationCount != invocations.InvocationCount ||
+            http.WorkspaceId != snapshot.WorkspaceId ||
+            http.RepositoryId != snapshot.RepositoryId ||
+            http.SnapshotId != snapshot.Id ||
+            !string.Equals(http.FingerprintSha256,
+                snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(callees.FingerprintSha256,
                 snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(invocations.FingerprintSha256,
@@ -315,6 +325,76 @@ public sealed class CSharpEvidenceGraphBuilder(
             }
         }
 
+        // HTTP verb annotations are source-observed *spellings*. Their
+        // presence is merely a candidate ASP.NET surface, NOT a verified
+        // effective HTTP endpoint. The source method itself must have
+        // already been indexed as a saved syntax declaration at this exact
+        // path/hash/span. Never synthesize or guess a target method node.
+        var syntaxMethods = syntax.Declarations
+            .Where(item => item.Kind == "method")
+            .ToDictionary(item =>
+                "declaration:" + item.FilePath + ":" + item.FileSha256 +
+                ":" + item.SpanStart + ":" + item.SpanLength,
+                item => item,
+                StringComparer.Ordinal);
+        foreach (var candidate in http.Candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var methodId = "declaration:" + candidate.FilePath + ":" +
+                candidate.FileSha256 + ":" + candidate.MethodSpanStart +
+                ":" + candidate.MethodSpanLength;
+            if (!syntaxMethods.TryGetValue(methodId, out var method) ||
+                method.Name != candidate.MethodName ||
+                !nodes.TryGetValue(methodId, out var methodNode) ||
+                methodNode.Kind != "syntax-declaration" ||
+                methodNode.FilePath != candidate.FilePath ||
+                methodNode.FileSha256 != candidate.FileSha256)
+            {
+                throw new SnapshotCaptureException(
+                    "HTTP annotation does not match a captured C# method declaration.", 409);
+            }
+
+            var endpointId = "http-attribute:" + candidate.FilePath + ":" +
+                candidate.FileSha256 + ":" + candidate.AttributeSpanStart +
+                ":" + candidate.AttributeSpanLength;
+            var label = candidate.HttpVerb + " [" +
+                candidate.WrittenAttribute + "] " + candidate.MethodName;
+            var description =
+                "Convention-name HTTP attribute candidate (not an ASP.NET-bound or registered endpoint). " +
+                "Attribute argument route: " +
+                (candidate.AttributeRouteLiteral is null
+                    ? "(" + candidate.AttributeRouteStatus + ")"
+                    : candidate.AttributeRouteLiteral) + "; " +
+                "method [Route] argument: " +
+                (candidate.MethodRouteLiteral is null
+                    ? "(" + candidate.MethodRouteStatus + ")"
+                    : candidate.MethodRouteLiteral) + "; " +
+                "containing type [Route] argument: " +
+                (candidate.TypeRouteLiteral is null
+                    ? "(" + candidate.TypeRouteStatus + ")"
+                    : candidate.TypeRouteLiteral) +
+                ". These are separately observed source strings, NOT a composed effective URL.";
+            AddNode(new EvidenceGraphNode(
+                endpointId,
+                "http-endpoint-attribute",
+                label,
+                candidate.FilePath, candidate.FileSha256,
+                candidate.Line, candidate.Column,
+                description));
+            AddEdge(new EvidenceGraphEdge(
+                "http-attribute-method:" + endpointId,
+                endpointId,
+                methodId,
+                "annotates-method",
+                "candidate",
+                null,
+                candidate.FilePath, candidate.FileSha256,
+                candidate.Line, candidate.Column,
+                "Observed a conventional written HTTP verb attribute on this method. " +
+                "The actual attribute symbol, route mapping, controller activation, " +
+                "project compilation and runtime reachability are NOT verified."));
+        }
+
         // These are call-expression occurrences, NOT links to the called
         // method. The nearest directly enclosing method/constructor is
         // observable syntax. All unsupported execution scopes (lambdas,
@@ -487,6 +567,9 @@ public sealed class CSharpEvidenceGraphBuilder(
                 edge.ProjectContextStatus == "disjoint-project-candidates"),
             edges.Values.Count(edge => edge.Kind == "candidate-callee" &&
                 edge.ProjectContextStatus == "unknown-project-candidate"),
+            http.AnalyzerVersion,
+            http.CandidateCount,
+            http.NonliteralAttributeRouteCount,
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -506,6 +589,9 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "Candidate source/target/shared project evidence retains the saved .csproj SHA-256, inclusion basis and unresolved-rule count.",
                 "Missing, ambiguous and unsupported callee targets have no outgoing candidate-callee edge; no name-based fallback is permitted.",
                 "The earlier provisional type links cover only base-type clauses and explicit object creations; DI, data flow and runtime behavior remain unexamined.",
+                "HTTP endpoint attribute candidates recognize only simple conventional HTTP verb spellings on parsed methods; these are not resolved ASP.NET symbols, verified routes or runtime endpoints.",
+                "HTTP attribute, method-level and type-level route strings are reported separately, never composed, substituted or interpreted as effective URLs.",
+                "Minimal APIs, convention routing, aliases, qualified attribute names, nonliteral route expressions and registration/hosting configuration are not analyzed.",
                 "Lambda, local function, accessor and initializer invocations are file-scoped to avoid claiming an incorrect containing method.",
                 "The nodes and links are derived entirely from verified saved snapshot file paths, hashes and source spans."
             });

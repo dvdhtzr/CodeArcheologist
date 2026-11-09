@@ -52,6 +52,9 @@ type EvidenceGraphReport = {
   calleeSharedCandidateCount: number;
   calleeDisjointCandidateCount: number;
   calleeUnknownProjectCount: number;
+  httpAttributeAnalyzerVersion: string;
+  httpAttributeCandidateCount: number;
+  nonliteralHttpAttributeRouteCount: number;
   nodeCount: number;
   edgeCount: number;
   nodes: GraphNode[];
@@ -160,6 +163,17 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
       nodesById.has(edge.fromId) && nodesById.has(edge.toId)),
     [report, nodesById]
   );
+  const httpAttributeRows = useMemo(() =>
+    (report?.nodes ?? [])
+      .filter(node => node.kind === 'http-endpoint-attribute')
+      .map(node => {
+        const link = report?.edges.find(edge =>
+          edge.kind === 'annotates-method' && edge.fromId === node.id &&
+          edge.status === 'candidate');
+        const method = link ? nodesById.get(link.toId) : undefined;
+        return { node, link, method };
+      }), [report, nodesById]);
+
   const visibleCalleeEdges = useMemo(
     () => calleeEdges.filter(edge =>
       calleeContextFilter === 'all' ||
@@ -261,7 +275,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             {' '}{report.invocationCount} invocation sites
             {' '}({report.methodContainedInvocationCount} in direct method/constructor bodies) ·
             {' '}{report.provisionalCalleeCount} provisional callee candidates ·
-            {' '}{report.unresolvedCalleeCount} unresolved callees
+            {' '}{report.unresolvedCalleeCount} unresolved callees ·
+            {' '}{report.httpAttributeCandidateCount} HTTP attribute candidates
           </p>
           <p className="workspace-note">
             Callee project context: {report.calleeSharedCandidateCount} shared candidates ·
@@ -278,6 +293,76 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             and disjoint candidates do not prove the call is impossible.
             This is not a verified dependency graph.
           </p>
+          <section className="graph-http-entrypoints" aria-label="Candidate HTTP entry-point attributes">
+            <h4>Find HTTP attribute entry-point candidates</h4>
+            <p className="workspace-note">
+              These are source-observed conventional HTTP verb attribute names,
+              not verified ASP.NET symbols or registered HTTP endpoints.
+              Route strings are shown separately, not composed into effective URLs.
+            </p>
+            {httpAttributeRows.length === 0 ? (
+              <p role="status">
+                No conventional method-level HTTP verb attributes were identified
+                in this saved snapshot. Minimal APIs, convention routes and
+                external endpoints are not covered. This does not prove that
+                the application has no HTTP endpoints.
+              </p>
+            ) : (
+              <>
+                <p>
+                  {report.httpAttributeCandidateCount} candidate annotations ·
+                  {' '}{report.nonliteralHttpAttributeRouteCount} with nonliteral or
+                  unsupported HTTP attribute route arguments.
+                </p>
+                <ul className="syntax-declaration-list">
+                  {httpAttributeRows.slice(0, 30).map(({ node, link, method }) => (
+                    <li key={node.id}>
+                      <strong>{node.label}</strong>
+                      {node.filePath && node.fileSha256 && (
+                        <EvidenceAddress
+                          path={node.filePath}
+                          hash={node.fileSha256}
+                          line={node.line}
+                          column={node.column}
+                        />
+                      )}
+                      <span>
+                        {link?.kind ?? 'Source-only candidate'} ·
+                        {' '}<strong>{link?.status ?? 'unresolved'}</strong>
+                        {method ? ' · method: ' + method.label : ' · method unavailable'}
+                      </span>
+                      <p>{node.detail}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(node.id);
+                          setKind('http-endpoint-attribute');
+                          setSearch('');
+                        }}
+                      >
+                        Inspect annotation and method in graph
+                      </button>
+                      {method && (
+                        <a href="#direct-impact" onClick={() => {
+                          setImpactMethodId(method.id);
+                          setImpactSearch('');
+                        }}>
+                          Review direct impact candidates for {method.label}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {httpAttributeRows.length > 30 && (
+                  <p className="workspace-note">
+                    Showing 30 of {httpAttributeRows.length} annotations.
+                    All candidates and their evidence are available in the
+                    authenticated local graph API.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
           <section className="graph-callee-finder" aria-label="Provisional callee project evidence">
             <h4>Find callee project evidence</h4>
             <p className="workspace-note">
@@ -560,6 +645,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                 <option value="target-declaration">Referenced declarations</option>
                 <option value="syntax-declaration">Parsed declarations (unreferenced)</option>
                 <option value="invocation-site">Invocation sites (candidate or unresolved)</option>
+                <option value="http-endpoint-attribute">HTTP attribute candidates (not registered endpoints)</option>
                 <option value="unresolved-use">Unresolved occurrences</option>
               </select>
             </label>
