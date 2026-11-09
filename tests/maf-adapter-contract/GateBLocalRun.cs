@@ -6,12 +6,16 @@ internal static class GateBLocalRun
 {
     public static async Task<int> RunAsync(string[] args)
     {
-        if (args.Length != 2 || !int.TryParse(args[1], out var attempts) ||
-            attempts is < 1 or > 10)
+        var diagnostic = args.Length == 1 && args[0] == "--gate-b-diagnose";
+        var validRun = args.Length == 2 && args[0] == "--gate-b-run" &&
+            int.TryParse(args[1], out var requested) && requested is >= 1 and <= 10;
+        if (!diagnostic && !validRun)
         {
-            Console.Error.WriteLine("Usage: --gate-b-run <attempts 1..10>");
+            Console.Error.WriteLine("Usage: --gate-b-run <attempts 1..10> OR --gate-b-diagnose");
             return 2;
         }
+
+        var attempts = diagnostic ? 1 : int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
 
         // Trusted, direct in-process harness. No extra service, API credentials,
         // imported code execution, cloud model, or manually supplied source path.
@@ -101,6 +105,32 @@ internal static class GateBLocalRun
         Console.WriteLine("Selected saved candidate: " + selectedKind);
         Console.WriteLine("Snapshot ID: " + selectedSnapshot.Id.ToString("D"));
         Console.WriteLine("Snapshot fingerprint: " + selectedSnapshot.FingerprintSha256);
+        if (diagnostic)
+        {
+            Console.WriteLine("Diagnostic mode: native /api/chat with identical Gate B schema and evidence.");
+            Console.WriteLine("No source content or model text will be printed.");
+            GateBNativeDiagnostic result;
+            try
+            {
+                result = await investigator.DiagnoseNativeAsync(
+                    selectedSnapshot, selectedEntryPoint, CancellationToken.None);
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                Console.Error.WriteLine("RED: evidence retrieval failed: " + error.GetType().Name);
+                return 1;
+            }
+            Console.WriteLine("Native chat: " + result.Status);
+            Console.WriteLine("Content characters: " + result.ContentLength);
+            Console.WriteLine("Thinking characters: " + result.ThinkingLength);
+            Console.WriteLine("Done reason: " + result.DoneReason);
+            Console.WriteLine("Prompt tokens: " + result.PromptTokens);
+            Console.WriteLine("Generation tokens: " + result.GenerationTokens);
+            Console.WriteLine("Envelope bytes: " + result.EnvelopeBytes);
+            Console.WriteLine("Diagnostic only: Gate B remains RED until MAF succeeds.");
+            return result.Status == "native-chat-completed" ? 0 : 1;
+        }
+
         Console.WriteLine("Running independent real MAF/Ollama investigations (no retry).");
 
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
