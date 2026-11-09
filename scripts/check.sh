@@ -14,6 +14,8 @@ else
   exit 1
 fi
 dotnet build "$ROOT/src/CodeArcheologist.Api/CodeArcheologist.Api.csproj" --configuration Release
+# Pure typed MAF protocol regression tests; never contact Ollama.
+dotnet run --project "$ROOT/tests/maf-protocol/MafProtocolChecks.csproj" --configuration Release
 npm ci --prefix "$ROOT/src/CodeArcheologist.Client" --no-audit --no-fund
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run typecheck
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run build
@@ -21,4 +23,4 @@ node --test "$ROOT/tests/security/local-access.test.mjs"
 node --test "$ROOT/tests/workspaces/workspaces.test.mjs"
 node --test "$ROOT/tests/repositories/registration.test.mjs"
 node --test "$ROOT/tests/snapshots/capture.test.mjs"
-echo 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
+echo 'GREEN: Local build, MAF protocol, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
