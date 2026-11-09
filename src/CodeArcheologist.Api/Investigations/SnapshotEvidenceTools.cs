@@ -26,6 +26,7 @@ public sealed record AgentEvidenceRelation(
     string EvidenceSha256,
     int? Line,
     int? Column,
+    string Explanation,
     string? ProjectContextStatus);
 
 public sealed record AgentEvidencePackage(
@@ -269,7 +270,7 @@ public sealed class SnapshotEvidenceTools(
             relations[edge.Id] = new AgentEvidenceRelation(
                 edge.Id, edge.Kind, edge.Status, edge.FromId, edge.ToId,
                 edge.EvidencePath, edge.EvidenceSha256, edge.Line, edge.Column,
-                edge.ProjectContextStatus);
+                edge.Explanation, edge.ProjectContextStatus);
         }
     }
 
