@@ -143,12 +143,12 @@ public sealed class SnapshotCaptureService(WorkspaceStore store)
 
                 SnapshotPolicy.VerifyDirectoryAncestry(
                     Path.GetDirectoryName(location)!, contentRoot);
-                var info = new FileInfo(location);
-                if (!info.Exists ||
-                    (info.Attributes & (FileAttributes.ReparsePoint |
+                var artifactInfo = new FileInfo(location);
+                if (!artifactInfo.Exists ||
+                    (artifactInfo.Attributes & (FileAttributes.ReparsePoint |
                         FileAttributes.Directory | FileAttributes.Device)) != 0 ||
-                    info.LinkTarget is not null ||
-                    info.Length != file.SizeBytes)
+                    artifactInfo.LinkTarget is not null ||
+                    artifactInfo.Length != file.SizeBytes)
                 {
                     throw new SnapshotCaptureException(
                         "A saved snapshot artifact was changed or replaced.");
