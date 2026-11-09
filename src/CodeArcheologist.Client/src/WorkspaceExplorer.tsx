@@ -181,8 +181,9 @@ export function WorkspaceExplorer({ csrfToken }: Props) {
               <p>Created {new Date(selected.createdAtUtc).toLocaleString()}</p>
               <small>Workspace ID: {selected.id}</small>
               <p className="workspace-note">
-                Workspace metadata and registered local directory locations are persistent.
-                No source snapshots, vault notes or analysis have been created.
+                Workspace metadata, registered directories and captured snapshots persist
+                locally. Open a registered repository to inspect its saved snapshots.
+                Vault notes and semantic analysis are not implemented yet.
               </p>
               <RepositoryRegistry
                 key={selected.id}

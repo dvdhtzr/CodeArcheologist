@@ -189,8 +189,9 @@ export function App() {
       <aside className="notice">
         <strong>Developer foundation</strong>
         <p>
-          Workspace metadata is stored locally. Repository ingestion, analysis, MAF
-          investigations, plugins and Mission Control remain future milestones.
+          Workspaces, repository registrations and explicit source snapshots are stored
+          locally. Semantic analysis, MAF investigations, plugins and Mission Control
+          remain future milestones.
         </p>
       </aside>
     </main>

@@ -242,6 +242,31 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     }
 }).RequireAuthorization();
 
+// Deterministic filename-only inventory of a previously captured snapshot.
+// The source manifest AND saved bytes are integrity-checked first; this route
+// never follows the mutable registered repository path or executes source.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/inventory",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     WorkspaceStore store, SnapshotCaptureService service) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+
+    try
+    {
+        var manifest = service.ReadManifest(snapshot);
+        return Results.Ok(SourceInventoryBuilder.Build(manifest));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Snapshot inventory could not be verified." });
+    }
+}).RequireAuthorization();
+
 app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots",
     async (Guid workspaceId, Guid repositoryId, HttpContext context,
         WorkspaceStore store, SnapshotCaptureService service, CancellationToken cancellationToken) =>

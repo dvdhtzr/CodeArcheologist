@@ -27,6 +27,37 @@ type Manifest = {
   exclusions: { path: string; reason: string }[];
 };
 
+type InventorySummary = {
+  name: string;
+  fileCount: number;
+  totalBytes: number;
+};
+
+type InventoryFile = {
+  path: string;
+  sha256: string;
+  sizeBytes: number;
+  language: string;
+  role: string;
+};
+
+type InventoryReport = {
+  workspaceId: string;
+  repositoryId: string;
+  snapshotId: string;
+  fingerprintSha256: string;
+  analyzerVersion: string;
+  detectionMethod: string;
+  includedFileCount: number;
+  includedBytes: number;
+  excludedEntryCount: number;
+  languages: InventorySummary[];
+  roles: InventorySummary[];
+  files: InventoryFile[];
+  exclusions: { path: string; reason: string }[];
+  limitations: string[];
+};
+
 type Props = {
   workspaceId: string;
   repositoryId: string;
@@ -36,6 +67,7 @@ type Props = {
 export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props) {
   const [list, setList] = useState<SnapshotPage | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [inventory, setInventory] = useState<InventoryReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -50,6 +82,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setList(null);
       setError('');
       setManifest(null);
+      setInventory(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
@@ -114,6 +147,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
   async function inspect(id: string) {
     setBusy(true);
     setError('');
+    setInventory(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/manifest', {
         credentials: 'same-origin',
@@ -124,6 +158,28 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setManifest(data);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Manifest could not be opened.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function inspectInventory(id: string) {
+    setBusy(true);
+    setError('');
+    setManifest(null);
+    try {
+      const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/inventory', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        const result: { error?: string } = await response.json().catch(() => ({}));
+        throw new Error(result.error ?? 'Snapshot inventory could not be verified.');
+      }
+      const report: InventoryReport = await response.json();
+      setInventory(report);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Inventory could not be inspected.');
     } finally {
       setBusy(false);
     }
@@ -152,9 +208,14 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       <ul className="snapshot-list">
         {list?.items.map((snapshot) => (
           <li key={snapshot.id}>
-            <button type="button" disabled={busy} onClick={() => void inspect(snapshot.id)}>
-              Inspect manifest
-            </button>
+            <div className="snapshot-actions">
+              <button type="button" disabled={busy} onClick={() => void inspect(snapshot.id)}>
+                Inspect manifest
+              </button>
+              <button type="button" disabled={busy} onClick={() => void inspectInventory(snapshot.id)}>
+                Inspect source inventory
+              </button>
+            </div>
             <span>
               {new Date(snapshot.capturedAtUtc).toLocaleString()} —
               {' '}{snapshot.fileCount} files, {snapshot.exclusionCount} exclusions
@@ -168,6 +229,71 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       {list?.hasMore && <p className="workspace-note">
         Showing the newest {list.items.length} of {list.totalCount} snapshots.
       </p>}
+      {inventory && (
+        <section className="snapshot-manifest" aria-label="Snapshot source inventory">
+          <h4>Source inventory (filename-based)</h4>
+          <p>
+            {inventory.includedFileCount} captured files · {inventory.includedBytes} bytes ·
+            {' '}{inventory.excludedEntryCount} excluded entries
+          </p>
+          <p className="workspace-note">
+            Detector: {inventory.analyzerVersion} ({inventory.detectionMethod}).
+            All paths and hashes belong to the saved snapshot, not the current working directory.
+          </p>
+          <div className="inventory-summaries">
+            <div>
+              <h4>Probable languages</h4>
+              <ul>
+                {inventory.languages.map((language) => (
+                  <li key={language.name}>
+                    <span>{language.name}</span>
+                    <span>{language.fileCount} file(s)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4>File roles</h4>
+              <ul>
+                {inventory.roles.map((role) => (
+                  <li key={role.name}>
+                    <span>{role.name}</span>
+                    <span>{role.fileCount} file(s)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <details>
+            <summary>Included files ({inventory.files.length})</summary>
+            <ul>
+              {inventory.files.slice(0, 100).map((file) => (
+                <li key={file.path}>
+                  <code>{file.path}</code>
+                  <span>{file.language} · {file.role} · SHA-256 {file.sha256.slice(0, 16)}…</span>
+                </li>
+              ))}
+            </ul>
+            {inventory.files.length > 100 && (
+              <p className="workspace-note">Showing the first 100 files; all remain in the saved manifest.</p>
+            )}
+          </details>
+          <details>
+            <summary>Excluded entries ({inventory.exclusions.length})</summary>
+            <ul>
+              {inventory.exclusions.slice(0, 100).map((entry) => (
+                <li key={entry.path}>
+                  <code>{entry.path}</code>
+                  <span>{entry.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+          <p className="workspace-note">
+            This inventory does not parse code or establish functions, endpoints, dependencies, or behavior.
+          </p>
+        </section>
+      )}
       {manifest && (
         <section className="snapshot-manifest" aria-label="Captured manifest">
           <h4>Manifest (verified against saved digest)</h4>
