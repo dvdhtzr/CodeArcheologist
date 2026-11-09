@@ -9,5 +9,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI" Version="1.28.0" />
     <PackageReference Include="OllamaSharp" Version="5.5.2" />
+    <ProjectReference Include="../../src/CodeArcheologist.Api/CodeArcheologist.Api.csproj" />
   </ItemGroup>
 </Project>
