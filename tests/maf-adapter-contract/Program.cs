@@ -40,13 +40,13 @@ static string Validate(string? text)
     }
 }
 
-if (args.Length > 0 && args[0] == "--gate-b-fixture")
+if (args.Length > 0 && args[0] is "--gate-b-fixture" or "--gate-b-fixture-faults")
 {
     Environment.ExitCode = await GateBFixtureRun.RunAsync(args);
     return;
 }
 
-if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose")
+if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose" or "--gate-b-faults")
 {
     Environment.ExitCode = await GateBLocalRun.RunAsync(args);
     return;
