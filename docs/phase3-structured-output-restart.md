@@ -1,6 +1,6 @@
 # Phase 3 restart: local structured-output contract first
 
-Status: Gate A provider probe implemented, awaiting owner's local compile and Ollama results. Created from verified deterministic `main`. No code from draft PR #25 is presumed valid.
+Status: native Ollama Gate A passed 5/5 locally on qwen3.5:9b; focused MAF/OllamaSharp adapter probe committed, awaiting owner's compile and runtime verification. Created from verified deterministic `main`. No code from draft PR #25 is presumed valid.
 
 ## Why restart
 
@@ -64,3 +64,21 @@ dotnet run --project .\tests\ollama-contract\OllamaContractProbe.csproj --config
 The command posts five independent non-streamed schema-constrained requests to `http://127.0.0.1:11434/api/generate` using `format` as a JSON Schema and `think: false`. It does not use any user repository, files, credentials, or cloud endpoint. It logs category-only outcomes; no model prose is printed. A missing provider, timeout, unsupported schema, partial JSON or field-contract failure produces RED. No retries obscure failures. An all-GREEN provider result proves **only** this narrow native-Ollama contract, not the MAF adapter, source grounding, or agent behavior.
 
 **Required next gate before an agent:** Compile a separate adapter probe against the exact pinned OllamaSharp and MAF versions, using verified API signatures and the same host schema validation. Do not infer adapter support from the REST probe alone.
+
+## Gate A adapter probe — isolated compile and runtime verification
+
+The native Ollama REST test returned 5/5 `valid` on the owner's machine. A separate project now references **Microsoft.Agents.AI 1.28.0** and **OllamaSharp 5.5.2**, exercising `AsAIAgent`, `AgentRunOptions.ResponseFormat`, and `ChatResponseFormat.ForJsonSchema` with the same required fields and length constraints. This uses actual MAF `RunAsync`, not a manual HTTP substitute; it does not yet introduce evidence or tools.
+
+From the project root on `feature/phase3-structured-output-contract`:
+
+```powershell
+dotnet build .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release
+```
+
+Only if that builds GREEN, execute with Ollama running:
+
+```powershell
+dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release --no-build -- 5 qwen3.5:9b
+```
+
+The adapter project is intentionally not part of `scripts/check.ps1` until the pinned package signatures have been confirmed on the owner's Windows installation. A compile failure is a gate failure, not permission to improvise a replacement API. A valid run proves schema adherence for this minimal two-field contract, not source grounding, agent reasoning, or reliability at scale. No raw model response or user source is printed.
