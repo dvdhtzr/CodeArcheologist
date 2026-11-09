@@ -12,6 +12,8 @@ To report a vulnerability, use the repository's **Report a vulnerability** / pri
 
 **DI registration candidate inventory** uses bounded Roslyn syntax inspection of SHA-256-verified saved C# snapshots only, never loading imported assemblies or evaluating MSBuild. Written `AddScoped`/`AddSingleton`/`AddTransient` names and generic or `typeof` type texts are **candidate source evidence**, not compiler-bound Microsoft DI calls or a runtime service graph. Exact saved path/hash/span joins to independently observed invocation sites fail closed on mismatch; factories, overloads and non-matching method names remain explicitly unresolved or outside coverage. See [ADR 0018](docs/decisions/0018-csharp-di-registration-candidates.md).
 
+**Agent-ready evidence tool contracts** are application-owned, typed, read-only and snapshot-scoped; no model can supply a file path or command. The entry-point evidence route accepts only exact existing HTTP attribute or Minimal API candidate node IDs, cross-checks independently observed Roslyn syntax spans, verifies copied source bytes/hashes and returns bounded snippets/relationships with honest unknowns. The separate CSRF-protected citation check rejects fabricated IDs, mismatched fingerprints, duplicate citations, unsupported claim kinds and citations of the wrong evidence type. A passing check is **reference identity only**, not a verdict on textual truth or runtime reachability. No actual agent, Ollama, network model, imported source execution, MSBuild or project restore is introduced. See [ADR 0019](docs/decisions/0019-agent-ready-snapshot-evidence-contracts.md).
+
 ## Security commitments
 
 - Default analysis never executes imported source, MSBuild targets, dependency lifecycle scripts or tests.
