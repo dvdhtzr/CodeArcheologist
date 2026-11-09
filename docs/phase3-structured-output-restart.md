@@ -254,3 +254,38 @@ the Investigator, but simulated provider fault-injection is still
 **pending**; do not claim those paths are independently tested.
 Human inspection of canonical claims, scope and usefulness remains
 required before marking broader Gate B GREEN or merging the PR.
+
+## Gate B attribute coverage gap: disposable saved-snapshot fixture
+
+On November 9 the owner confirmed `scripts/check.ps1` GREEN, but
+`--gate-b-run 5 http-endpoint-attribute` returned RED **before model
+inference**: no eligible saved attribute candidate was found in the
+first 100 saved snapshots. This is a coverage gap in stored test
+inputs, not an Ollama, MAF or citation failure.
+
+The existing MAF adapter test project now supports a deliberate
+synthetic-fixture exercise:
+
+```powershell
+dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release --no-build -- --gate-b-fixture 5
+```
+
+This mode creates a disposable local source tree containing a plain
+C# attribute-based controller with [HttpGet] and [HttpPost], registers
+it in a separate temporary SQLite store, captures it using the
+production `SnapshotCaptureService`, verifies the saved graph with the
+same `SnapshotEvidenceTools`, and runs 5 real MAF/Ollama investigations
+through `GateBLocalRun`. No external repo is compiled, executed,
+restored or downloaded. The process-local data-directory override is
+restored, and temporary source/data are deleted in a `finally` block.
+No normal user workspace or snapshot is created or altered.
+
+This verifies **repeatability on a deliberately synthetic
+attribute-based fixture**, not generalization to actual user projects.
+A separate genuine repository attribute snapshot is still desirable
+for broader acceptance. The fixture does not replace provider fault
+injection or semantic usefulness review.
+
+If the fixture run is GREEN, continue with the independent saved
+snapshot diversity check as applicable; if RED, stop and inspect the
+specific result. PR remains draft and unmerged until user acceptance.
