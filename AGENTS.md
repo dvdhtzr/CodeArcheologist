@@ -38,3 +38,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 27. Joined static project candidates and synthetic Roslyn type links remain hypotheses; never promote shared candidates to verified compiler inputs or real dependencies, and never interpret disjoint candidates as proof of invalid binding.
 28. Joined relationship evidence must preserve upstream source/target SHA-256, project hashes, snapshot IDs and unresolved statuses and propagate all upstream integrity/limit failures without publishing partial results.
+
+29. Graph nodes/edges must be deterministic, snapshot-scoped, backed by copied-file SHA-256 and source spans when available, and referentially consistent. Never create an imagined target for an unresolved reference.
+30. A graph visualization does not upgrade candidate compile-item membership, synthetic type links or project context into verified dependencies or impact propagation; graph size limits must fail closed.
