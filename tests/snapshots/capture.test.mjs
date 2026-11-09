@@ -637,11 +637,12 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '<Target Name="NeverExecute" BeforeTargets="Build">' +
         '<Exec Command="DO_NOT_RUN"/></Target></Project>');
       await writeFile(join(source, 'ProjectOne', 'Main.cs'),
-        'namespace One; public class Main : global::Shared.Contract {}\n');
+        'namespace One; public class Main : global::Shared.Contract { ' +
+         'public void Call() { global::Shared.Contract.Ping(); } }\n');
       await writeFile(join(source, 'ProjectOne', 'Skip.cs'),
         'namespace One; public class Skip {}\n');
       await writeFile(join(source, 'Shared', 'Shared.cs'),
-        'namespace Shared; public class Contract {}\n');
+        'namespace Shared; public class Contract { public static void Ping() {} }\n');
       await writeFile(join(source, 'ProjectTwo', 'Two.csproj'),
         '<Project Sdk="Microsoft.NET.Sdk">' +
         '<PropertyGroup><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>' +
@@ -649,7 +650,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '<Compile Include="Conditional.cs" Condition="\'$(Configuration)\' == \'Debug\'"/>' +
         '<Compile Include="**/Wildcard.cs"/></ItemGroup></Project>');
       await writeFile(join(source, 'ProjectTwo', 'Direct.cs'),
-        'namespace Two; public class Direct : global::Shared.Contract {}\n');
+        'namespace Two; public class Direct : global::Shared.Contract { ' +
+         'public void Call() { global::Shared.Contract.Ping(); } }\n');
       await writeFile(join(source, 'ProjectTwo', 'Conditional.cs'),
         'namespace Two; public class Conditional : MissingDependency {}\n');
       await writeFile(join(source, 'src', 'Orphan.cs'),
@@ -779,7 +781,13 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v4');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v5');
+      assert.ok(graph.calleeSharedCandidateCount >= 1);
+      assert.ok(graph.calleeDisjointCandidateCount >= 1);
+      assert.ok(graph.calleeUnknownProjectCount >= 1);
+      assert.equal(graph.calleeSharedCandidateCount + graph.calleeDisjointCandidateCount +
+        graph.calleeUnknownProjectCount, graph.provisionalCalleeCount,
+        'every candidate callee must have exactly one project context status');
       assert.equal(graph.calleeAnalyzerVersion, 'roslyn-synthetic-callees-v1');
       assert.ok(graph.provisionalCalleeCount >= 1);
       assert.ok(graph.unresolvedCalleeCount >= 1);
@@ -915,6 +923,49 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.ok(!graph.nodes.some(node =>
         node.kind === 'syntax-declaration' &&
         node.label.includes('ArcheologistNoSuchMethodForFixture')));
+
+      const projectQualified = graph.edges.filter(edge =>
+        edge.kind === 'candidate-callee' &&
+        graph.nodes.some(node => node.id === edge.toId &&
+          node.filePath === 'Shared/Shared.cs' &&
+          node.label === 'Shared.Contract.Ping'));
+      const sharedCall = projectQualified.find(edge =>
+        edge.evidencePath === 'ProjectOne/Main.cs');
+      const disjointCall = projectQualified.find(edge =>
+        edge.evidencePath === 'ProjectTwo/Direct.cs');
+      assert.ok(sharedCall && disjointCall,
+        'both source projects have an observed synthetic candidate for Shared.Contract.Ping');
+      assert.equal(sharedCall.status, 'provisional-local');
+      assert.equal(sharedCall.projectContextStatus, 'shared-project-candidate');
+      assert.equal(sharedCall.sourceProjectCandidates.length, 1);
+      assert.equal(sharedCall.targetProjectCandidates.length, 1);
+      assert.deepEqual(sharedCall.sharedProjectCandidates.map(item => item.projectPath),
+        ['ProjectOne/One.csproj']);
+      assert.equal(sharedCall.sourceProjectCandidates[0].projectSha256, one.projectSha256);
+      assert.equal(sharedCall.sourceProjectCandidates[0].inclusionBasis, 'sdk-default-pattern');
+      assert.equal(sharedCall.targetProjectCandidates[0].projectSha256, one.projectSha256);
+      assert.equal(sharedCall.targetProjectCandidates[0].inclusionBasis, 'literal-compile-include');
+      assert.ok(sharedCall.targetProjectCandidates[0].unresolvedRuleCount > 0);
+      assert.equal(sharedCall.evidenceSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id, 'files',
+          'ProjectOne', 'Main.cs'))));
+      assert.equal(disjointCall.status, 'provisional-local');
+      assert.equal(disjointCall.projectContextStatus, 'disjoint-project-candidates');
+      assert.deepEqual(disjointCall.sourceProjectCandidates.map(item => item.projectPath),
+        ['ProjectTwo/Two.csproj']);
+      assert.deepEqual(disjointCall.targetProjectCandidates.map(item => item.projectPath),
+        ['ProjectOne/One.csproj']);
+      assert.deepEqual(disjointCall.sharedProjectCandidates, []);
+      assert.equal(disjointCall.sourceProjectCandidates[0].projectSha256,
+        two.projectSha256);
+      assert.ok(disjointCall.explanation.includes('not evaluated'));
+      assert.ok(!disjointCall.explanation.includes('verified call'));
+      assert.equal(pokeCandidate.projectContextStatus, 'unknown-project-candidate');
+      assert.deepEqual(pokeCandidate.sourceProjectCandidates, []);
+      assert.deepEqual(pokeCandidate.targetProjectCandidates, []);
+      assert.deepEqual(pokeCandidate.sharedProjectCandidates, []);
+      assert.ok(graph.limitations.some(text =>
+        text.includes('shared, disjoint and unknown')));
       assert.ok(graph.limitations.some(text => text.includes('source-only')));
 
 
