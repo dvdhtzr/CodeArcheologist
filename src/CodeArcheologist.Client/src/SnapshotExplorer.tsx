@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CSharpSyntaxView } from './CSharpSyntaxView';
+import { CSharpTypeLinksView } from './CSharpTypeLinksView';
 
 type Snapshot = {
   id: string;
@@ -70,6 +71,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [inventory, setInventory] = useState<InventoryReport | null>(null);
   const [syntaxSnapshotId, setSyntaxSnapshotId] = useState<string | null>(null);
+  const [typeLinksSnapshotId, setTypeLinksSnapshotId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -86,6 +88,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setManifest(null);
       setInventory(null);
       setSyntaxSnapshotId(null);
+      setTypeLinksSnapshotId(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
@@ -152,6 +155,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setError('');
     setInventory(null);
     setSyntaxSnapshotId(null);
+    setTypeLinksSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/manifest', {
         credentials: 'same-origin',
@@ -172,6 +176,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setError('');
     setManifest(null);
     setSyntaxSnapshotId(null);
+    setTypeLinksSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/inventory', {
         credentials: 'same-origin',
@@ -227,10 +232,24 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                   setError('');
                   setManifest(null);
                   setInventory(null);
+                  setTypeLinksSnapshotId(null);
                   setSyntaxSnapshotId(snapshot.id);
                 }}
               >
                 Inspect C# syntax
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError('');
+                  setManifest(null);
+                  setInventory(null);
+                  setSyntaxSnapshotId(null);
+                  setTypeLinksSnapshotId(snapshot.id);
+                }}
+              >
+                Inspect C# type links
               </button>
             </div>
             <span>
@@ -246,6 +265,12 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       {list?.hasMore && <p className="workspace-note">
         Showing the newest {list.items.length} of {list.totalCount} snapshots.
       </p>}
+      {typeLinksSnapshotId && (
+        <CSharpTypeLinksView
+          key={typeLinksSnapshotId}
+          endpoint={endpoint + '/' + encodeURIComponent(typeLinksSnapshotId) + '/csharp-type-links'}
+        />
+      )}
       {syntaxSnapshotId && (
         <CSharpSyntaxView
           key={syntaxSnapshotId}

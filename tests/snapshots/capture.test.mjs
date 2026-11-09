@@ -158,6 +158,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await post(endpoint, null)).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/inventory')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-syntax')).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-type-links')).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -383,6 +384,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal(rejected.status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -399,6 +401,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal(rejected.status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -436,6 +439,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       const syntax = await get(endpoint + '/' + firstId + '/csharp-syntax', session);
       assert.equal(syntax.status, 200);
       assert.equal((await syntax.json()).snapshotId, firstId);
+      const localLinks = await get(endpoint + '/' + firstId + '/csharp-type-links', session);
+      assert.equal(localLinks.status, 200);
+      assert.equal((await localLinks.json()).snapshotId, firstId);
 
       // Same key must resolve the same completed capture after restart.
       const retry = await post(endpoint, session, undefined, { key: secondKey });
@@ -497,6 +503,109 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         d.kind === 'constructor' && d.name === 'Service'));
       assert.ok(syntax.declarations.some(d =>
         d.kind === 'property' && d.name === 'Size'));
+    });
+
+    await t.test('Roslyn source-local links preserve evidence and unresolved uses', async () => {
+      // Previous malformed C# was intentionally tested above; this fixture
+      // isolates type binding from unrelated parse recovery.
+      await rm(join(source, 'src', 'Broken.cs'));
+      await writeFile(join(source, 'src', 'TypesBase.cs'),
+        'namespace Bridge;\npublic class BaseThing {}\n');
+      await writeFile(join(source, 'src', 'TypesUse.cs'),
+        'namespace Bridge;\n' +
+        'public class Derived : BaseThing {\n' +
+        '    public BaseThing Make() => new BaseThing();\n' +
+        '}\n' +
+        'public class UnknownChild : MissingExternal {}\n');
+
+      const created = await post(endpoint, session);
+      assert.equal(created.status, 201);
+      const snapshot = await created.json();
+      const url = endpoint + '/' + snapshot.id + '/csharp-type-links';
+      const response = await get(url, session);
+      assert.equal(response.status, 200,
+        'type-link response: ' + (response.status === 200
+          ? 'OK' : await response.clone().text()));
+      const report = await response.json();
+
+      assert.equal(report.workspaceId, wid);
+      assert.equal(report.repositoryId, rid);
+      assert.equal(report.snapshotId, snapshot.id);
+      assert.equal(report.fingerprintSha256, snapshot.fingerprintSha256);
+      assert.equal(report.analyzerVersion, 'roslyn-synthetic-type-links-v1');
+      assert.equal(report.syntaxErrorCount, 0);
+      assert.equal(report.provisionalLinkCount, 2);
+      assert.equal(report.unresolvedCount, 1);
+      const inherited = report.usages.find(usage =>
+        usage.usageKind === 'base-type' && usage.writtenType === 'BaseThing');
+      const createdType = report.usages.find(usage =>
+        usage.usageKind === 'object-creation' && usage.writtenType === 'BaseThing');
+      const missing = report.usages.find(usage =>
+        usage.writtenType === 'MissingExternal');
+      assert.ok(inherited);
+      assert.equal(inherited.status, 'provisional-local');
+      assert.equal(inherited.line, 2);
+      assert.equal(inherited.target?.name, 'BaseThing');
+      assert.equal(inherited.target?.namespace, 'Bridge');
+      assert.equal(inherited.target?.filePath, 'src/TypesBase.cs');
+      assert.equal(inherited.target?.line, 2);
+      assert.equal(inherited.target?.fileSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'src', 'TypesBase.cs'))));
+      assert.equal(inherited.fileSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'src', 'TypesUse.cs'))));
+      assert.equal(createdType?.status, 'provisional-local');
+      assert.equal(createdType?.target?.fileSha256, inherited.target.fileSha256);
+      assert.equal(missing?.status, 'unresolved');
+      assert.equal(missing?.target, null);
+      assert.ok(report.limitations.some(text => text.includes('NOT a verified')));
+      assert.deepEqual((await (await get(url, session)).json()).usages, report.usages);
+
+      // An edit to the LIVE repository cannot rewrite captured relationships.
+      await writeFile(join(source, 'src', 'TypesBase.cs'),
+        'namespace Bridge; public class Unrelated {}\n');
+      assert.deepEqual((await (await get(url, session)).json()).usages, report.usages);
+
+      const original = await get(endpoint + '/' + firstId + '/csharp-type-links', session);
+      assert.equal(original.status, 200);
+      assert.equal((await original.json()).provisionalLinkCount, 0);
+
+      const foreign = '/api/v1/workspaces/' + randomUUID() +
+        '/repositories/' + rid + '/snapshots/' + snapshot.id + '/csharp-type-links';
+      assert.equal((await get(foreign, session)).status, 404);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-type-links',
+        session)).status, 404);
+
+      await stopApi(api);
+      api = null;
+      api = await startApi(data);
+      assert.equal((await get(url, session)).status, 401,
+        'previous browser session must not survive API restart');
+      session = await pair();
+      const reopened = await get(url, session);
+      assert.equal(reopened.status, 200);
+      const afterRestart = await reopened.json();
+      assert.equal(afterRestart.snapshotId, snapshot.id);
+      assert.deepEqual(afterRestart.usages, report.usages);
+    });
+
+    await t.test('C# type links enforce the explicit file limit, not partial reports', async () => {
+      for (let index = 0; index < 251; index++) {
+        await writeFile(join(source, 'src', 'Limit' + index + '.cs'),
+          'namespace Limits; internal class Type' + index + ' {}\n');
+      }
+
+      const created = await post(endpoint, session);
+      assert.equal(created.status, 201);
+      const snapshot = await created.json();
+      const bounded = await get(endpoint + '/' + snapshot.id + '/csharp-type-links', session);
+      assert.equal(bounded.status, 413,
+        'analyzer should fail closed on more than 250 C# files');
+      const body = await bounded.json();
+      assert.match(body.error, /limited to 250 files/);
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
+        'safe captured snapshot remains inspectable even when this analyzer declines it');
     });
   } finally {
     await stopApi(api);

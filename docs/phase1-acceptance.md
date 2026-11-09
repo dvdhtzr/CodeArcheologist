@@ -90,6 +90,21 @@ resolver, secret detector, complete analyzer, backup system or public preview.
 
 Parser-only observations are not a resolved semantic model or proof of project correctness.
 
+## PR #9 — provisional local C# type links (pending owner-run verification)
+
+- [ ] Existing security, workspace, registration and snapshot HTTP suites remain GREEN.
+- [ ] .NET 10 build with Roslyn and frontend TypeScript/Vite build pass on Windows.
+- [ ] Type-link endpoint rejects unauthenticated requests and wrong workspace/repository/snapshot scoping.
+- [ ] Snapshot hash evidence anchors both the source usage and candidate target declaration.
+- [ ] A base-type clause and a `new Type()` expression can provisionally bind to a captured source declaration.
+- [ ] Unknown/missing/ambiguous types are unresolved, not fabricated as verified.
+- [ ] Syntax error count and missing compilation/project context are explicitly disclosed.
+- [ ] Manifest/copy tampering denies the entire response; old snapshot is unaffected by new code.
+- [ ] Browser displays both provisional matches and unresolved uses with paths, SHA-256 and limitations.
+- [ ] Restarting the API preserves the saved snapshot and ability to reconstruct type relationships.
+
+This is not an actual project compilation, resolved call graph, verified inheritance hierarchy or completed graph model.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
