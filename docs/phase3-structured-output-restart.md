@@ -127,3 +127,28 @@ Gate B remains pending until both deterministic and real-model gates pass
 and the owner explicitly accepts. The result's free-text statement is
 not independently semantically proven merely because the structural edge
 and citations are validated.
+
+## Gate B real-model saved-snapshot runner
+
+After the Windows `scripts/check.ps1` suite passes GREEN and Ollama is running
+with `qwen3.5:9b`, execute the already-existing adapter test project:
+
+```powershell
+dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release -- 5 qwen3.5:9b
+dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release -- --gate-b-run 5
+```
+
+The second command is the real Gate B test, not another tiny two-field Gate A
+contract. It uses the existing API's services directly, finds the first eligible
+saved C# HTTP mapping/attribute candidate across up to 20 local snapshots,
+verifies its source package before inference, invokes the actual
+`GateBInvestigator` five independent times through MAF/Ollama, and reports
+only outcome categories, counts, snapshot identity and fingerprint. No
+free-text model response or copied source is printed. It uses the normal
+Code Archeologist user app-data store and requires that at least one saved
+snapshot containing a candidate already exist. If none exists, capture one
+using the existing UI first. The runner does not capture from mutable
+source, run repository code, or require manually supplying IDs.
+
+This is an initial real-model Gate B reliability exercise, not full semantic
+verification or evidence of C# runtime behavior. Stop on RED and diagnose.
