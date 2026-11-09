@@ -120,6 +120,21 @@ type AgentCitationCheckReport = {
   limitations: string[];
 };
 
+type LocalMafFinding = {
+  claimKind: string; statement: string; evidenceIds: string[]; unknowns: string[];
+};
+type LocalMafRoleResult = {
+  role: string; summary: string; findings: LocalMafFinding[];
+  citationOutcome: string; citationDiagnostics: string[];
+};
+type LocalMafResult = {
+  snapshotId: string; fingerprintSha256: string; entryPointId: string;
+  model: string; transport: string; workflowStatus: string;
+  evidenceQuality: string; investigator: LocalMafRoleResult | null;
+  reviewer: LocalMafRoleResult | null; toolCalls: string[];
+  workflowEvents: string[]; diagnostics: string[]; unknowns: string[];
+};
+
 type AdjacentEvidence = { edge: GraphEdge; other: GraphNode; outgoing: boolean };
 
 function Short({ value, length = 24 }: { value: string; length?: number }) {
@@ -159,8 +174,8 @@ function EvidenceAddress({ path, hash, line, column }: {
 }
 
 export function CSharpEvidenceGraphView({
-  endpoint, evidenceToolEndpoint, csrfToken,
-}: { endpoint: string; evidenceToolEndpoint: string; csrfToken: string }) {
+  endpoint, evidenceToolEndpoint, localMafEndpoint, csrfToken,
+}: { endpoint: string; evidenceToolEndpoint: string; localMafEndpoint: string; csrfToken: string }) {
   const [report, setReport] = useState<EvidenceGraphReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -176,6 +191,10 @@ export function CSharpEvidenceGraphView({
   const [toolCheck, setToolCheck] = useState<AgentCitationCheckReport | null>(null);
   const [toolChecking, setToolChecking] = useState(false);
   const toolResultRef = useRef<HTMLElement>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [agentResult, setAgentResult] = useState<LocalMafResult | null>(null);
+  const agentResultRef = useRef<HTMLElement>(null);
   const graphDetailRef = useRef<HTMLDivElement>(null);
   const [inspectRequest, setInspectRequest] = useState<{ nodeId: string } | null>(null);
 
@@ -203,6 +222,45 @@ export function CSharpEvidenceGraphView({
     toolResultRef.current?.focus({ preventScroll: true });
     toolResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [toolResult]);
+
+  useEffect(() => {
+    if (!agentResult) return;
+    agentResultRef.current?.focus({ preventScroll: true });
+    agentResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [agentResult]);
+
+  async function runLocalMaf(nodeId: string) {
+    if (agentLoading || toolLoading || toolChecking) return;
+    setAgentLoading(true);
+    setAgentError('');
+    setAgentResult(null);
+    try {
+      const response = await fetch(localMafEndpoint, {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CodeArcheologist-Request': '1',
+          'X-CodeArcheologist-Csrf': csrfToken,
+        },
+        body: JSON.stringify({ entryPointId: nodeId }),
+      });
+      if (!response.ok) {
+        const failure: { error?: string } =
+          await response.json().catch(() => ({}));
+        throw new Error(failure.error ??
+          'Local MAF/Ollama investigation failed (HTTP ' + response.status + ')');
+      }
+      const result: LocalMafResult = await response.json();
+      if (result.entryPointId !== nodeId)
+        throw new Error('Agent investigation returned a different saved entry-point identity.');
+      setAgentResult(result);
+    } catch (cause) {
+      setAgentError(cause instanceof Error ? cause.message :
+        'Local MAF/Ollama investigation failed.');
+    } finally {
+      setAgentLoading(false);
+    }
+  }
 
   async function inspectAgentEvidence(nodeId: string) {
     if (toolLoading || toolChecking) return;
@@ -298,6 +356,8 @@ export function CSharpEvidenceGraphView({
       setToolResult(null);
       setToolCheck(null);
       setToolError('');
+      setAgentResult(null);
+      setAgentError('');
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
@@ -551,6 +611,11 @@ export function CSharpEvidenceGraphView({
                       >
                         Inspect agent-ready evidence package
                       </button>
+                      <button type="button" disabled={agentLoading}
+                        onClick={() => { void runLocalMaf(node.id); }}>
+                        {agentLoading ? 'Local MAF workflow running…' :
+                          'Investigate using real local MAF + Ollama'}
+                      </button>
                       {method && (
                         <a href="#direct-impact" onClick={() => {
                           setImpactMethodId(method.id);
@@ -628,6 +693,11 @@ export function CSharpEvidenceGraphView({
                         onClick={() => { void inspectAgentEvidence(node.id); }}
                       >
                         Inspect agent-ready evidence package
+                      </button>
+                      <button type="button" disabled={agentLoading}
+                        onClick={() => { void runLocalMaf(node.id); }}>
+                        {agentLoading ? 'Local MAF workflow running…' :
+                          'Investigate using real local MAF + Ollama'}
                       </button>
                     </li>
                   ))}
@@ -723,6 +793,66 @@ export function CSharpEvidenceGraphView({
                     {[...toolResult.unknowns, ...toolResult.limitations]
                       .map((warning, i) => <li key={i}>{warning}</li>)}
                   </ul>
+                </>
+              )}
+            </section>
+          )}
+          {(agentLoading || agentError || agentResult) && (
+            <section className="graph-agent-evidence" tabIndex={-1}
+              ref={agentResultRef} aria-live="polite"
+              aria-label="Local MAF multi-agent investigation">
+              <h4>Local Microsoft Agent Framework + Ollama</h4>
+              {agentLoading && <p role="status">
+                Running Functional Investigator → Skeptic/Reviewer with bounded
+                saved-snapshot evidence tools. Local Ollama must be running.
+              </p>}
+              {agentError && <p role="alert" className="error">{agentError}</p>}
+              {agentResult && (
+                <>
+                  <p><strong>{agentResult.workflowStatus}</strong> ·
+                    {' '}transport: {agentResult.transport} ·
+                    {' '}evidence: {agentResult.evidenceQuality}
+                  </p>
+                  <p className="workspace-note">
+                    Model: {agentResult.model} · snapshot:
+                    {' '}{agentResult.snapshotId} · SHA-256:
+                    {' '}{agentResult.fingerprintSha256.slice(0, 20)}…
+                  </p>
+                  {[agentResult.investigator, agentResult.reviewer]
+                    .filter((role): role is LocalMafRoleResult => role !== null)
+                    .map(role => (
+                      <div key={role.role}>
+                        <h4>{role.role}</h4>
+                        <p>{role.summary}</p>
+                        <p>{role.citationOutcome}</p>
+                        {role.findings.map((finding, i) => (
+                          <div key={i}>
+                            <p>{finding.statement} · <strong>{finding.claimKind}</strong></p>
+                            <code>{finding.evidenceIds.join(', ')}</code>
+                            <ul>{finding.unknowns.map((item, j) =>
+                              <li key={j}>{item}</li>)}</ul>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  <details open>
+                    <summary>Actual agent execution and evidence-tool trace</summary>
+                    <p>Role-scoped tool invocations:
+                      {' '}{agentResult.toolCalls.length
+                        ? agentResult.toolCalls.join(' → ') : 'none'}</p>
+                    <ul>{agentResult.workflowEvents.map((item, i) =>
+                      <li key={i}>{item}</li>)}</ul>
+                  </details>
+                  <details open>
+                    <summary>Diagnostics, uncertainty and verification limits</summary>
+                    <ul>{[...agentResult.diagnostics, ...agentResult.unknowns]
+                      .map((item, i) => <li key={i}>{item}</li>)}</ul>
+                  </details>
+                  <p className="workspace-note">
+                    Valid citation references do NOT prove semantic truth,
+                    runtime routes or executed code. An inconclusive report
+                    is not success.
+                  </p>
                 </>
               )}
             </section>
