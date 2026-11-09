@@ -294,6 +294,20 @@ This is the DI evidence step of [agent-tool readiness #21](https://github.com/dv
 
 After owner GREEN and squash merge, revisit [issue #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21) and move into the first **real local Microsoft Agent Framework + Ollama** investigation described in [#19](https://github.com/dvdhtzr/CodeArcheologist/issues/19), with independent evidence-quality tests and a bounded failure taxonomy.
 
+## Experimental real local MAF + Ollama two-agent workflow — owner verification pending
+
+- [ ] Windows .NET 10 package restore/build, frontend typecheck/build and disposable local auth/security/integration tests GREEN; imported repository projects were not executed.
+- [ ] Exact authenticated, CSRF-protected saved-snapshot MAF POST rejects anonymous, wrong-origin/CSRF, wrong workspace/snapshot, malformed/DI/non-entry-point IDs **without invoking Ollama**.
+- [ ] Actual MAF `AIAgent` instances for **FunctionalInvestigator** and **SkepticReviewer** run as a connected `WorkflowBuilder` workflow using the localhost Ollama model configured in API appsettings (default `qwen3.5:9b`).
+- [ ] Each role actually invokes its own read-only, parameterless `ReadSnapshotEvidence` tool within the bounded tool budget. No arbitrary live files, shell, source execution or external URL access.
+- [ ] Browser **Investigate using real local MAF + Ollama** is discoverable on both controller-style and Minimal API source candidate lists and shows live execution status, tool calls, role responses and typed citation outcomes.
+- [ ] Two independently observed role responses and application-owned citation reference checks must pass before a finding appears. Inconclusive reports never masquerade as success.
+- [ ] Negative cases: missing Ollama provider, model output invalid/non-JSON or fabricated IDs, model skips tool, overlong response, timeout/cancellation and HTTP failures have explicit transport/workflow/quality categories.
+- [ ] Unknowns accurately state source-only route/callee candidates, unsupported dynamic/runtime behavior, unverified narrative semantics and missing durable checkpoints.
+- [ ] Browser session accepts one bounded real local run with traceable role and evidence-tool diagnostics. A failure remains RED/inconclusive and requires improvement before owner approval; no guessed successes.
+
+This is the experimental first vertical slice for [MAF/Ollama issue #19](https://github.com/dvdhtzr/CodeArcheologist/issues/19). Later work adds persistent checkpoints, broader agents, independent semantic evidence quality and held-out evaluation; do not mark those features complete.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
