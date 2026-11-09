@@ -23,3 +23,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 16. Snapshot content must be recorded by immutable-by-app identity with exact relative paths, file hashes, exclusion list and capture policy version. Never equate a filesystem fingerprint with a verified Git commit.
 17. No silent partial capture: limits, unauthorized paths, content changes and missing source must fail closed, leaving no trusted record. Integration tests must verify source non-modification and saved-artifact integrity.
 18. Do not claim that revalidating paths or checking symlinks before file opens is an OS-enforced race-free sandbox; any elevated threat model requires restricted-handle acquisition and adversarial filesystem race tests.
+
+19. Filename-only inventory labels (language and file role) are heuristic, even when the underlying snapshot path/hash is verified. Never promote them into verified code semantics, dependencies, API routes or behavior.
+20. Inventory must be scoped to the exact workspace/repository/snapshot, derive from a verified immutable snapshot, remain rebuildable, and fail closed on manifest/byte tampering.
