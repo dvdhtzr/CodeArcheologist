@@ -161,6 +161,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-type-links')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-projects')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-link-context')).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-evidence-graph')).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -389,6 +390,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-link-context', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-evidence-graph', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -408,6 +410,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-link-context', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-evidence-graph', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -612,6 +615,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.match(body.error, /limited to 250 files/);
       assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-link-context', session)).status, 413,
         'joined context must not publish partial type relationships after analyzer limit');
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-evidence-graph', session)).status, 413,
+        'graph must not return partial output after upstream type-link limits');
       assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
         'safe captured snapshot remains inspectable even when this analyzer declines it');
     });
@@ -745,6 +750,88 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.ok(context.limitations.some(text => text.includes('not verified')));
       assert.deepEqual((await (await get(contextUrl, session)).json()).usages,
         context.usages);
+      const graphUrl = endpoint + '/' + snapshot.id + '/csharp-evidence-graph';
+      const graphResponse = await get(graphUrl, session);
+      assert.equal(graphResponse.status, 200,
+        'graph: ' + (graphResponse.status === 200 ? 'OK' : await graphResponse.clone().text()));
+      const graph = await graphResponse.json();
+      assert.equal(graph.workspaceId, wid);
+      assert.equal(graph.repositoryId, rid);
+      assert.equal(graph.snapshotId, snapshot.id);
+      assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v1');
+      assert.equal(graph.linkContextAnalyzerVersion, 'project-type-link-context-v1');
+      assert.equal(graph.projectAnalyzerVersion, 'static-csproj-membership-v1');
+      assert.equal(graph.nodeCount, graph.nodes.length);
+      assert.equal(graph.edgeCount, graph.edges.length);
+      assert.ok(graph.nodeCount > 0 && graph.edgeCount > 0);
+      assert.deepEqual(graph.nodes.map(node => node.id),
+        [...graph.nodes.map(node => node.id)].sort());
+      assert.deepEqual(graph.edges.map(edge => edge.id),
+        [...graph.edges.map(edge => edge.id)].sort());
+      const graphNodeIds = new Set(graph.nodes.map(node => node.id));
+      assert.equal(graphNodeIds.size, graph.nodes.length);
+      assert.equal(new Set(graph.edges.map(edge => edge.id)).size, graph.edges.length);
+      for (const edge of graph.edges) {
+        assert.ok(graphNodeIds.has(edge.fromId) && graphNodeIds.has(edge.toId),
+          'every graph edge connects actual snapshot nodes');
+        assert.match(edge.evidenceSha256, /^[0-9a-f]{64}$/);
+        assert.ok(!['verified', 'compiled', 'real-dependency'].includes(edge.status));
+      }
+
+      const sourceNode = graph.nodes.find(node =>
+        node.kind === 'csharp-file' && node.filePath === 'ProjectOne/Main.cs');
+      const targetNode = graph.nodes.find(node =>
+        node.kind === 'target-declaration' &&
+        node.filePath === 'Shared/Shared.cs' && node.label === 'Shared.Contract');
+      const projectNode = graph.nodes.find(node =>
+        node.kind === 'project-file' && node.filePath === 'ProjectOne/One.csproj');
+      const unresolvedNode = graph.nodes.find(node =>
+        node.kind === 'unresolved-use' &&
+        node.filePath === 'ProjectTwo/Conditional.cs' &&
+        node.label === 'MissingDependency');
+      assert.ok(sourceNode && targetNode && projectNode && unresolvedNode);
+      assert.equal(sourceNode.fileSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'ProjectOne', 'Main.cs'))));
+      assert.equal(targetNode.fileSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'Shared', 'Shared.cs'))));
+      assert.equal(projectNode.fileSha256, one.projectSha256);
+      assert.ok(targetNode.line > 0 && targetNode.column > 0);
+      assert.ok(unresolvedNode.line > 0);
+      assert.ok(!graph.nodes.some(node =>
+        node.kind === 'target-declaration' && node.label === 'MissingDependency'));
+
+      const member = graph.edges.find(edge =>
+        edge.fromId === projectNode.id && edge.toId === sourceNode.id &&
+        edge.kind === 'candidate-compile-item');
+      assert.ok(member);
+      assert.equal(member.status, 'candidate');
+      assert.equal(member.projectContextStatus, 'sdk-default-pattern');
+      assert.equal(member.evidencePath, 'ProjectOne/One.csproj');
+      assert.equal(member.evidenceSha256, one.projectSha256);
+
+      const linkEdge = graph.edges.find(edge =>
+        edge.fromId === sourceNode.id && edge.toId === targetNode.id &&
+        edge.kind === 'base-type');
+      assert.ok(linkEdge);
+      assert.equal(linkEdge.status, 'provisional-local');
+      assert.equal(linkEdge.projectContextStatus, 'shared-project-candidate');
+      assert.equal(linkEdge.evidenceSha256, sourceNode.fileSha256);
+      assert.ok(linkEdge.line > 0 && linkEdge.column > 0);
+      const declarationEdge = graph.edges.find(edge =>
+        edge.fromId === targetNode.id && edge.toId === 'file:Shared/Shared.cs');
+      assert.equal(declarationEdge?.status, 'observed-location');
+
+      const unresolvedEdge = graph.edges.find(edge =>
+        edge.toId === unresolvedNode.id && edge.kind === 'base-type');
+      assert.ok(unresolvedEdge);
+      assert.equal(unresolvedEdge.status, 'unresolved');
+      assert.equal(unresolvedEdge.projectContextStatus, 'unresolved-target');
+      assert.ok(graph.limitations.some(text => text.includes('not a verified')));
+      assert.deepEqual((await (await get(graphUrl, session)).json()).edges, graph.edges);
+
 
 
       const foreign = '/api/v1/workspaces/' + randomUUID() +
@@ -757,6 +844,11 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(foreignContext, session)).status, 404);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-link-context',
         session)).status, 404);
+      const foreignGraph = '/api/v1/workspaces/' + randomUUID() +
+        '/repositories/' + rid + '/snapshots/' + snapshot.id + '/csharp-evidence-graph';
+      assert.equal((await get(foreignGraph, session)).status, 404);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-evidence-graph',
+        session)).status, 404);
       assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
 
       // Working tree changes are not reflected in the saved project view.
@@ -765,6 +857,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
       assert.deepEqual((await (await get(contextUrl, session)).json()).usages,
         context.usages);
+      assert.deepEqual((await (await get(graphUrl, session)).json()).edges,
+        graph.edges);
 
       const savedProject = join(data, 'snapshots', snapshot.id,
         'files', 'ProjectOne', 'One.csproj');
@@ -773,6 +867,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       try {
         assert.equal((await get(url, session)).status, 409);
         assert.equal((await get(contextUrl, session)).status, 409);
+        assert.equal((await get(graphUrl, session)).status, 409);
       } finally {
         await writeFile(savedProject, original);
       }
@@ -786,6 +881,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
       assert.deepEqual((await (await get(contextUrl, session)).json()).usages,
         context.usages);
+      assert.deepEqual((await (await get(graphUrl, session)).json()).edges,
+        graph.edges);
     });
 
     await t.test('project XML DTD is prohibited and never evaluated', async () => {
@@ -800,6 +897,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(response.status, 422);
       assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-link-context',
         session)).status, 422, 'combined analysis must reject unsafe project XML');
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-evidence-graph',
+        session)).status, 422, 'graph must reject unsafe project XML');
       const body = await response.json();
       assert.match(body.error, /cannot be safely parsed/);
       assert.doesNotMatch(JSON.stringify(body), /sensitive.txt/);

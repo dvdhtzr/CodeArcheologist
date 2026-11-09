@@ -134,3 +134,93 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .syntax-declaration-list span { font-size: 0.78rem; color: #b4cee9; overflow-wrap: anywhere; }
 .syntax-declaration-list code { overflow-wrap: anywhere; }
 .syntax-view details { margin-top: 14px; }
+
+
+/* Bounded, accessible snapshot-evidence graph explorer. */
+.evidence-graph .graph-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.evidence-graph .graph-controls label {
+  display: grid;
+  gap: 5px;
+  flex: 1 1 180px;
+  margin: 0;
+}
+.evidence-graph .graph-controls :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #527397;
+  border-radius: 6px;
+  background: #0b1729;
+  color: #eef3ff;
+  font: inherit;
+}
+.evidence-graph .graph-explorer-layout {
+  display: grid;
+  grid-template-columns: minmax(155px, 0.95fr) minmax(0, 2fr);
+  gap: 14px;
+  margin: 16px 0;
+}
+.evidence-graph .graph-node-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: start;
+  max-height: 520px;
+  overflow: auto;
+  padding: 10px;
+  background: #0b1d34;
+  border: 1px solid #395877;
+  border-radius: 8px;
+}
+.evidence-graph .graph-node-picker button {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+  padding: 8px;
+  border: 1px solid #3e5d7e;
+  border-radius: 6px;
+  color: #dceeff;
+  background: #152b46;
+  overflow-wrap: anywhere;
+}
+.evidence-graph .graph-node-picker button.graph-selected {
+  background: #234869;
+  border-color: #a8cfff;
+}
+.evidence-graph .graph-node-picker small { color: #acc2dc; }
+.evidence-graph .graph-detail {
+  min-width: 0;
+  background: #0d2038;
+  border: 1px solid #395877;
+  border-radius: 8px;
+  padding: 13px;
+  overflow-wrap: anywhere;
+}
+.evidence-graph .graph-neighborhood {
+  width: 100%;
+  max-height: 330px;
+  margin: 10px 0;
+  border: 1px solid #2f4d6c;
+  border-radius: 7px;
+  background: #0a192d;
+}
+.evidence-graph .graph-detail li button {
+  justify-self: start;
+  border: 1px solid #6184ad;
+  border-radius: 5px;
+  padding: 5px 8px;
+  color: #e4f2ff;
+  background: #223e5e;
+  text-align: left;
+}
+@media (max-width: 750px) {
+  .evidence-graph .graph-explorer-layout { grid-template-columns: 1fr; }
+  .evidence-graph .graph-node-picker { max-height: 220px; }
+}

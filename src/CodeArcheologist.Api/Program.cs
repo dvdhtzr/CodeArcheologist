@@ -17,6 +17,7 @@ builder.Services.AddSingleton<CSharpSyntaxInspector>();
 builder.Services.AddSingleton<CSharpTypeRelationshipInspector>();
 builder.Services.AddSingleton<StaticCSharpProjectInspector>();
 builder.Services.AddSingleton<CSharpProjectLinkContextInspector>();
+builder.Services.AddSingleton<CSharpEvidenceGraphBuilder>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -363,6 +364,29 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     catch (IOException)
     {
         return Results.Conflict(new { error = "Saved source evidence could not be verified." });
+    }
+}).RequireAuthorization();
+
+// Read-only, snapshot-grounded graph projection. All semantic edges remain
+// candidate/provisional; this is not a verified project dependency graph.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/csharp-evidence-graph",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, WorkspaceStore store,
+     CSharpEvidenceGraphBuilder builder, CancellationToken cancellationToken) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+
+    try
+    {
+        return Results.Ok(builder.Build(snapshot, cancellationToken));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved graph evidence could not be verified." });
     }
 }).RequireAuthorization();
 
