@@ -321,14 +321,15 @@ public sealed class SnapshotEvidenceTools(
             else if (ids.Distinct(StringComparer.Ordinal).Count() != ids.Count)
                 outcome = "duplicate-citations";
             else if (claim.ClaimKind == "source-observation" &&
-                !ids.Any(id => items.TryGetValue(id, out var item) &&
-                    item.EvidenceStatus == "observed-syntax" ||
-                    relations.TryGetValue(id, out var link) &&
-                    link.EvidenceStatus == "observed-syntax"))
+                !ids.Any(id =>
+                    (items.TryGetValue(id, out var item) &&
+                     item.EvidenceStatus == "observed-syntax") ||
+                    (relations.TryGetValue(id, out var link) &&
+                     link.EvidenceStatus == "observed-syntax")))
                 outcome = "observed-source-evidence-required";
             else if (claim.ClaimKind == "candidate-relationship" &&
                 !ids.Any(id => relations.TryGetValue(id, out var link) &&
-                    link.EvidenceStatus is "candidate" or "provisional-local"))
+                    (link.EvidenceStatus is "candidate" or "provisional-local")))
                 outcome = "candidate-relationship-evidence-required";
             else
                 outcome = "references-valid-not-semantic-verification";
