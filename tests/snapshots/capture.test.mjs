@@ -637,9 +637,16 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '<Target Name="NeverExecute" BeforeTargets="Build">' +
         '<Exec Command="DO_NOT_RUN"/></Target></Project>');
       await writeFile(join(source, 'ProjectOne', 'Main.cs'),
-        'namespace One; public class Main : global::Shared.Contract { ' +
+        'namespace One; [Route("api/[controller]")] ' +
+         'public class Main : global::Shared.Contract { ' +
          'public void Call() { global::Shared.Contract.Ping(); } ' +
-         'public void Run() { Call(); } }\n');
+         'public void Run() { Call(); } ' +
+         '[HttpGet("items/{id}")] public int Details(int id) => id; ' +
+         '[HttpPost] [Route("create")] public void Create() {} ' +
+         '[HttpDelete(RouteToken)] public void Delete(int id) {} ' +
+         '[CustomHttpGet("not-an-endpoint")] public void IgnoreThis() {} ' +
+         '[global::HttpGet("qualified")] public void QualifiedNotSupported() {} ' +
+         '}\n');
       await writeFile(join(source, 'ProjectOne', 'Skip.cs'),
         'namespace One; public class Skip {}\n');
       await writeFile(join(source, 'Shared', 'Shared.cs'),
@@ -782,7 +789,10 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v5');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v6');
+      assert.equal(graph.httpAttributeAnalyzerVersion, 'roslyn-http-attribute-candidates-v1');
+      assert.equal(graph.httpAttributeCandidateCount, 3);
+      assert.equal(graph.nonliteralHttpAttributeRouteCount, 1);
       assert.ok(graph.calleeSharedCandidateCount >= 1);
       assert.ok(graph.calleeDisjointCandidateCount >= 1);
       assert.ok(graph.calleeUnknownProjectCount >= 1);
@@ -803,6 +813,54 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.projectAnalyzerVersion, 'static-csproj-membership-v1');
       assert.equal(graph.nodeCount, graph.nodes.length);
       assert.equal(graph.edgeCount, graph.edges.length);
+      const httpNodes = graph.nodes.filter(node => node.kind === 'http-endpoint-attribute');
+      const httpEdges = graph.edges.filter(edge => edge.kind === 'annotates-method');
+      assert.equal(httpNodes.length, 3);
+      assert.equal(httpEdges.length, 3);
+      assert.deepEqual(httpNodes.map(node => node.label), [
+        'DELETE [HttpDelete] Delete',
+        'GET [HttpGet] Details',
+        'POST [HttpPost] Create'
+      ]);
+      const nodeByLabel = label => httpNodes.find(node => node.label === label);
+      const getCandidate = nodeByLabel('GET [HttpGet] Details');
+      const postCandidate = nodeByLabel('POST [HttpPost] Create');
+      const dynamicCandidate = nodeByLabel('DELETE [HttpDelete] Delete');
+      assert.ok(getCandidate && postCandidate && dynamicCandidate);
+      assert.ok(getCandidate.detail.includes('items/{id}'));
+      assert.ok(getCandidate.detail.includes('api/[controller]'));
+      assert.ok(getCandidate.detail.includes('NOT a composed effective URL'));
+      assert.ok(postCandidate.detail.includes('create'));
+      assert.ok(postCandidate.detail.includes('method [Route] argument'));
+      assert.ok(dynamicCandidate.detail.includes('(nonliteral-or-unsupported)'));
+      assert.ok(!dynamicCandidate.detail.includes('RouteToken'));
+      assert.ok(!graph.nodes.some(node =>
+        node.kind === 'http-endpoint-attribute' &&
+        (node.label.includes('IgnoreThis') ||
+         node.label.includes('QualifiedNotSupported'))));
+      const mainHash = sha256(await readFile(join(data, 'snapshots',
+        snapshot.id, 'files', 'ProjectOne', 'Main.cs')));
+      for (const candidate of httpNodes) {
+        assert.equal(candidate.filePath, 'ProjectOne/Main.cs');
+        assert.equal(candidate.fileSha256, mainHash);
+        assert.ok(candidate.line > 0 && candidate.column > 0);
+        const related = httpEdges.filter(edge => edge.fromId === candidate.id);
+        assert.equal(related.length, 1);
+        assert.equal(related[0].status, 'candidate');
+        assert.equal(related[0].evidencePath, candidate.filePath);
+        assert.equal(related[0].evidenceSha256, candidate.fileSha256);
+        assert.equal(related[0].line, candidate.line);
+        assert.equal(related[0].column, candidate.column);
+        assert.ok(related[0].explanation.includes('NOT verified'));
+        const method = graph.nodes.find(node => node.id === related[0].toId);
+        assert.ok(method && method.kind === 'syntax-declaration' &&
+          method.label.startsWith('One.Main.'));
+        assert.equal(method.filePath, candidate.filePath);
+        assert.equal(method.fileSha256, candidate.fileSha256);
+      }
+      assert.ok(graph.limitations.some(text =>
+        text.includes('not resolved ASP.NET symbols')));
+
       assert.ok(graph.nodeCount > 0 && graph.edgeCount > 0);
       assert.deepEqual(graph.nodes.map(node => node.id),
         [...graph.nodes.map(node => node.id)].sort());
