@@ -48,7 +48,7 @@ static void SelfTest()
         ("{}", "schema-mismatch"),
         ("[]", "root-not-object"),
         ("{\"answer\":\"fine\",\"unknown\":\"none yet\",\"extra\":1}", "schema-mismatch"),
-        ("{\"answer\":\"fine\",\"unknown\":\"\"}", "unknown-length-invalid(0)"),
+        ("{\"answer\":\"valid\",\"unknown\":\"\"}", "unknown-length-invalid(0)"),
         ("{\"answer\":\"A concise answer\",\"unknown\":\"Runtime unverified\"}", "valid"),
         (new string('x', 4097), "oversize-model-response")
     };
