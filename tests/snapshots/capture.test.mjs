@@ -160,6 +160,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-syntax')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-type-links')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-projects')).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-link-context')).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -387,6 +388,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-link-context', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -405,6 +407,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-link-context', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -607,11 +610,18 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         'analyzer should fail closed on more than 250 C# files');
       const body = await bounded.json();
       assert.match(body.error, /limited to 250 files/);
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-link-context', session)).status, 413,
+        'joined context must not publish partial type relationships after analyzer limit');
       assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
         'safe captured snapshot remains inspectable even when this analyzer declines it');
     });
 
     await t.test('static project candidates honor literal rules without MSBuild execution', async () => {
+      // The earlier negative test deliberately exceeded the type-link cap.
+      // Its saved snapshot is retained; remove only the disposable live files.
+      for (let index = 0; index < 251; index++) {
+        await rm(join(source, 'src', 'Limit' + index + '.cs'));
+      }
       await mkdir(join(source, 'ProjectOne'));
       await mkdir(join(source, 'ProjectTwo'));
       await mkdir(join(source, 'Shared'));
@@ -622,7 +632,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '<Target Name="NeverExecute" BeforeTargets="Build">' +
         '<Exec Command="DO_NOT_RUN"/></Target></Project>');
       await writeFile(join(source, 'ProjectOne', 'Main.cs'),
-        'namespace One; public class Main {}\n');
+        'namespace One; public class Main : global::Shared.Contract {}\n');
       await writeFile(join(source, 'ProjectOne', 'Skip.cs'),
         'namespace One; public class Skip {}\n');
       await writeFile(join(source, 'Shared', 'Shared.cs'),
@@ -634,9 +644,12 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '<Compile Include="Conditional.cs" Condition="\'$(Configuration)\' == \'Debug\'"/>' +
         '<Compile Include="**/Wildcard.cs"/></ItemGroup></Project>');
       await writeFile(join(source, 'ProjectTwo', 'Direct.cs'),
-        'namespace Two; public class Direct {}\n');
+        'namespace Two; public class Direct : global::Shared.Contract {}\n');
       await writeFile(join(source, 'ProjectTwo', 'Conditional.cs'),
-        'namespace Two; public class Conditional {}\n');
+        'namespace Two; public class Conditional : MissingDependency {}\n');
+      await writeFile(join(source, 'src', 'Orphan.cs'),
+        'namespace Orphans; public class Orphan { ' +
+        'public object Build() => new global::Shared.Contract(); }\n');
 
       const created = await post(endpoint, session);
       assert.equal(created.status, 201);
@@ -676,11 +689,73 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.ok(report.unmappedFiles.some(file => file.path === 'ProjectOne/Skip.cs'));
       assert.ok(report.unmappedFiles.some(file => file.path === 'ProjectTwo/Conditional.cs'));
       assert.ok(report.limitations.some(rule => rule.includes('candidate-only')));
+      const contextUrl = endpoint + '/' + snapshot.id + '/csharp-link-context';
+      const contextResponse = await get(contextUrl, session);
+      assert.equal(contextResponse.status, 200,
+        'joined project/type context: ' +
+          (contextResponse.status === 200 ? 'OK' : await contextResponse.clone().text()));
+      const context = await contextResponse.json();
+      assert.equal(context.snapshotId, snapshot.id);
+      assert.equal(context.workspaceId, wid);
+      assert.equal(context.repositoryId, rid);
+      assert.equal(context.fingerprintSha256, snapshot.fingerprintSha256);
+      assert.equal(context.analyzerVersion, 'project-type-link-context-v1');
+      assert.equal(context.typeLinkAnalyzerVersion, 'roslyn-synthetic-type-links-v1');
+      assert.equal(context.projectAnalyzerVersion, 'static-csproj-membership-v1');
+      assert.ok(context.sharedCandidateCount >= 1);
+      assert.ok(context.disjointCandidateCount >= 1);
+      assert.ok(context.unknownProjectCount >= 1);
+      assert.ok(context.unresolvedTargetCount >= 1);
+
+      const shared = context.usages.find(item =>
+        item.typeUsage.filePath === 'ProjectOne/Main.cs' &&
+        item.typeUsage.usageKind === 'base-type');
+      const disjoint = context.usages.find(item =>
+        item.typeUsage.filePath === 'ProjectTwo/Direct.cs' &&
+        item.typeUsage.usageKind === 'base-type');
+      const unknown = context.usages.find(item =>
+        item.typeUsage.filePath === 'src/Orphan.cs' &&
+        item.typeUsage.usageKind === 'object-creation');
+      const unresolved = context.usages.find(item =>
+        item.typeUsage.filePath === 'ProjectTwo/Conditional.cs' &&
+        item.typeUsage.usageKind === 'base-type');
+      assert.ok(shared && disjoint && unknown && unresolved);
+      assert.equal(shared.projectContextStatus, 'shared-project-candidate');
+      assert.equal(shared.typeUsage.status, 'provisional-local');
+      assert.deepEqual(shared.sharedCandidateProjects.map(project => project.projectPath),
+        ['ProjectOne/One.csproj']);
+      assert.equal(shared.typeUsage.target.filePath, 'Shared/Shared.cs');
+      assert.equal(shared.typeUsage.target.fileSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'Shared', 'Shared.cs'))));
+      assert.equal(shared.sourceProjects[0].projectSha256, one.projectSha256);
+      assert.equal(disjoint.projectContextStatus, 'disjoint-project-candidates');
+      assert.deepEqual(disjoint.sourceProjects.map(project => project.projectPath),
+        ['ProjectTwo/Two.csproj']);
+      assert.deepEqual(disjoint.targetProjects.map(project => project.projectPath),
+        ['ProjectOne/One.csproj']);
+      assert.deepEqual(disjoint.sharedCandidateProjects, []);
+      assert.equal(disjoint.typeUsage.status, 'provisional-local');
+      assert.equal(unknown.projectContextStatus, 'unknown-project-candidate');
+      assert.equal(unknown.sourceProjects.length, 0);
+      assert.ok(unknown.typeUsage.target);
+      assert.equal(unresolved.projectContextStatus, 'unresolved-target');
+      assert.equal(unresolved.typeUsage.status, 'unresolved');
+      assert.equal(unresolved.typeUsage.target, null);
+      assert.ok(context.limitations.some(text => text.includes('not verified')));
+      assert.deepEqual((await (await get(contextUrl, session)).json()).usages,
+        context.usages);
+
 
       const foreign = '/api/v1/workspaces/' + randomUUID() +
         '/repositories/' + rid + '/snapshots/' + snapshot.id + '/csharp-projects';
       assert.equal((await get(foreign, session)).status, 404);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-projects',
+        session)).status, 404);
+      const foreignContext = '/api/v1/workspaces/' + randomUUID() +
+        '/repositories/' + rid + '/snapshots/' + snapshot.id + '/csharp-link-context';
+      assert.equal((await get(foreignContext, session)).status, 404);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-link-context',
         session)).status, 404);
       assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
 
@@ -688,6 +763,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       await writeFile(join(source, 'ProjectOne', 'Main.cs'),
         'namespace One; public class NewVersion {}\n');
       assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
+      assert.deepEqual((await (await get(contextUrl, session)).json()).usages,
+        context.usages);
 
       const savedProject = join(data, 'snapshots', snapshot.id,
         'files', 'ProjectOne', 'One.csproj');
@@ -695,6 +772,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       await writeFile(savedProject, '<Project Sdk="CORRUPTED"/>');
       try {
         assert.equal((await get(url, session)).status, 409);
+        assert.equal((await get(contextUrl, session)).status, 409);
       } finally {
         await writeFile(savedProject, original);
       }
@@ -706,6 +784,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(url, session)).status, 401);
       session = await pair();
       assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
+      assert.deepEqual((await (await get(contextUrl, session)).json()).usages,
+        context.usages);
     });
 
     await t.test('project XML DTD is prohibited and never evaluated', async () => {
@@ -718,6 +798,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       const snapshot = await created.json();
       const response = await get(endpoint + '/' + snapshot.id + '/csharp-projects', session);
       assert.equal(response.status, 422);
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-link-context',
+        session)).status, 422, 'combined analysis must reject unsafe project XML');
       const body = await response.json();
       assert.match(body.error, /cannot be safely parsed/);
       assert.doesNotMatch(JSON.stringify(body), /sensitive.txt/);

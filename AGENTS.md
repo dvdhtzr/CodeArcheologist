@@ -35,3 +35,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 25. Project membership obtained from static `.csproj` XML and SDK patterns is candidate-only. Do not evaluate imported MSBuild targets or claim the candidate list is effective compiler input.
 26. Reject XML DTD/external entities and report conditional, wildcard, imported or property-expanded Compile rules as unresolved; do not silently infer their effect.
+
+27. Joined static project candidates and synthetic Roslyn type links remain hypotheses; never promote shared candidates to verified compiler inputs or real dependencies, and never interpret disjoint candidates as proof of invalid binding.
+28. Joined relationship evidence must preserve upstream source/target SHA-256, project hashes, snapshot IDs and unresolved statuses and propagate all upstream integrity/limit failures without publishing partial results.

@@ -119,6 +119,21 @@ This is not an actual project compilation, resolved call graph, verified inherit
 
 This milestone does not authorize project evaluation, resolved dependency graphs or actual project semantic compilation.
 
+## PR #11 — combined project/link evidence context (pending owner-run verification)
+
+- [ ] Existing .NET 10 build, TypeScript/Vite build, and all localhost HTTP suites remain GREEN.
+- [ ] Authenticated endpoint joins type links and project candidates from identical saved snapshot provenance.
+- [ ] Shared project-candidate evidence preserves the earlier `provisional-local` Roslyn status.
+- [ ] Disjoint candidates are disclosed as uncertain, not invalid or verified project dependencies.
+- [ ] Missing project candidates and unresolved target declarations are separate categories.
+- [ ] Source and target file SHA-256 plus project hashes remain inspectable.
+- [ ] Mis-scoped snapshot IDs return 404; anonymous requests return 401.
+- [ ] Saved-byte tampering returns 409; unsafe project DTD returns 422; type-link limit returns 413.
+- [ ] Live source edits do not affect saved observations; API restart reconstructs the same results.
+- [ ] Browser `Inspect link context` displays all four classifications and reasons.
+
+No project evaluation, resolved dependency graph, method-call graph or automatic confidence promotion is implemented.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
