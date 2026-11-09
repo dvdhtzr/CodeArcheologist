@@ -26,3 +26,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 19. Filename-only inventory labels (language and file role) are heuristic, even when the underlying snapshot path/hash is verified. Never promote them into verified code semantics, dependencies, API routes or behavior.
 20. Inventory must be scoped to the exact workspace/repository/snapshot, derive from a verified immutable snapshot, remain rebuildable, and fail closed on manifest/byte tampering.
+
+21. Roslyn syntax observations must be extracted from hash-verified captured files without creating an MSBuild workspace, running project evaluation, loading source generators or executing third-party analyzers.
+22. Namespace/type/member declarations and their spans are syntactic observations only. Do not claim binding, inheritance, dependencies, call graphs, project compilation or behavior without separately verified evidence.
