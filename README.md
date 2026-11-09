@@ -25,7 +25,7 @@ The approved architectural baseline consists of [v0.1](docs/architecture/Code-Ar
 - Local Windows PowerShell and Unix shell startup/build scripts with disposable security and workspace persistence tests.
 - Safety, contribution, acceptance and architecture documentation.
 
-**Not yet implemented:** immutable Git commit resolution, full safe hostile-source ingestion, complete workspaces (vault mapping, backup/restore), production-grade hosted authentication, agents/MAF, quality engine, plugins, source sandbox, graph, vector retrieval, vault reconciliation, production packaging, or complete Mission Control. Snapshot capture is available only by explicit user action and is not suitable for highly sensitive or adversarial repositories without further hardening.
+**Not yet implemented:** immutable Git commit resolution, full safe hostile-source ingestion, complete workspaces (vault mapping, backup/restore), production-grade hosted authentication, agents/MAF, quality engine, plugins, source sandbox, durable graph persistence, vector retrieval, vault reconciliation, production packaging, or complete Mission Control. Snapshot capture is available only by explicit user action and is not suitable for highly sensitive or adversarial repositories without further hardening.
 
 ## Development
 
