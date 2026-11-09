@@ -41,3 +41,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 29. Graph nodes/edges must be deterministic, snapshot-scoped, backed by copied-file SHA-256 and source spans when available, and referentially consistent. Never create an imagined target for an unresolved reference.
 30. A graph visualization does not upgrade candidate compile-item membership, synthetic type links or project context into verified dependencies or impact propagation; graph size limits must fail closed.
+
+31. Syntax declaration graph nodes represent captured Roslyn parse locations; these are not compiler-verified symbols or runtime behavior. Reuse exact file/hash/span target identities and their containment edges instead of duplicating nodes.
+32. Do not identify overloads solely by name; preserve distinct source spans. An expanded syntax graph must not claim a method-call, resolved project dependency, or complete symbol inventory.
