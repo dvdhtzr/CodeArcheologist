@@ -55,6 +55,8 @@ public sealed class CSharpSyntaxInspector(SnapshotCaptureService capture)
     public const string AnalyzerVersion = "roslyn-csharp-syntax-v1";
     private const int MaxDeclarations = 25000;
     private const int MaxDiagnostics = 1000;
+    private const int MaxCSharpFiles = 1000;
+    private const long MaxCSharpBytes = 32L * 1024 * 1024;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly CSharpParseOptions ParseOptions =
         CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
@@ -68,6 +70,13 @@ public sealed class CSharpSyntaxInspector(SnapshotCaptureService capture)
             .Where(file => file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             .OrderBy(file => file.Path, StringComparer.Ordinal)
             .ToArray();
+
+        if (csFiles.Length > MaxCSharpFiles ||
+            csFiles.Sum(file => file.SizeBytes) > MaxCSharpBytes)
+        {
+            throw new SnapshotCaptureException(
+                "This initial C# parser is limited to 1000 files / 32 MiB of C# text per snapshot.", 413);
+        }
 
         var declarations = new List<CSharpDeclaration>();
         var diagnostics = new List<CSharpParseIssue>();
