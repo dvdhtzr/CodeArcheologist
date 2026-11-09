@@ -200,6 +200,7 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
                     new { role = "user", content = BuildPrompt(evidenceJson) }
                 },
                 format = schema.RootElement.Clone(),
+                think = false,
                 stream = false
             }, timeout.Token);
             if (!response.IsSuccessStatusCode)
