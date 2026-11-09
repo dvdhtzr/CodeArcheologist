@@ -38,7 +38,7 @@ public sealed class LocalMafInvestigation(
     private static readonly SemaphoreSlim RunGate = new(1, 1);
     private const int MaxOutput = 16000;
     private const string OutputContract =
-        "Return ONLY JSON with shape {\"summary\":\"...\",\"findings\":[{\"claimKind\":\"source-observation or candidate-relationship\",\"statement\":\"...\",\"evidenceIds\":[\"exact supplied ID\"],\"unknowns\":[\"...\"]}]}. " +
+        "Your entire final answer must be one JSON object, without markdown, preamble, commentary or thinking text. Use exact lowerCamelCase property names. Return ONLY JSON with shape {\"summary\":\"...\",\"findings\":[{\"claimKind\":\"source-observation or candidate-relationship\",\"statement\":\"...\",\"evidenceIds\":[\"exact supplied ID\"],\"unknowns\":[\"...\"]}]}. " +
         "Make at least one conservative claim and state an unknown. " +
         "For source-observation claims, cite an EXACT ID from References or Relations " +
         "whose EvidenceStatus is observed-syntax. For candidate-relationship claims, " +
@@ -196,9 +196,9 @@ public sealed class LocalMafInvestigation(
                 if (roleOutputs.Count == 2)
                 {
                     if (first is null)
-                        diagnostics.Add("Investigator output failed structured parsing or citation evaluation.");
+                        diagnostics.Add("Investigator output rejected: " + ClassifyRoleResponseFailure(roleOutputs[0].Text) + ".");
                     if (second is null)
-                        diagnostics.Add("Reviewer output failed structured parsing or citation evaluation.");
+                        diagnostics.Add("Reviewer output rejected: " + ClassifyRoleResponseFailure(roleOutputs[1].Text) + ".");
                 }
                 if (first is not null)
                 {
@@ -265,6 +265,73 @@ public sealed class LocalMafInvestigation(
         catch (SnapshotCaptureException)
         {
             return null;
+        }
+    }
+
+    // Diagnostic-only classifier. Never return model text, evidence IDs, code
+    // excerpts or source-derived field values to the browser on a rejected run.
+    // The strict parser and deterministic citation check remain authoritative.
+    public static string ClassifyRoleResponseFailure(string response)
+    {
+        if (response.Length > MaxOutput) return "output-too-large";
+        var trimmed = response.Trim();
+        if (trimmed.StartsWith("```", StringComparison.Ordinal) &&
+            trimmed.EndsWith("```", StringComparison.Ordinal))
+        {
+            var nl = trimmed.IndexOf('\\n');
+            if (nl < 0) return "malformed-json-fence";
+            trimmed = trimmed[(nl + 1)..^3].Trim();
+        }
+
+        try
+        {
+            using var json = JsonDocument.Parse(trimmed);
+            var root = json.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return "json-root-not-object";
+            if (!root.TryGetProperty("summary", out var title) ||
+                title.ValueKind != JsonValueKind.String)
+                return "summary-missing-or-not-string";
+            if (title.GetString()?.Length is not (>= 15 and <= 1500))
+                return "summary-length-invalid";
+            if (!root.TryGetProperty("findings", out var findings) ||
+                findings.ValueKind != JsonValueKind.Array)
+                return "findings-missing-or-not-array";
+            if (findings.GetArrayLength() is < 1 or > 8)
+                return "findings-count-invalid";
+            foreach (var item in findings.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    return "finding-not-object";
+                if (!item.TryGetProperty("claimKind", out var kind) ||
+                    kind.ValueKind != JsonValueKind.String)
+                    return "claim-kind-missing-or-not-string";
+                if (!item.TryGetProperty("statement", out var statement) ||
+                    statement.ValueKind != JsonValueKind.String ||
+                    statement.GetString()?.Length is not (>= 15 and <= 1200))
+                    return "statement-missing-or-invalid-length";
+                if (!item.TryGetProperty("evidenceIds", out var ids) ||
+                    ids.ValueKind != JsonValueKind.Array ||
+                    ids.GetArrayLength() is < 1 or > 8)
+                    return "evidence-ids-missing-or-invalid-count";
+                if (ids.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String ||
+                    x.GetString()?.Length is not (>= 1 and <= 1024)))
+                    return "evidence-id-invalid";
+                var strings = ids.EnumerateArray().Select(x => x.GetString()).ToArray();
+                if (strings.Distinct(StringComparer.Ordinal).Count() != strings.Length)
+                    return "duplicate-evidence-ids";
+                if (!item.TryGetProperty("unknowns", out var unknowns) ||
+                    unknowns.ValueKind != JsonValueKind.Array ||
+                    unknowns.GetArrayLength() is < 1 or > 8)
+                    return "unknowns-missing-or-invalid-count";
+                if (unknowns.EnumerateArray().Any(x => x.ValueKind != JsonValueKind.String ||
+                    x.GetString()?.Length is not (>= 5 and <= 500)))
+                    return "unknown-text-invalid";
+            }
+            return "citation-evaluation-failed";
+        }
+        catch (JsonException)
+        {
+            return "invalid-json-or-extra-text";
         }
     }
 
