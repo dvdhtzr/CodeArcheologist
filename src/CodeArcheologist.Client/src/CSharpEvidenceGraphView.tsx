@@ -62,6 +62,30 @@ type EvidenceGraphReport = {
   limitations: string[];
 };
 
+type AgentFinding = {
+  summary: string;
+  evidenceIds: string[];
+  unknowns: string[];
+};
+
+type AgentInvestigation = {
+  snapshotId: string;
+  fingerprintSha256: string;
+  entryPointId: string;
+  methodId: string;
+  model: string;
+  workflow: string;
+  outcome: string;
+  transport: string;
+  evidenceQuality: string;
+  investigator: AgentFinding | null;
+  reviewer: AgentFinding | null;
+  toolCalls: string[];
+  agentTrace: string[];
+  diagnostics: string[];
+  limitations: string[];
+};
+
 type AdjacentEvidence = { edge: GraphEdge; other: GraphNode; outgoing: boolean };
 
 function Short({ value, length = 24 }: { value: string; length?: number }) {
@@ -100,7 +124,9 @@ function EvidenceAddress({ path, hash, line, column }: {
   );
 }
 
-export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
+export function CSharpEvidenceGraphView({
+  endpoint, investigationEndpoint, csrfToken,
+}: { endpoint: string; investigationEndpoint: string; csrfToken: string }) {
   const [report, setReport] = useState<EvidenceGraphReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,6 +136,9 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
   const [calleeContextFilter, setCalleeContextFilter] = useState('all');
   const [impactSearch, setImpactSearch] = useState('');
   const [impactMethodId, setImpactMethodId] = useState('');
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [agentResult, setAgentResult] = useState<AgentInvestigation | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -118,6 +147,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
       setError('');
       setReport(null);
       setSelectedId('');
+      setAgentError('');
+      setAgentResult(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
@@ -151,6 +182,36 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
     void load();
     return () => controller.abort();
   }, [endpoint]);
+
+  async function runAgentInvestigation(entryPointId: string) {
+    if (agentBusy) return;
+    setAgentBusy(true);
+    setAgentError('');
+    setAgentResult(null);
+    try {
+      const response = await fetch(investigationEndpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CodeArcheologist-Request': '1',
+          'X-CodeArcheologist-Csrf': csrfToken,
+        },
+        body: JSON.stringify({ entryPointId }),
+      });
+      if (!response.ok) {
+        const failure: { error?: string } = await response.json().catch(() => ({}));
+        throw new Error(failure.error ?? 'Local MAF investigation failed (HTTP ' + response.status + ')');
+      }
+      const result: AgentInvestigation = await response.json();
+      setAgentResult(result);
+    } catch (cause) {
+      setAgentError(cause instanceof Error ? cause.message : 'Local MAF investigation failed.');
+    } finally {
+      setAgentBusy(false);
+    }
+  }
 
   const nodesById = useMemo(() => new Map(
     (report?.nodes ?? []).map(node => [node.id, node])), [report]);
@@ -342,6 +403,13 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                       >
                         Inspect annotation and method in graph
                       </button>
+                      <button
+                        type="button"
+                        disabled={agentBusy}
+                        onClick={() => { void runAgentInvestigation(node.id); }}
+                      >
+                        {agentBusy ? 'MAF investigation running…' : 'Investigate with local MAF + Ollama'}
+                      </button>
                       {method && (
                         <a href="#direct-impact" onClick={() => {
                           setImpactMethodId(method.id);
@@ -363,6 +431,70 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
               </>
             )}
           </section>
+          {(agentBusy || agentError || agentResult) && (
+            <section className="graph-agent-results" aria-live="polite" aria-label="Local agent investigation results">
+              <h4>Local MAF + Ollama investigation</h4>
+              {agentBusy && <p role="status">
+                Running Functional Investigator → Skeptic/Reviewer with saved
+                source evidence. This is a bounded, user-triggered local model workflow.
+              </p>}
+              {agentError && <p role="alert" className="error">{agentError}</p>}
+              {agentResult && (
+                <>
+                  <p>
+                    <strong>{agentResult.outcome}</strong> ·
+                    {' '}transport: {agentResult.transport} ·
+                    {' '}evidence gate: {agentResult.evidenceQuality}
+                  </p>
+                  <p className="workspace-note">
+                    {agentResult.workflow} · model: {agentResult.model} ·
+                    saved snapshot: {agentResult.snapshotId} ·
+                    fingerprint: {agentResult.fingerprintSha256.slice(0, 16)}…
+                  </p>
+                  {agentResult.investigator && (
+                    <div className="graph-agent-role">
+                      <h4>Functional Investigator</h4>
+                      <p>{agentResult.investigator.summary}</p>
+                      <p className="workspace-note">
+                        Source IDs: {agentResult.investigator.evidenceIds.join(', ')}
+                      </p>
+                      <strong>Explicit unknowns</strong>
+                      <ul>{agentResult.investigator.unknowns.map((value, i) =>
+                        <li key={i}>{value}</li>)}</ul>
+                    </div>
+                  )}
+                  {agentResult.reviewer && (
+                    <div className="graph-agent-role">
+                      <h4>Skeptic / Reviewer</h4>
+                      <p>{agentResult.reviewer.summary}</p>
+                      <p className="workspace-note">
+                        Source IDs: {agentResult.reviewer.evidenceIds.join(', ')}
+                      </p>
+                      <strong>Challenges and unknowns</strong>
+                      <ul>{agentResult.reviewer.unknowns.map((value, i) =>
+                        <li key={i}>{value}</li>)}</ul>
+                    </div>
+                  )}
+                  <details>
+                    <summary>Agent trace and evidence-tool calls</summary>
+                    <p>Evidence tool sections actually called: {
+                      agentResult.toolCalls.length
+                        ? agentResult.toolCalls.join(', ')
+                        : 'none recorded'
+                    }</p>
+                    <ul>{agentResult.agentTrace.map((event, i) => <li key={i}>{event}</li>)}</ul>
+                  </details>
+                  <details open>
+                    <summary>Verification limits and diagnostics</summary>
+                    <ul>
+                      {[...agentResult.diagnostics, ...agentResult.limitations]
+                        .map((message, i) => <li key={i}>{message}</li>)}
+                    </ul>
+                  </details>
+                </>
+              )}
+            </section>
+          )}
           <section className="graph-callee-finder" aria-label="Provisional callee project evidence">
             <h4>Find callee project evidence</h4>
             <p className="workspace-note">
