@@ -7,15 +7,32 @@ internal static class GateBLocalRun
     public static async Task<int> RunAsync(string[] args)
     {
         var diagnostic = args.Length == 1 && args[0] == "--gate-b-diagnose";
-        var validRun = args.Length == 2 && args[0] == "--gate-b-run" &&
+        var validRun = args.Length >= 2 && args.Length <= 5 &&
+            args[0] == "--gate-b-run" &&
             int.TryParse(args[1], out var requested) && requested is >= 1 and <= 10;
+        var kind = "any";
+        Guid? excludeSnapshot = null;
+        if (validRun && args.Length >= 3)
+        {
+            kind = args[2];
+            validRun = kind is "any" or "http-minimal-mapping" or "http-endpoint-attribute";
+        }
+        if (validRun && args.Length >= 4)
+        {
+            validRun = args.Length == 5 && args[3] == "--exclude-snapshot" &&
+                Guid.TryParse(args[4], out var parsed);
+            if (validRun) excludeSnapshot = Guid.Parse(args[4]);
+        }
         if (!diagnostic && !validRun)
         {
-            Console.Error.WriteLine("Usage: --gate-b-run <attempts 1..10> OR --gate-b-diagnose");
+            Console.Error.WriteLine(
+                "Usage: --gate-b-run <1..10> [any|http-minimal-mapping|http-endpoint-attribute] " +
+                "[--exclude-snapshot <saved-snapshot-GUID>] OR --gate-b-diagnose");
             return 2;
         }
 
-        var attempts = diagnostic ? 1 : int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
+        var attempts = diagnostic ? 1 : int.Parse(args[1],
+            System.Globalization.CultureInfo.InvariantCulture);
 
         // Trusted, direct in-process harness. No extra service, API credentials,
         // imported code execution, cloud model, or manually supplied source path.
@@ -53,12 +70,15 @@ internal static class GateBLocalRun
             {
                 foreach (var snapshot in store.ListSnapshots(workspace.Id, repository.Id).Items)
                 {
-                    if (inspected++ >= 20) break;
+                    if (inspected++ >= 100) break;
+                    if (excludeSnapshot.HasValue && snapshot.Id == excludeSnapshot.Value)
+                        continue;
                     try
                     {
                         var graph = graphBuilder.Build(snapshot, CancellationToken.None);
                         foreach (var candidate in graph.Nodes
                             .Where(n => n.Kind is "http-minimal-mapping" or "http-endpoint-attribute")
+                            .Where(n => kind == "any" || n.Kind == kind)
                             .OrderBy(n => n.Kind == "http-minimal-mapping" ? 0 : 1)
                             .ThenBy(n => n.Id, StringComparer.Ordinal))
                         {
@@ -66,7 +86,7 @@ internal static class GateBLocalRun
                                 CancellationToken.None);
                             // Match the Investigator evidence size contract before invoking
                             // the model; avoid selecting a known over-budget package.
-                            if (System.Text.Json.JsonSerializer.Serialize(evidence).Length > 20000)
+                            if (GateBInvestigator.BuildAgentEvidenceJson(evidence).Length > 20000)
                                 continue;
                             if (!evidence.Relations.Any(r =>
                                 r.Kind is "annotates-method" or "candidate-http-mapping" &&
@@ -97,7 +117,8 @@ internal static class GateBLocalRun
         if (selectedSnapshot is null || selectedEntryPoint is null)
         {
             Console.Error.WriteLine(
-                "RED: no usable saved HTTP candidate found in first 20 saved snapshots. " +
+                "RED: no usable " + kind + " candidate in first 100 saved snapshots" +
+                (excludeSnapshot is null ? ". " : " excluding the requested snapshot. ") +
                 "Capture a repository containing a C# controller or Minimal API mapping in the UI.");
             return 1;
         }
@@ -153,6 +174,17 @@ internal static class GateBLocalRun
             Console.WriteLine($"Attempt {i}/{attempts}: {label}" +
                 (run.Result is null ? "" :
                     $"; findings={run.Result.Findings.Count}; unknowns={run.Result.Unknowns.Count}"));
+            // Show *host-generated*, citation-gated findings for human usefulness
+            // review. Never print untrusted model prose or raw source excerpts.
+            if (i == 1 && run.Result is not null)
+            {
+                Console.WriteLine("  Host summary: " + run.Result.Summary);
+                foreach (var finding in run.Result.Findings)
+                    Console.WriteLine("  Checked finding: " + finding.Statement);
+                foreach (var unknown in run.Result.Unknowns)
+                    Console.WriteLine("  Known limitation: " + unknown);
+                Console.WriteLine("  Citation status: " + run.CitationStatus);
+            }
         }
 
         var accepted = counts.Where(pair =>
