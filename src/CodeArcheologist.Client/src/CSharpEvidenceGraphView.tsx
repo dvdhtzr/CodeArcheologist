@@ -334,6 +334,15 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                           >
                             Inspect in graph: {source.label} → {target.label}
                           </button>
+                          <a
+                            href="#direct-impact"
+                            onClick={() => {
+                              setImpactMethodId(edge.toId);
+                              setImpactSearch('');
+                            }}
+                          >
+                            Review direct impact candidates for {target.label}
+                          </a>
                           <span>
                             {edge.kind} · <strong>{edge.status}</strong>
                             {' '}· {edge.projectContextStatus}
@@ -374,7 +383,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
               </>
             )}
           </section>
-          <section className="graph-impact-explorer" aria-label="Direct change-impact candidates">
+          <section id="direct-impact" className="graph-impact-explorer" aria-label="Direct change-impact candidates">
             <h4>Explore direct change-impact candidates</h4>
             <p className="workspace-note">
               Choose a captured C# method and inspect written invocation sites
