@@ -338,6 +338,8 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
         <CSharpEvidenceGraphView
           key={graphSnapshotId}
           endpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/csharp-evidence-graph'}
+          evidenceToolEndpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/evidence-tools/entry-point'}
+          csrfToken={csrfToken}
         />
       )}
       {contextSnapshotId && (

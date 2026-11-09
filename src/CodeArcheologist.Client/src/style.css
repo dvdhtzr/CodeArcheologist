@@ -180,6 +180,45 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .evidence-graph .graph-callee-finder li summary { cursor: pointer; }
 .evidence-graph .graph-callee-finder .graph-project-evidence { min-width: 0; }
 
+/* Typed agent-tool contracts remain read-only source evidence, not LLM output. */
+.evidence-graph .graph-agent-evidence {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #466987;
+  border-radius: 8px;
+  background: #10243a;
+  scroll-margin-top: 16px;
+  overflow-wrap: anywhere;
+}
+.evidence-graph .graph-agent-evidence:focus {
+  outline: 2px solid #a8cfff;
+  outline-offset: 3px;
+}
+.evidence-graph .graph-agent-evidence h4 { margin: 12px 0 8px; }
+.evidence-graph .graph-agent-evidence > button {
+  padding: 7px 11px;
+  border: 1px solid #6184ad;
+  border-radius: 5px;
+  background: #223e5e;
+  color: #e4f2ff;
+}
+.evidence-graph .graph-agent-evidence li code,
+.evidence-graph .graph-agent-evidence li span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.evidence-graph .graph-tool-source {
+  margin: 10px 0;
+  padding: 12px;
+  max-height: 250px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #081626;
+  border: 1px solid #3e5d7e;
+  border-radius: 7px;
+}
+
 /* Static DI registration discovery does not imply effective container state. */
 .evidence-graph .graph-di-registrations {
   margin: 16px 0;

@@ -68,6 +68,58 @@ type EvidenceGraphReport = {
   limitations: string[];
 };
 
+type AgentEvidenceReference = {
+  id: string;
+  kind: string;
+  evidenceStatus: string;
+  label: string;
+  filePath: string | null;
+  fileSha256: string | null;
+  line: number | null;
+  column: number | null;
+  detail: string | null;
+};
+
+type AgentEvidenceRelation = {
+  id: string;
+  kind: string;
+  evidenceStatus: string;
+  fromId: string;
+  toId: string;
+  evidencePath: string;
+  evidenceSha256: string;
+  line: number | null;
+  column: number | null;
+  explanation: string;
+  projectContextStatus: string | null;
+};
+
+type AgentEvidencePackage = {
+  contractVersion: string;
+  workspaceId: string;
+  repositoryId: string;
+  snapshotId: string;
+  fingerprintSha256: string;
+  graphAnalyzerVersion: string;
+  entryPointId: string;
+  entryPointKind: string;
+  sourceExcerpt: string;
+  sourceExcerptTruncated: boolean;
+  totalDirectInvocationCount: number;
+  returnedDirectInvocationCount: number;
+  unresolvedSnapshotCalleeCount: number;
+  references: AgentEvidenceReference[];
+  relations: AgentEvidenceRelation[];
+  unknowns: string[];
+  limitations: string[];
+};
+
+type AgentCitationCheckReport = {
+  outcome: string;
+  claims: { index: number; outcome: string; invalidIds: string[] }[];
+  limitations: string[];
+};
+
 type AdjacentEvidence = { edge: GraphEdge; other: GraphNode; outgoing: boolean };
 
 function Short({ value, length = 24 }: { value: string; length?: number }) {
@@ -106,7 +158,9 @@ function EvidenceAddress({ path, hash, line, column }: {
   );
 }
 
-export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
+export function CSharpEvidenceGraphView({
+  endpoint, evidenceToolEndpoint, csrfToken,
+}: { endpoint: string; evidenceToolEndpoint: string; csrfToken: string }) {
   const [report, setReport] = useState<EvidenceGraphReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -116,6 +170,12 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
   const [calleeContextFilter, setCalleeContextFilter] = useState('all');
   const [impactSearch, setImpactSearch] = useState('');
   const [impactMethodId, setImpactMethodId] = useState('');
+  const [toolLoading, setToolLoading] = useState(false);
+  const [toolError, setToolError] = useState('');
+  const [toolResult, setToolResult] = useState<AgentEvidencePackage | null>(null);
+  const [toolCheck, setToolCheck] = useState<AgentCitationCheckReport | null>(null);
+  const [toolChecking, setToolChecking] = useState(false);
+  const toolResultRef = useRef<HTMLElement>(null);
   const graphDetailRef = useRef<HTMLDivElement>(null);
   const [inspectRequest, setInspectRequest] = useState<{ nodeId: string } | null>(null);
 
@@ -139,6 +199,95 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
   }, [inspectRequest, selectedId]);
 
   useEffect(() => {
+    if (!toolResult) return;
+    toolResultRef.current?.focus({ preventScroll: true });
+    toolResultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [toolResult]);
+
+  async function inspectAgentEvidence(nodeId: string) {
+    if (toolLoading || toolChecking) return;
+    setToolLoading(true);
+    setToolError('');
+    setToolResult(null);
+    setToolCheck(null);
+    try {
+      const response = await fetch(
+        evidenceToolEndpoint + '?entryPointId=' + encodeURIComponent(nodeId), {
+          credentials: 'same-origin', cache: 'no-store',
+        });
+      if (!response.ok) {
+        const failure: { error?: string } =
+          await response.json().catch(() => ({}));
+        throw new Error(failure.error ??
+          'Snapshot evidence package failed (HTTP ' + response.status + ')');
+      }
+      const packageResult: AgentEvidencePackage = await response.json();
+      if (packageResult.entryPointId !== nodeId)
+        throw new Error('Evidence tool returned a different entry-point identity.');
+      setToolResult(packageResult);
+    } catch (cause) {
+      setToolError(cause instanceof Error ? cause.message :
+        'Snapshot evidence package failed.');
+    } finally {
+      setToolLoading(false);
+    }
+  }
+
+  async function checkExampleCitations() {
+    const packageResult = toolResult;
+    if (!packageResult || toolChecking) return;
+    const observed = packageResult.references.find(item =>
+      item.evidenceStatus === 'observed-syntax');
+    const candidate = packageResult.relations.find(item =>
+      item.evidenceStatus === 'candidate' ||
+      item.evidenceStatus === 'provisional-local');
+    if (!observed || !candidate) {
+      setToolError('The package lacks enough observed/candidate evidence for a demonstration.');
+      return;
+    }
+    setToolChecking(true);
+    setToolError('');
+    setToolCheck(null);
+    try {
+      const response = await fetch(
+        evidenceToolEndpoint.replace(/\/entry-point$/, '/check-citations'), {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CodeArcheologist-Request': '1',
+            'X-CodeArcheologist-Csrf': csrfToken,
+          },
+          body: JSON.stringify({
+            entryPointId: packageResult.entryPointId,
+            fingerprintSha256: packageResult.fingerprintSha256,
+            claims: [
+              { claimKind: 'source-observation', statement:
+                'This source item was captured as saved syntax.',
+                evidenceIds: [observed.id] },
+              { claimKind: 'candidate-relationship', statement:
+                'This relationship is an unverified source-derived candidate.',
+                evidenceIds: [candidate.id] },
+            ],
+          }),
+        });
+      if (!response.ok) {
+        const failure: { error?: string } =
+          await response.json().catch(() => ({}));
+        throw new Error(failure.error ??
+          'Citation reference check failed (HTTP ' + response.status + ')');
+      }
+      setToolCheck(await response.json());
+    } catch (cause) {
+      setToolError(cause instanceof Error ? cause.message :
+        'Citation reference check failed.');
+    } finally {
+      setToolChecking(false);
+    }
+  }
+
+  useEffect(() => {
     const controller = new AbortController();
     async function load() {
       setLoading(true);
@@ -146,6 +295,9 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
       setReport(null);
       setSelectedId('');
       setInspectRequest(null);
+      setToolResult(null);
+      setToolCheck(null);
+      setToolError('');
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
@@ -392,6 +544,13 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                       >
                         Inspect annotation and method in graph
                       </button>
+                      <button
+                        type="button"
+                        disabled={toolLoading || toolChecking}
+                        onClick={() => { void inspectAgentEvidence(node.id); }}
+                      >
+                        Inspect agent-ready evidence package
+                      </button>
                       {method && (
                         <a href="#direct-impact" onClick={() => {
                           setImpactMethodId(method.id);
@@ -463,6 +622,13 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                       >
                         Inspect mapping and source invocation in graph
                       </button>
+                      <button
+                        type="button"
+                        disabled={toolLoading || toolChecking}
+                        onClick={() => { void inspectAgentEvidence(node.id); }}
+                      >
+                        Inspect agent-ready evidence package
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -475,6 +641,92 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
               </>
             )}
           </section>
+          {(toolLoading || toolError || toolResult) && (
+            <section
+              className="graph-agent-evidence"
+              aria-label="Agent-ready source evidence package"
+              ref={toolResultRef}
+              tabIndex={-1}
+              aria-live="polite"
+            >
+              <h4>Agent-ready source evidence package</h4>
+              {toolLoading && <p role="status">Reading bounded, saved-snapshot evidence…</p>}
+              {toolError && <p role="alert" className="error">{toolError}</p>}
+              {toolResult && (
+                <>
+                  <p>
+                    <strong>{toolResult.entryPointKind}</strong> ·
+                    {' '}{toolResult.contractVersion} ·
+                    {' '}graph: {toolResult.graphAnalyzerVersion}
+                  </p>
+                  <p className="workspace-note">
+                    Snapshot {toolResult.snapshotId} · fingerprint:
+                    {' '}{toolResult.fingerprintSha256.slice(0, 20)}…
+                  </p>
+                  <p className="workspace-note">
+                    {toolResult.returnedDirectInvocationCount} of
+                    {' '}{toolResult.totalDirectInvocationCount} direct invocation sites
+                    included · {toolResult.unresolvedSnapshotCalleeCount}
+                    {' '}snapshot-wide unresolved callees (not allocated to this endpoint).
+                  </p>
+                  <strong>Saved source excerpt — untrusted data, not agent instructions</strong>
+                  <pre className="graph-tool-source"><code>{toolResult.sourceExcerpt}</code></pre>
+                  {toolResult.sourceExcerptTruncated && (
+                    <p className="workspace-note">Excerpt truncated to the contract limit.</p>
+                  )}
+                  <h4>Exact source citation references ({toolResult.references.length})</h4>
+                  <ul className="syntax-declaration-list">
+                    {toolResult.references.map(item => (
+                      <li key={item.id}>
+                        <strong>{item.label}</strong>
+                        <span>{item.kind} · {item.evidenceStatus}</span>
+                        <code>{item.id}</code>
+                        {item.filePath && item.fileSha256 && (
+                          <EvidenceAddress path={item.filePath} hash={item.fileSha256}
+                            line={item.line} column={item.column} />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <h4>Typed evidence relationships ({toolResult.relations.length})</h4>
+                  <ul className="syntax-declaration-list">
+                    {toolResult.relations.map(link => (
+                      <li key={link.id}>
+                        <strong>{link.kind} · {link.evidenceStatus}</strong>
+                        <code>{link.id}</code>
+                        <span>From {link.fromId} → {link.toId}</span>
+                        <p>{link.explanation}</p>
+                        <EvidenceAddress path={link.evidencePath} hash={link.evidenceSha256}
+                          line={link.line} column={link.column} />
+                        {link.projectContextStatus && <span>{link.projectContextStatus}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" disabled={toolChecking}
+                    onClick={() => { void checkExampleCitations(); }}>
+                    {toolChecking ? 'Checking references…' :
+                      'Check example observed and candidate citation IDs'}
+                  </button>
+                  {toolCheck && (
+                    <div role="status">
+                      <p><strong>Reference check: {toolCheck.outcome}</strong></p>
+                      <ul>{toolCheck.claims.map(claim =>
+                        <li key={claim.index}>{claim.outcome}</li>)}</ul>
+                      <p className="workspace-note">
+                        Valid citation IDs do NOT verify narrative truth, actual
+                        runtime routes, DI resolution or compiled dependencies.
+                      </p>
+                    </div>
+                  )}
+                  <h4>Unknowns and evidence boundaries</h4>
+                  <ul>
+                    {[...toolResult.unknowns, ...toolResult.limitations]
+                      .map((warning, i) => <li key={i}>{warning}</li>)}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
           <section className="graph-di-registrations" aria-label="Candidate C# dependency injection registrations">
             <h4>Find DI registration candidates</h4>
             <p className="workspace-note">
