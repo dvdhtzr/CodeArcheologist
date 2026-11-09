@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type GraphNode = {
   id: string;
@@ -113,6 +113,27 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
   const [calleeContextFilter, setCalleeContextFilter] = useState('all');
   const [impactSearch, setImpactSearch] = useState('');
   const [impactMethodId, setImpactMethodId] = useState('');
+  const graphDetailRef = useRef<HTMLDivElement>(null);
+  const [inspectRequest, setInspectRequest] = useState<{ nodeId: string } | null>(null);
+
+  // A direct Inspect action must navigate to the graph detail, not merely
+  // update a selected node far below the viewport.
+  function inspectGraphNode(nodeId: string, nodeKind: string) {
+    setSelectedId(nodeId);
+    setKind(nodeKind);
+    setSearch('');
+    // A fresh object also re-activates navigation for repeated clicks on
+    // the currently selected node.
+    setInspectRequest({ nodeId });
+  }
+
+  useEffect(() => {
+    if (!inspectRequest || selectedId !== inspectRequest.nodeId) return;
+    const target = graphDetailRef.current;
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [inspectRequest, selectedId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -121,6 +142,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
       setError('');
       setReport(null);
       setSelectedId('');
+      setInspectRequest(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
@@ -350,9 +372,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedId(node.id);
-                          setKind('http-endpoint-attribute');
-                          setSearch('');
+                          inspectGraphNode(node.id, 'http-endpoint-attribute');
                         }}
                       >
                         Inspect annotation and method in graph
@@ -423,9 +443,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedId(node.id);
-                          setKind('http-minimal-mapping');
-                          setSearch('');
+                          inspectGraphNode(node.id, 'http-minimal-mapping');
                         }}
                       >
                         Inspect mapping and source invocation in graph
@@ -492,9 +510,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedId(edge.fromId);
-                              setKind('invocation-site');
-                              setSearch('');
+                              inspectGraphNode(edge.fromId, 'invocation-site');
                             }}
                           >
                             Inspect in graph: {source.label} → {target.label}
@@ -660,9 +676,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedId(item.invocation.id);
-                                setKind('invocation-site');
-                                setSearch('');
+                                inspectGraphNode(item.invocation.id, 'invocation-site');
                               }}
                             >
                               Inspect invocation and candidate in graph
@@ -752,7 +766,13 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                 </p>
               )}
             </div>
-            <div className="graph-detail">
+            <div
+              ref={graphDetailRef}
+              className="graph-detail"
+              role="region"
+              aria-label="Selected graph node evidence"
+              tabIndex={-1}
+            >
               {!selectedNode && <p>Select a graph node to inspect its relationships.</p>}
               {selectedNode && (
                 <>
