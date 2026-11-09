@@ -118,7 +118,7 @@ public sealed class StaticCSharpProjectInspector(SnapshotCaptureService capture)
                     "Saved .csproj has no valid Project root: " + project.Path, 422);
             }
 
-            var root = document.Root;
+            var root = document.Root!;
             var sdk = ((string?)root.Attribute("Sdk"))?.Trim();
             var unresolved = new SortedSet<string>(StringComparer.Ordinal);
             var candidate = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -273,7 +273,32 @@ public sealed class StaticCSharpProjectInspector(SnapshotCaptureService capture)
     {
         var value = raw.Trim().Replace('\\', '/');
         if (value.Length == 0 || value.StartsWith('/') ||
-            value.Contains(':') || value.IndexOfAny(['*', '?', '$', '@', '%', '|', '#']) >= 0)
+            value.Contains(':') || value.IndexOfAny(new[] { '*', '?', ')
+            return null;
+
+        var segments = new List<string>();
+        if (projectDirectory.Length > 0)
+            segments.AddRange(projectDirectory.Split('/'));
+
+        foreach (var segment in value.Split('/'))
+        {
+            if (segment is "" or "." or "..")
+            {
+                if (segment == "..")
+                {
+                    if (segments.Count == 0) return null;
+                    segments.RemoveAt(segments.Count - 1);
+                }
+                continue;
+            }
+
+            if (segment.Any(char.IsControl)) return null;
+            segments.Add(segment);
+        }
+        return segments.Count > 0 ? string.Join("/", segments) : null;
+    }
+}
+, '@', '%', '|', '#' }) >= 0)
             return null;
 
         var segments = new List<string>();
