@@ -88,7 +88,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setManifest(null);
       setInventory(null);
       setSyntaxSnapshotId(null);
-    setTypeLinksSnapshotId(null);
+      setTypeLinksSnapshotId(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
