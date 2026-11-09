@@ -75,7 +75,7 @@ fabricating a target.
 The React graph exposes **Find Minimal API mapping candidates**
 independently from the existing controller annotation panel,
 with saved line/hash evidence, link classification, detailed limitations,
-direct graph navigation and an explicit zero-result message. The
+direct graph navigation **with scroll and keyboard focus to the selected evidence panel**, and an explicit zero-result message. Direct Inspect actions in the controller, callee and impact panels use the same focus/scroll behavior. The
 display is bounded to the first 40 rows, while full data stays in
 the authenticated, snapshot-scoped graph API.
 
