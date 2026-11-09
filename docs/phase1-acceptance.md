@@ -197,6 +197,24 @@ method-to-method call graph or execution proof.
 
 This is **not** a verified method-to-method call graph, execution proof, project loading, or impact model.
 
+## PR #16 — callee static project-candidate context (pending owner verification)
+
+- [ ] Windows .NET 10, TypeScript/Vite and local HTTP integration suites GREEN.
+- [ ] Graph v5 retains all provisional method-callee edges with unmodified `provisional-local` status.
+- [ ] Project-candidate context of each callee edge is exactly one of shared, disjoint or unknown; counts partition provisional callee count.
+- [ ] Shared project candidates use identical saved project path and SHA-256 on both sides.
+- [ ] Source, target and shared project candidates list saved .csproj path/hash, inclusion basis and unresolved-rule count.
+- [ ] Disjoint candidates never imply a call is impossible; missing candidates never imply exclusion.
+- [ ] Unresolved callees have no candidate edge or fabricated project-context evidence.
+- [ ] Existing snapshot provenance, authorization/scope, tamper 409, XML DTD 422, bounds 413 and restart stability remain intact.
+- [ ] Browser displays project-context counts and exact candidate evidence on selected callee links.
+- [ ] Browser provides **Find callee project evidence** with direct candidate links, all/shared/disjoint/unknown filtering, expandable project evidence and a useful explicit empty state when a snapshot has zero candidates.
+- [ ] Owner browser acceptance confirms honest confidence labels and existing graph navigation.
+
+This enriches existing synthetic call edges with **unevaluated static
+project evidence**; it does not load projects, resolve real compiler
+symbols or certify runtime dependencies.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.

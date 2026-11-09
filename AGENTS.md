@@ -50,3 +50,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 35. Callee edges from reference-free synthetic Roslyn models must be explicitly `provisional-local` and target an existing, SHA-256-verified saved source method declaration. Never promote them to real compiler, project, runtime or impact edges.
 36. Never resolve an invocation by matching names, argument counts or candidate symbols when unique Roslyn source binding fails. Join independent invocation observations by exact source file/hash/span; inconsistent or missing evidence must fail closed rather than silently drop edges.
+
+37. Qualifying a provisional method callee with source/target .csproj membership **never** upgrades its original `provisional-local` status. Shared/disjoint/unknown static project candidates are evidence, not verified compiler membership, real project references or runtime behavior.
+38. When enriching call edges, reuse the existing hash-verified project inspection report and preserve exact .csproj SHA-256, inclusion basis and unresolved-rule count; never fabricate project candidates for unresolved callees.

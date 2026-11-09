@@ -21,7 +21,10 @@ public sealed record EvidenceGraphEdge(
     string EvidenceSha256,
     int? Line,
     int? Column,
-    string Explanation);
+    string Explanation,
+    IReadOnlyList<ProjectMembershipEvidence>? SourceProjectCandidates = null,
+    IReadOnlyList<ProjectMembershipEvidence>? TargetProjectCandidates = null,
+    IReadOnlyList<ProjectMembershipEvidence>? SharedProjectCandidates = null);
 
 public sealed record CSharpEvidenceGraphReport(
     Guid WorkspaceId,
@@ -39,6 +42,9 @@ public sealed record CSharpEvidenceGraphReport(
     string CalleeAnalyzerVersion,
     int ProvisionalCalleeCount,
     int UnresolvedCalleeCount,
+    int CalleeSharedCandidateCount,
+    int CalleeDisjointCandidateCount,
+    int CalleeUnknownProjectCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -59,7 +65,7 @@ public sealed class CSharpEvidenceGraphBuilder(
     CSharpInvocationSyntaxInspector invocationInspector,
     CSharpProvisionalInvocationBinder calleeBinder)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v4";
+    public const string Version = "csharp-snapshot-evidence-graph-v5";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -140,6 +146,34 @@ public sealed class CSharpEvidenceGraphBuilder(
                     "C# evidence graph exceeds the 16000-edge limit.", 413);
             edges.Add(edge.Id, edge);
         }
+
+        // This is the exact same static, unevaluated candidate membership
+        // report used to render project/file hypotheses. Do not call MSBuild,
+        // derive project dependencies or promote any synthetic callee edge.
+        var projectsByFile = new Dictionary<string, List<ProjectMembershipEvidence>>(
+            StringComparer.Ordinal);
+        foreach (var project in projects.Projects)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var file in project.CandidateFiles)
+            {
+                if (!projectsByFile.TryGetValue(file.Path, out var candidates))
+                {
+                    candidates = new List<ProjectMembershipEvidence>();
+                    projectsByFile.Add(file.Path, candidates);
+                }
+                candidates.Add(new ProjectMembershipEvidence(
+                    project.ProjectPath,
+                    project.ProjectSha256,
+                    file.InclusionBasis,
+                    project.UnresolvedRules.Count));
+            }
+        }
+
+        IReadOnlyList<ProjectMembershipEvidence> Candidates(string path) =>
+            projectsByFile.TryGetValue(path, out var candidates)
+                ? candidates.OrderBy(item => item.ProjectPath, StringComparer.Ordinal).ToArray()
+                : Array.Empty<ProjectMembershipEvidence>();
 
         // File nodes are copied artifacts, not inferred dependencies.
         foreach (var file in manifest.Files
@@ -380,16 +414,49 @@ public sealed class CSharpEvidenceGraphBuilder(
                     "Synthetic callee target was not present in saved syntax declarations.", 409);
             }
 
+            var sourceProjects = Candidates(binding.FilePath);
+            var targetProjects = Candidates(target.FilePath);
+            var sharedProjects = sourceProjects
+                .Where(source => targetProjects.Any(other =>
+                    string.Equals(source.ProjectPath, other.ProjectPath,
+                        StringComparison.Ordinal) &&
+                    string.Equals(source.ProjectSha256, other.ProjectSha256,
+                        StringComparison.Ordinal)))
+                .ToArray();
+
+            // A shared candidate project may support the plausibility of a
+            // synthetic match; missing/disjoint candidates never disprove it.
+            string projectContext;
+            string explanation;
+            if (sourceProjects.Count == 0 || targetProjects.Count == 0)
+            {
+                projectContext = "unknown-project-candidate";
+                explanation = "One or both captured files lack a static .csproj membership candidate; no real project exclusion can be inferred.";
+            }
+            else if (sharedProjects.Length > 0)
+            {
+                projectContext = "shared-project-candidate";
+                explanation = "The source and target files share an unevaluated .csproj candidate; this does not prove the call compiles or is a runtime dependency.";
+            }
+            else
+            {
+                projectContext = "disjoint-project-candidates";
+                explanation = "The current static .csproj candidates do not overlap. Real project references, imports and conditions were not evaluated.";
+            }
+
             AddEdge(new EvidenceGraphEdge(
                 "provisional-callee:" + siteId,
                 siteId, targetId,
                 "candidate-callee", "provisional-local",
-                null,
+                projectContext,
                 binding.FilePath,
                 binding.FileSha256,
                 observed.Line,
                 observed.Column,
-                binding.Reason));
+                binding.Reason + " " + explanation,
+                sourceProjects,
+                targetProjects,
+                sharedProjects));
         }
 
         if (matchedIds.Count != observedSites.Count)
@@ -414,6 +481,12 @@ public sealed class CSharpEvidenceGraphBuilder(
             callees.AnalyzerVersion,
             callees.ProvisionalCount,
             callees.UnresolvedCount,
+            edges.Values.Count(edge => edge.Kind == "candidate-callee" &&
+                edge.ProjectContextStatus == "shared-project-candidate"),
+            edges.Values.Count(edge => edge.Kind == "candidate-callee" &&
+                edge.ProjectContextStatus == "disjoint-project-candidates"),
+            edges.Values.Count(edge => edge.Kind == "candidate-callee" &&
+                edge.ProjectContextStatus == "unknown-project-candidate"),
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -429,6 +502,8 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "An unresolved-use node records the written source occurrence and never fabricates a declaration or external dependency.",
                 "Invocation syntax sites are observed and attributed to direct method/constructor syntax where possible; only provisional source-local callee bindings are proposed.",
                 "A candidate-callee edge is a source-only reference-free synthetic Roslyn hypothesis, not a project-verified or runtime method-to-method call.",
+                "Callee project context is an independent static .csproj membership cross-check: shared, disjoint and unknown statuses never establish real compilation, project references, or execution.",
+                "Candidate source/target/shared project evidence retains the saved .csproj SHA-256, inclusion basis and unresolved-rule count.",
                 "Missing, ambiguous and unsupported callee targets have no outgoing candidate-callee edge; no name-based fallback is permitted.",
                 "The earlier provisional type links cover only base-type clauses and explicit object creations; DI, data flow and runtime behavior remain unexamined.",
                 "Lambda, local function, accessor and initializer invocations are file-scoped to avoid claiming an incorrect containing method.",
