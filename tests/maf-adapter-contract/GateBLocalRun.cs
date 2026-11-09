@@ -184,6 +184,9 @@ internal static class GateBLocalRun
                 foreach (var unknown in run.Result.Unknowns)
                     Console.WriteLine("  Known limitation: " + unknown);
                 Console.WriteLine("  Citation status: " + run.CitationStatus);
+                if (run.Result.SuggestedNextQuestion is not null)
+                    Console.WriteLine("  AI-selected next question (NOT verified): " +
+                        run.Result.SuggestedNextQuestion);
             }
         }
 
