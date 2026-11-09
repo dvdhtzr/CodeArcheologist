@@ -182,6 +182,21 @@ No resolved compiler symbols, project evaluation, call graph, durable graph pers
 This slice creates a **call-site syntax inventory**, not a compiler-bound
 method-to-method call graph or execution proof.
 
+## PR #15 — provisional source-local callee links (pending owner verification)
+
+- [ ] Windows .NET 10, TypeScript/Vite, and localhost HTTP integration suites GREEN.
+- [ ] Synthetic Roslyn callee analysis is bounded, reference-free, in-memory, and reads only hash-verified snapshot copies.
+- [ ] Graph v4 reports binder version, provisional candidate count and unresolved count; counts partition all observed invocation sites.
+- [ ] One ordinary method with a unique captured declaration may create a `candidate-callee` / `provisional-local` edge from its invocation-site node to its exact method syntax node.
+- [ ] Every candidate edge preserves the invocation's captured SHA-256, path, one-based line and column.
+- [ ] A missing/ambiguous/nonordinary/external callee remains unresolved with no guessed declaration or outgoing edge.
+- [ ] Independent invocation syntax and binding reports join bijectively on exact path/hash/span; mismatch fails 409 without partial results.
+- [ ] Existing direct caller containment, overload, lambda and local-function protections remain intact.
+- [ ] Existing auth/scope, tamper 409, unsafe XML 422, per-inspector 413 bounds and restart stability still pass.
+- [ ] Browser displays candidate/unresolved counts, **Invocation sites (candidate or unresolved)** filter and evidence-backed provisional callee navigation.
+
+This is **not** a verified method-to-method call graph, execution proof, project loading, or impact model.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
