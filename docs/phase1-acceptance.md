@@ -265,6 +265,21 @@ operations, actual HTTP registration, or functional behavior.
 
 This is one finite readiness step under [issue #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21). Next: bounded DI registration evidence and typed evidence-tool contracts before resuming the first MAF/Ollama workflow.
 
+## DI registration source-syntax candidates — owner verification pending
+
+- [ ] Windows .NET 10 build, React/TypeScript/Vite, and local security/integration tests GREEN.
+- [ ] Graph v8 adds DI inspector version, candidate count and unresolved registration-shape count; all identities match the exact verified snapshot.
+- [ ] A bounded source-only Roslyn inspector detects conventional `AddScoped`, `AddSingleton` and `AddTransient` member calls and preserves saved source SHA-256, line/column and syntax span.
+- [ ] Generic two-type and two-`typeof` registrations preserve written service/implementation types without semantic or runtime binding; one-generic-type registration does not invent an implementation type.
+- [ ] Lambda factory/instance arguments and unsupported overloads remain unresolved; unrelated same-named methods are candidates, never verified DI calls. Unsupported `TryAddScoped` is not falsely included.
+- [ ] Every `di-registration-candidate` node has an exact `candidate-di-registration` edge with `candidate` status to its matching independent observed invocation node. Mismatches fail 409.
+- [ ] Existing 404 scope, tamper 409, strict UTF-8 422, XML 422, 413 resource limits, restart and read-only source protections remain GREEN.
+- [ ] Browser **Find DI registration candidates** lists saved source evidence, lifetime spelling, type syntax or unresolved form; clicking **Inspect** scrolls/focuses the graph evidence and shows the candidate-to-invocation link.
+- [ ] No runtime service graph, actual DI lifetime, project compilation or inferred implementation interface relationship is claimed.
+- [ ] No new runtime dependencies, cloud models, CI workflows, database migration or imported source execution.
+
+This is the DI evidence step of [agent-tool readiness #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21). Next milestone: typed, read-only, exact-snapshot agent-tool contracts and negative tests, then real local MAF/Ollama investigations.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.

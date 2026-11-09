@@ -58,6 +58,9 @@ type EvidenceGraphReport = {
   minimalApiAnalyzerVersion: string;
   minimalApiCandidateCount: number;
   nonliteralMinimalApiRouteCount: number;
+  diRegistrationAnalyzerVersion: string;
+  diRegistrationCandidateCount: number;
+  diUnresolvedShapeCount: number;
   nodeCount: number;
   edgeCount: number;
   nodes: GraphNode[];
@@ -210,6 +213,17 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
         return { node, link, invocation };
       }), [report, nodesById]);
 
+  const diRegistrationRows = useMemo(() =>
+    (report?.nodes ?? [])
+      .filter(node => node.kind === 'di-registration-candidate')
+      .map(node => {
+        const edge = report?.edges.find(candidate =>
+          candidate.kind === 'candidate-di-registration' &&
+          candidate.fromId === node.id && candidate.status === 'candidate');
+        const invocation = edge ? nodesById.get(edge.toId) : undefined;
+        return { node, edge, invocation };
+      }), [report, nodesById]);
+
   const visibleCalleeEdges = useMemo(
     () => calleeEdges.filter(edge =>
       calleeContextFilter === 'all' ||
@@ -313,7 +327,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             {' '}{report.provisionalCalleeCount} provisional callee candidates ·
             {' '}{report.unresolvedCalleeCount} unresolved callees ·
             {' '}{report.httpAttributeCandidateCount} HTTP attribute candidates ·
-            {' '}{report.minimalApiCandidateCount} Minimal API mapping candidates
+            {' '}{report.minimalApiCandidateCount} Minimal API mapping candidates ·
+            {' '}{report.diRegistrationCandidateCount} DI registration candidates
           </p>
           <p className="workspace-note">
             Callee project context: {report.calleeSharedCandidateCount} shared candidates ·
@@ -455,6 +470,66 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                   <p className="workspace-note">
                     Showing the first 40 of {minimalApiRows.length} candidates.
                     Full evidence is available in the authenticated local graph API.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+          <section className="graph-di-registrations" aria-label="Candidate C# dependency injection registrations">
+            <h4>Find DI registration candidates</h4>
+            <p className="workspace-note">
+              Find written AddScoped, AddSingleton and AddTransient member calls,
+              with candidate service/implementation type syntax and lifetime.
+              Generic factory and instance overloads stay unresolved. These are
+              not compiler-bound DI registrations or verified runtime services.
+            </p>
+            {diRegistrationRows.length === 0 ? (
+              <p role="status">
+                No conventional DI registration member names were identified
+                in this saved snapshot. This does not establish that the
+                application has no dependency injection configuration.
+                Custom containers, reflection and dynamic setup are not covered.
+              </p>
+            ) : (
+              <>
+                <p>
+                  {report.diRegistrationCandidateCount} DI syntax candidates ·
+                  {' '}{report.diUnresolvedShapeCount} with unresolved
+                  registration shape.
+                </p>
+                <ul className="syntax-declaration-list">
+                  {diRegistrationRows.slice(0, 40).map(({ node, edge, invocation }) => (
+                    <li key={node.id}>
+                      <strong>{node.label}</strong>
+                      {node.filePath && node.fileSha256 && (
+                        <EvidenceAddress
+                          path={node.filePath}
+                          hash={node.fileSha256}
+                          line={node.line}
+                          column={node.column}
+                        />
+                      )}
+                      <span>
+                        {edge?.kind ?? 'Source-only candidate'} ·
+                        {' '}<strong>{edge?.status ?? 'unresolved'}</strong>
+                        {' '}· {invocation
+                          ? 'observed invocation: ' + invocation.label
+                          : 'invocation evidence unavailable'}
+                      </span>
+                      <p>{node.detail}</p>
+                      <button type="button" onClick={() =>
+                        inspectGraphNode(node.id, 'di-registration-candidate')
+                      }>
+                        Inspect DI registration and source invocation in graph
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {diRegistrationRows.length > 40 && (
+                  <p className="workspace-note">
+                    Showing the first 40 of {diRegistrationRows.length} DI
+                    registration candidates. Full evidence is available from
+                    the authenticated local graph API.
                   </p>
                 )}
               </>
@@ -740,6 +815,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                 <option value="invocation-site">Invocation sites (candidate or unresolved)</option>
                 <option value="http-endpoint-attribute">HTTP attribute candidates (not registered endpoints)</option>
                 <option value="http-minimal-mapping">Minimal API mapping candidates (not registered endpoints)</option>
+                <option value="di-registration-candidate">DI registration candidates (not verified services)</option>
                 <option value="unresolved-use">Unresolved occurrences</option>
               </select>
             </label>
