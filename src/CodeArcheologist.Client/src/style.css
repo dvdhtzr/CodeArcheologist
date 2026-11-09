@@ -117,3 +117,11 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .snapshot-manifest li span { color: #a8bbd9; font-size: 0.75rem; }
 .snapshot-manifest details { margin-top: 16px; }
 .snapshot-manifest summary { cursor: pointer; font-size: 0.85rem; }
+
+.snapshot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.inventory-summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
+.inventory-summaries > div { border: 1px solid #3b5577; border-radius: 8px; padding: 12px; background: #10213a; }
+.inventory-summaries h4 { margin: 0 0 10px; }
+.inventory-summaries ul { margin: 0; padding: 0; display: grid; gap: 6px; list-style: none; }
+.inventory-summaries li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; background: transparent; padding: 2px 0; border: 0; }
+.inventory-summaries li span { font-size: 0.78rem; overflow-wrap: anywhere; }
