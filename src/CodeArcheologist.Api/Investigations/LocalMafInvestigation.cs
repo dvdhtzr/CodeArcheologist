@@ -62,7 +62,9 @@ public sealed class LocalMafInvestigation(
             var toolCalls = new List<string>();
             var workflowEvents = new List<string>();
             var diagnostics = new List<string>();
-            var textByExecutor = new Dictionary<string, string>(StringComparer.Ordinal);
+            // Explicit WorkflowBuilder edge orders these two executor outputs.
+            // Executor IDs are host-assigned and need not equal display names.
+            var roleOutputs = new List<(string ExecutorId, string Text)>();
             var transport = "succeeded";
             var endpoint = new Uri("http://127.0.0.1:11434");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -113,7 +115,7 @@ public sealed class LocalMafInvestigation(
                                 workflowEvents.Add("response:" + output.ExecutorId);
                             if (output.Response.Text is { } text &&
                                 text.Length <= MaxOutput)
-                                textByExecutor[output.ExecutorId] = text;
+                                roleOutputs.Add((output.ExecutorId, text));
                             else
                                 transport = "oversized-or-empty-agent-response";
                             break;
@@ -147,24 +149,23 @@ public sealed class LocalMafInvestigation(
 
             LocalMafRoleResult? first = null;
             LocalMafRoleResult? second = null;
-            if (transport == "succeeded" && textByExecutor.Count == 2 &&
+            if (transport == "succeeded" && roleOutputs.Count == 2 &&
+                roleOutputs[0].ExecutorId != roleOutputs[1].ExecutorId &&
                 toolCalls.Count(call => call == "FunctionalInvestigator") is >= 1 and <= 4 &&
                 toolCalls.Count(call => call == "SkepticReviewer") is >= 1 and <= 4)
             {
-                // Role names are MAF executor names; never assign two arbitrary
-                // model outputs to fictional roles.
-                if (textByExecutor.TryGetValue("FunctionalInvestigator", out var inv) &&
-                    textByExecutor.TryGetValue("SkepticReviewer", out var review))
-                {
-                    first = CheckRole("FunctionalInvestigator", inv, snapshot,
-                        evidence.EntryPointId);
-                    second = CheckRole("SkepticReviewer", review, snapshot,
-                        evidence.EntryPointId);
-                }
+                // Roles are assigned from the actual sequential MAF edge:
+                // first executor is the Functional Investigator, second is the
+                // Skeptic. Never trust model-supplied role names; tool calls
+                // are independently captured by each role-owned host delegate.
+                first = CheckRole("FunctionalInvestigator", roleOutputs[0].Text,
+                    snapshot, evidence.EntryPointId);
+                second = CheckRole("SkepticReviewer", roleOutputs[1].Text,
+                    snapshot, evidence.EntryPointId);
             }
             if (transport == "succeeded")
             {
-                diagnostics.Add("Complete role responses: " + textByExecutor.Count +
+                diagnostics.Add("Complete role responses: " + roleOutputs.Count +
                     "; investigator evidence-tool calls: " +
                     toolCalls.Count(call => call == "FunctionalInvestigator") +
                     "; reviewer evidence-tool calls: " +
