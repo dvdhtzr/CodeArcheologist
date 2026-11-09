@@ -208,7 +208,7 @@ public sealed class LocalMafInvestigation(
     private LocalMafRoleResult? CheckRole(
         string role, string raw, SnapshotRecord snapshot, string entryPointId)
     {
-        if (!TryParse(raw, out var summary, out var findings)) return null;
+        if (!TryParseRoleResponse(raw, out var summary, out var findings)) return null;
         try
         {
             var check = evidenceTools.CheckCitations(snapshot,
@@ -226,7 +226,7 @@ public sealed class LocalMafInvestigation(
         }
     }
 
-    public static bool TryParse(string response,
+    public static bool TryParseRoleResponse(string response,
         out string summary, out IReadOnlyList<LocalMafFinding> findings)
     {
         summary = string.Empty;
