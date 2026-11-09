@@ -40,6 +40,12 @@ public sealed class LocalMafInvestigation(
     private const string OutputContract =
         "Return ONLY JSON with shape {\"summary\":\"...\",\"findings\":[{\"claimKind\":\"source-observation or candidate-relationship\",\"statement\":\"...\",\"evidenceIds\":[\"exact supplied ID\"],\"unknowns\":[\"...\"]}]}. " +
         "Make at least one conservative claim and state an unknown. " +
+        "For source-observation claims, cite an EXACT ID from References or Relations " +
+        "whose EvidenceStatus is observed-syntax. For candidate-relationship claims, " +
+        "cite an EXACT ID from Relations (not References) with EvidenceStatus candidate " +
+        "or provisional-local. Never construct, shorten, or paraphrase IDs. " +
+        "If no matching relationship exists, make a conservative source-observation " +
+        "instead of inventing one. Include unknowns for every finding. " +
         "Do NOT assert executed calls, effective HTTP routing, actual DI " +
         "resolution, compiled dependencies, or a verified functionality map.";
 
@@ -185,10 +191,31 @@ public sealed class LocalMafInvestigation(
                     toolCalls.Count(call => call == "FunctionalInvestigator") +
                     "; reviewer evidence-tool calls: " +
                     toolCalls.Count(call => call == "SkepticReviewer") + ".");
+                // Distinguish structural JSON failures from scope/type citation
+                // failures without returning untrusted model prose or raw IDs.
+                if (roleOutputs.Count == 2)
+                {
+                    if (first is null)
+                        diagnostics.Add("Investigator output failed structured parsing or citation evaluation.");
+                    if (second is null)
+                        diagnostics.Add("Reviewer output failed structured parsing or citation evaluation.");
+                }
                 if (first is not null)
+                {
                     diagnostics.Add("Investigator citation gate: " + first.CitationOutcome + ".");
+                    foreach (var item in first.CitationDiagnostics.Select((outcome, index) => (outcome, index))
+                        .Where(item => item.outcome != "references-valid-not-semantic-verification"))
+                        diagnostics.Add("Investigator finding " + item.index +
+                            " citation check: " + item.outcome + ".");
+                }
                 if (second is not null)
+                {
                     diagnostics.Add("Reviewer citation gate: " + second.CitationOutcome + ".");
+                    foreach (var item in second.CitationDiagnostics.Select((outcome, index) => (outcome, index))
+                        .Where(item => item.outcome != "references-valid-not-semantic-verification"))
+                        diagnostics.Add("Reviewer finding " + item.index +
+                            " citation check: " + item.outcome + ".");
+                }
             }
             var accepted = first is not null && second is not null &&
                 first.CitationOutcome == "all-reference-checks-passed" &&
