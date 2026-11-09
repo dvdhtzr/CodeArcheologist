@@ -40,7 +40,7 @@ static string Validate(string? text)
     }
 }
 
-if (args.Length > 0 && args[0] == "--gate-b-run")
+if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose")
 {
     Environment.ExitCode = await GateBLocalRun.RunAsync(args);
     return;
