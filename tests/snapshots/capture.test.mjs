@@ -1534,6 +1534,11 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + snapshot.id +
           '/evidence-tools/entry-point?entryPointId=' +
           encodeURIComponent(httpNodes[0].id), session)).status, 409);
+        const gateBTamper = await post(endpoint + '/' + snapshot.id +
+          '/investigations/gate-b', session,
+          { entryPointId: httpNodes[0].id });
+        assert.equal(gateBTamper.status, 409,
+          'tampered saved snapshot must fail before any local MAF invocation');
       } finally {
         await writeFile(savedProject, original);
       }
