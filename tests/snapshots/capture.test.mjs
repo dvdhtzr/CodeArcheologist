@@ -159,6 +159,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(endpoint + '/' + randomUUID() + '/inventory')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-syntax')).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-type-links')).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-projects')).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -385,6 +386,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -402,6 +404,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-type-links', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -606,6 +609,120 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.match(body.error, /limited to 250 files/);
       assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
         'safe captured snapshot remains inspectable even when this analyzer declines it');
+    });
+
+    await t.test('static project candidates honor literal rules without MSBuild execution', async () => {
+      await mkdir(join(source, 'ProjectOne'));
+      await mkdir(join(source, 'ProjectTwo'));
+      await mkdir(join(source, 'Shared'));
+      await writeFile(join(source, 'ProjectOne', 'One.csproj'),
+        '<Project Sdk="Microsoft.NET.Sdk">' +
+        '<ItemGroup><Compile Remove="Skip.cs"/>' +
+        '<Compile Include="../Shared/Shared.cs"/></ItemGroup>' +
+        '<Target Name="NeverExecute" BeforeTargets="Build">' +
+        '<Exec Command="DO_NOT_RUN"/></Target></Project>');
+      await writeFile(join(source, 'ProjectOne', 'Main.cs'),
+        'namespace One; public class Main {}\n');
+      await writeFile(join(source, 'ProjectOne', 'Skip.cs'),
+        'namespace One; public class Skip {}\n');
+      await writeFile(join(source, 'Shared', 'Shared.cs'),
+        'namespace Shared; public class Contract {}\n');
+      await writeFile(join(source, 'ProjectTwo', 'Two.csproj'),
+        '<Project Sdk="Microsoft.NET.Sdk">' +
+        '<PropertyGroup><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>' +
+        '<ItemGroup><Compile Include="Direct.cs"/>' +
+        '<Compile Include="Conditional.cs" Condition="\'$(Configuration)\' == \'Debug\'"/>' +
+        '<Compile Include="**/Wildcard.cs"/></ItemGroup></Project>');
+      await writeFile(join(source, 'ProjectTwo', 'Direct.cs'),
+        'namespace Two; public class Direct {}\n');
+      await writeFile(join(source, 'ProjectTwo', 'Conditional.cs'),
+        'namespace Two; public class Conditional {}\n');
+
+      const created = await post(endpoint, session);
+      assert.equal(created.status, 201);
+      const snapshot = await created.json();
+      const url = endpoint + '/' + snapshot.id + '/csharp-projects';
+      const response = await get(url, session);
+      assert.equal(response.status, 200,
+        'static projects: ' + (response.status === 200 ? 'OK' : await response.clone().text()));
+      const report = await response.json();
+      assert.equal(report.snapshotId, snapshot.id);
+      assert.equal(report.workspaceId, wid);
+      assert.equal(report.repositoryId, rid);
+      assert.equal(report.fingerprintSha256, snapshot.fingerprintSha256);
+      assert.equal(report.analyzerVersion, 'static-csproj-membership-v1');
+      assert.equal(report.projectCount, 3);
+      const one = report.projects.find(project => project.projectPath === 'ProjectOne/One.csproj');
+      const two = report.projects.find(project => project.projectPath === 'ProjectTwo/Two.csproj');
+      const legacy = report.projects.find(project => project.projectPath === 'Demo.csproj');
+      assert.ok(one && two && legacy);
+      assert.equal(one.defaultCompileItemsInferred, true);
+      assert.deepEqual(one.candidateFiles.map(file => file.path),
+        ['ProjectOne/Main.cs', 'Shared/Shared.cs']);
+      assert.deepEqual(one.candidateFiles.map(file => file.inclusionBasis),
+        ['sdk-default-pattern', 'literal-compile-include']);
+      assert.equal(one.candidateFiles[0].sha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'ProjectOne', 'Main.cs'))));
+      assert.equal(one.projectSha256,
+        sha256(await readFile(join(data, 'snapshots', snapshot.id,
+          'files', 'ProjectOne', 'One.csproj'))));
+      assert.equal(two.defaultCompileItemsInferred, false);
+      assert.deepEqual(two.candidateFiles.map(file => file.path), ['ProjectTwo/Direct.cs']);
+      assert.ok(two.unresolvedRules.some(rule => rule.includes('Conditional Compile')));
+      assert.ok(two.unresolvedRules.some(rule => rule.includes('pattern/property/path')));
+      assert.equal(legacy.defaultCompileItemsInferred, false);
+      assert.equal(legacy.candidateFiles.length, 0);
+      assert.ok(report.unmappedFiles.some(file => file.path === 'ProjectOne/Skip.cs'));
+      assert.ok(report.unmappedFiles.some(file => file.path === 'ProjectTwo/Conditional.cs'));
+      assert.ok(report.limitations.some(rule => rule.includes('candidate-only')));
+
+      const foreign = '/api/v1/workspaces/' + randomUUID() +
+        '/repositories/' + rid + '/snapshots/' + snapshot.id + '/csharp-projects';
+      assert.equal((await get(foreign, session)).status, 404);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-projects',
+        session)).status, 404);
+      assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
+
+      // Working tree changes are not reflected in the saved project view.
+      await writeFile(join(source, 'ProjectOne', 'Main.cs'),
+        'namespace One; public class NewVersion {}\n');
+      assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
+
+      const savedProject = join(data, 'snapshots', snapshot.id,
+        'files', 'ProjectOne', 'One.csproj');
+      const original = await readFile(savedProject);
+      await writeFile(savedProject, '<Project Sdk="CORRUPTED"/>');
+      try {
+        assert.equal((await get(url, session)).status, 409);
+      } finally {
+        await writeFile(savedProject, original);
+      }
+      assert.equal((await get(url, session)).status, 200);
+
+      await stopApi(api);
+      api = null;
+      api = await startApi(data);
+      assert.equal((await get(url, session)).status, 401);
+      session = await pair();
+      assert.deepEqual((await (await get(url, session)).json()).projects, report.projects);
+    });
+
+    await t.test('project XML DTD is prohibited and never evaluated', async () => {
+      await writeFile(join(source, 'ProjectTwo', 'Dtd.csproj'),
+        '<!DOCTYPE Project [<!ENTITY leak SYSTEM "file:///C:/sensitive.txt">]>' +
+        '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>' +
+        '<AssemblyName>&leak;</AssemblyName></PropertyGroup></Project>');
+      const created = await post(endpoint, session);
+      assert.equal(created.status, 201);
+      const snapshot = await created.json();
+      const response = await get(endpoint + '/' + snapshot.id + '/csharp-projects', session);
+      assert.equal(response.status, 422);
+      const body = await response.json();
+      assert.match(body.error, /cannot be safely parsed/);
+      assert.doesNotMatch(JSON.stringify(body), /sensitive.txt/);
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
+        'snapshot remains intact although project analysis fails closed');
     });
   } finally {
     await stopApi(api);

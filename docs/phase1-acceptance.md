@@ -105,6 +105,20 @@ Parser-only observations are not a resolved semantic model or proof of project c
 
 This is not an actual project compilation, resolved call graph, verified inheritance hierarchy or completed graph model.
 
+## PR #10 — static project membership candidates (pending owner-run verification)
+
+- [ ] All prior API/React builds and four localhost HTTP suites GREEN on Windows.
+- [ ] Static `.csproj` XML inspection never invokes MSBuild, project targets or imported binaries.
+- [ ] Candidate membership retains exact project and file SHA-256 anchors from the same saved snapshot.
+- [ ] SDK default patterns, literal Compile Include and literal Compile Remove are distinguished and candidate-labeled.
+- [ ] Conditionals, globs, property expansion and import effects remain unresolved, not silently trusted.
+- [ ] Anonymous access is denied and cross-workspace/snapshot IDs return 404.
+- [ ] Modified saved XML fails 409; malicious DTD input fails 422 without XML entity resolution.
+- [ ] Live source changes do not change the saved result; reopening after API restart is consistent.
+- [ ] Browser shows project candidates and unresolved rules, never verified compiler membership.
+
+This milestone does not authorize project evaluation, resolved dependency graphs or actual project semantic compilation.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
