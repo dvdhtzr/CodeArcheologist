@@ -25,6 +25,7 @@ builder.Services.AddSingleton<StaticCSharpProjectInspector>();
 builder.Services.AddSingleton<CSharpProjectLinkContextInspector>();
 builder.Services.AddSingleton<CSharpEvidenceGraphBuilder>();
 builder.Services.AddSingleton<SnapshotEvidenceTools>();
+builder.Services.AddSingleton<LocalMafInvestigation>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -447,6 +448,34 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
     catch (UnauthorizedAccessException)
     {
         return Results.Json(new { error = "Saved citation evidence is not accessible." }, statusCode: 422);
+    }
+}).RequireAuthorization();
+
+// Explicit user-triggered, bounded local MAF investigation. No automatic
+// analysis or LLM request when opening a workspace or reading a snapshot.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/local-maf",
+    async (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+        LocalMafRequest request, WorkspaceStore store,
+        LocalMafInvestigation investigator, CancellationToken cancellationToken) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+    try
+    {
+        return Results.Ok(await investigator.RunAsync(
+            snapshot, request.EntryPointId, cancellationToken));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Local agent evidence could not be verified." });
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Json(new { error = "Local agent evidence is not accessible." }, statusCode: 422);
     }
 }).RequireAuthorization();
 
