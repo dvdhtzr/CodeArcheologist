@@ -104,6 +104,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState('all');
+  const [calleeContextFilter, setCalleeContextFilter] = useState('all');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -140,6 +141,21 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
 
   const nodesById = useMemo(() => new Map(
     (report?.nodes ?? []).map(node => [node.id, node])), [report]);
+
+  // Callee edges were previously discoverable only after a user happened
+  // to choose an invocation with a candidate target. Expose them directly.
+  const calleeEdges = useMemo(
+    () => (report?.edges ?? []).filter(edge =>
+      edge.kind === 'candidate-callee' &&
+      nodesById.has(edge.fromId) && nodesById.has(edge.toId)),
+    [report, nodesById]
+  );
+  const visibleCalleeEdges = useMemo(
+    () => calleeEdges.filter(edge =>
+      calleeContextFilter === 'all' ||
+      edge.projectContextStatus === calleeContextFilter),
+    [calleeEdges, calleeContextFilter]
+  );
 
   const selectedNode = nodesById.get(selectedId);
   const allNeighbors = useMemo((): AdjacentEvidence[] => {
@@ -201,6 +217,103 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             and disjoint candidates do not prove the call is impossible.
             This is not a verified dependency graph.
           </p>
+          <section className="graph-callee-finder" aria-label="Provisional callee project evidence">
+            <h4>Find callee project evidence</h4>
+            <p className="workspace-note">
+              Select a candidate to see its source and target methods and the static
+              project files behind the classification. These are synthetic source-only
+              hypotheses, never verified compiled calls.
+            </p>
+            {calleeEdges.length === 0 ? (
+              <p role="status">
+                No provisional callee links were identified in this saved snapshot.
+                There are no callee project classifications to inspect here.
+                This can happen when none of the written calls bind uniquely to
+                captured C# method declarations; it does not mean there are no
+                calls or dependencies in the repository.
+              </p>
+            ) : (
+              <>
+                <label>
+                  Filter callee project context
+                  <select
+                    value={calleeContextFilter}
+                    onChange={event => setCalleeContextFilter(event.target.value)}
+                  >
+                    <option value="all">All candidate callee links ({calleeEdges.length})</option>
+                    <option value="shared-project-candidate">
+                      Shared project candidates ({report.calleeSharedCandidateCount})
+                    </option>
+                    <option value="disjoint-project-candidates">
+                      Disjoint project candidates ({report.calleeDisjointCandidateCount})
+                    </option>
+                    <option value="unknown-project-candidate">
+                      Unknown project candidates ({report.calleeUnknownProjectCount})
+                    </option>
+                  </select>
+                </label>
+                {visibleCalleeEdges.length === 0 ? (
+                  <p role="status">
+                    No callee links in this snapshot have the selected project-context
+                    classification. Choose another classification to inspect available evidence.
+                  </p>
+                ) : (
+                  <ul className="syntax-declaration-list">
+                    {visibleCalleeEdges.slice(0, 25).map(edge => {
+                      const source = nodesById.get(edge.fromId)!;
+                      const target = nodesById.get(edge.toId)!;
+                      return (
+                        <li key={edge.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedId(edge.fromId);
+                              setKind('invocation-site');
+                              setSearch('');
+                            }}
+                          >
+                            Inspect in graph: {source.label} → {target.label}
+                          </button>
+                          <span>
+                            {edge.kind} · <strong>{edge.status}</strong>
+                            {' '}· {edge.projectContextStatus}
+                          </span>
+                          <EvidenceAddress
+                            path={edge.evidencePath}
+                            hash={edge.evidenceSha256}
+                            line={edge.line}
+                            column={edge.column}
+                          />
+                          <details>
+                            <summary>Show source, target and shared project evidence</summary>
+                            <p>{edge.explanation}</p>
+                            <ProjectCandidateList
+                              label="Source project candidates"
+                              candidates={edge.sourceProjectCandidates}
+                            />
+                            <ProjectCandidateList
+                              label="Target project candidates"
+                              candidates={edge.targetProjectCandidates}
+                            />
+                            <ProjectCandidateList
+                              label="Shared project candidates"
+                              candidates={edge.sharedProjectCandidates}
+                            />
+                          </details>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {visibleCalleeEdges.length > 25 && (
+                  <p className="workspace-note">
+                    Showing the first 25 matching candidate links. Select a narrower
+                    project-context classification or inspect more links in the graph.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
           <div className="graph-controls">
             <label>
               Find graph nodes
