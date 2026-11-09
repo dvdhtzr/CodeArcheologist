@@ -40,6 +40,12 @@ static string Validate(string? text)
     }
 }
 
+if (args.Length > 0 && args[0] == "--gate-b-run")
+{
+    Environment.ExitCode = await GateBLocalRun.RunAsync(args);
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--gate-b-self-test")
 {
     GateBSelfTests.Run();
