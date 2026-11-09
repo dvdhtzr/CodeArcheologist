@@ -159,6 +159,13 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
   color: #eef3ff;
   font: inherit;
 }
+.evidence-graph .graph-callee-finder li a {
+  justify-self: start;
+  color: #b9dcff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .evidence-graph .graph-callee-finder li button {
   justify-self: start;
   text-align: left;
