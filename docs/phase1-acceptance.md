@@ -250,6 +250,20 @@ This milestone seeds a **source-level entry-point inventory** toward
 the functionality map; it does not establish complete application
 operations, actual HTTP registration, or functional behavior.
 
+## Minimal API source-syntax entry point candidates — owner verification pending
+
+- [ ] Windows .NET 10, React/TypeScript/Vite, and local HTTP/security integration tests GREEN.
+- [ ] Graph v7 includes Minimal API analyzer version, candidate count, and nonliteral/unsupported first route argument count.
+- [ ] The independent bounded Roslyn scanner reads only verified saved C# bytes and recognizes conventional `MapGet`, `MapPost`, `MapPut`, `MapPatch`, `MapDelete` member invocation syntax.
+- [ ] Each mapping has file SHA-256, one-based line/column, route literal/status and non-binding handler syntax shape, and a `candidate-http-mapping` / `candidate` edge to the *exact matching existing invocation* node by path/hash/span.
+- [ ] A similarly named unrelated receiver is truthfully marked candidate; `CustomMapGet` and `MapGroup` are not falsely classified as supported mappings.
+- [ ] Literal and nonliteral/missing route arguments are distinguished without constructing effective URLs or guessing runtime handlers.
+- [ ] Existing auth, 404 snapshot scope, tamper 409, invalid UTF-8 422, DTD 422, per-analyzer 413 caps and restart/read-only-source rules remain GREEN.
+- [ ] Browser **Find Minimal API mapping candidates** shows actual source mappings from a captured Code Archeologist `Program.cs` and links to observed invocation evidence. Empty results remain honest.
+- [ ] No new runtime dependencies, cloud models, build of imported sources, CI workflow, state mutation or database migration.
+
+This is one finite readiness step under [issue #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21). Next: bounded DI registration evidence and typed evidence-tool contracts before resuming the first MAF/Ollama workflow.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
