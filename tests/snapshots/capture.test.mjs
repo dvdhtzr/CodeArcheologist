@@ -589,6 +589,24 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(afterRestart.snapshotId, snapshot.id);
       assert.deepEqual(afterRestart.usages, report.usages);
     });
+
+    await t.test('C# type links enforce the explicit file limit, not partial reports', async () => {
+      for (let index = 0; index < 251; index++) {
+        await writeFile(join(source, 'src', 'Limit' + index + '.cs'),
+          'namespace Limits; internal class Type' + index + ' {}\n');
+      }
+
+      const created = await post(endpoint, session);
+      assert.equal(created.status, 201);
+      const snapshot = await created.json();
+      const bounded = await get(endpoint + '/' + snapshot.id + '/csharp-type-links', session);
+      assert.equal(bounded.status, 413,
+        'analyzer should fail closed on more than 250 C# files');
+      const body = await bounded.json();
+      assert.match(body.error, /limited to 250 files/);
+      assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
+        'safe captured snapshot remains inspectable even when this analyzer declines it');
+    });
   } finally {
     await stopApi(api);
     await rm(testRoot, { recursive: true, force: true, maxRetries: 6, retryDelay: 250 });
