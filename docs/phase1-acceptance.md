@@ -76,6 +76,20 @@ remain mandatory before source-based conclusions are permitted.
 This is a bounded local source capture, not a race-free sandbox, Git commit
 resolver, secret detector, complete analyzer, backup system or public preview.
 
+## PR #8 — parser-backed C# syntax inspection (pending owner-run verification)
+
+- [ ] Roslyn package restore and .NET 10 build pass locally; React typecheck/build GREEN.
+- [ ] All existing security, workspace, registration and snapshot tests remain GREEN.
+- [ ] Syntax route requires authentication and exact workspace/repository/snapshot IDs.
+- [ ] Observations include exact copied-file SHA-256 and one-based line/column anchors.
+- [ ] Class/interface/record, method/constructor/property declarations are parsed without running imported code.
+- [ ] Changing live source never changes an earlier snapshot's declarations.
+- [ ] Syntax errors surface diagnostics and an incomplete status, not a false verified-success claim.
+- [ ] Stored manifest or copied-source tampering prevents syntax results (409).
+- [ ] Browser syntax inspector shows declarations and limitations; same snapshot works after restart.
+
+Parser-only observations are not a resolved semantic model or proof of project correctness.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
