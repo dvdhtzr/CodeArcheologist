@@ -7,6 +7,7 @@ internal static class GateBLocalRun
     public static async Task<int> RunAsync(string[] args)
     {
         var diagnostic = args.Length == 1 && args[0] == "--gate-b-diagnose";
+        var faults = args.Length == 1 && args[0] == "--gate-b-faults";
         var validRun = args.Length >= 2 && args.Length <= 5 &&
             args[0] == "--gate-b-run" &&
             int.TryParse(args[1], out var requested) && requested is >= 1 and <= 10;
@@ -23,15 +24,15 @@ internal static class GateBLocalRun
                 Guid.TryParse(args[4], out var parsed);
             if (validRun) excludeSnapshot = Guid.Parse(args[4]);
         }
-        if (!diagnostic && !validRun)
+        if (!diagnostic && !validRun && !faults)
         {
             Console.Error.WriteLine(
                 "Usage: --gate-b-run <1..10> [any|http-minimal-mapping|http-endpoint-attribute] " +
-                "[--exclude-snapshot <saved-snapshot-GUID>] OR --gate-b-diagnose");
+                "[--exclude-snapshot <saved-snapshot-GUID>] OR --gate-b-diagnose OR --gate-b-faults");
             return 2;
         }
 
-        var attempts = diagnostic ? 1 : int.Parse(args[1],
+        var attempts = diagnostic || faults ? 1 : int.Parse(args[1],
             System.Globalization.CultureInfo.InvariantCulture);
 
         // Trusted, direct in-process harness. No extra service, API credentials,
@@ -126,6 +127,10 @@ internal static class GateBLocalRun
         Console.WriteLine("Selected saved candidate: " + selectedKind);
         Console.WriteLine("Snapshot ID: " + selectedSnapshot.Id.ToString("D"));
         Console.WriteLine("Snapshot fingerprint: " + selectedSnapshot.FingerprintSha256);
+        if (faults)
+            return await GateBFaultProbe.RunAsync(tools, selectedSnapshot,
+                selectedEntryPoint);
+
         if (diagnostic)
         {
             Console.WriteLine("Diagnostic mode: native /api/chat with identical Gate B schema and evidence.");
