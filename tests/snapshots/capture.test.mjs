@@ -157,6 +157,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(endpoint)).status, 401);
       assert.equal((await post(endpoint, null)).status, 401);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/inventory')).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-syntax')).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -263,6 +264,43 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         session)).status, 404);
     });
 
+    await t.test('Roslyn syntax finds real C# declarations with snapshot anchors', async () => {
+      const url = endpoint + '/' + firstId + '/csharp-syntax';
+      const response = await get(url, session);
+      assert.equal(response.status, 200,
+        'syntax response: ' + (response.status === 200 ? 'OK' : await response.clone().text()));
+      const report = await response.json();
+      assert.equal(report.workspaceId, wid);
+      assert.equal(report.repositoryId, rid);
+      assert.equal(report.snapshotId, firstId);
+      assert.equal(report.fingerprintSha256, firstFingerprint);
+      assert.equal(report.analyzerVersion, 'roslyn-csharp-syntax-v1');
+      assert.equal(report.cSharpFileCount, 1);
+      assert.equal(report.hasSyntaxErrors, false);
+      assert.equal(report.syntaxErrorCount, 0);
+      assert.ok(report.declarations.some(d =>
+        d.kind === 'namespace' && d.name === 'Demo' &&
+        d.filePath === 'src/Example.cs' && d.startLine === 1));
+      const example = report.declarations.find(d =>
+        d.kind === 'class' && d.name === 'Example');
+      assert.ok(example);
+      assert.equal(example.containingNamespace, 'Demo');
+      assert.equal(example.filePath, 'src/Example.cs');
+      assert.equal(example.fileSha256,
+        originalManifest.files.find(file => file.path === 'src/Example.cs').sha256);
+      assert.ok(example.startColumn > 0);
+      assert.ok(example.spanLength > 0);
+      assert.ok(report.limitations.some(message => message.includes('not resolved symbols')));
+      assert.deepEqual((await (await get(url, session)).json()).declarations,
+        report.declarations);
+
+      const foreignWorkspaceUrl = '/api/v1/workspaces/' + randomUUID() +
+        '/repositories/' + rid + '/snapshots/' + firstId + '/csharp-syntax';
+      assert.equal((await get(foreignWorkspaceUrl, session)).status, 404);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-syntax',
+        session)).status, 404);
+    });
+
     await t.test('identical request retry is idempotent, no duplicate snapshot', async () => {
       const retry = await post(endpoint, session, undefined, { key: firstKey });
       assert.equal(retry.status, 200);
@@ -295,6 +333,14 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         'files', 'src', 'Example.cs'), 'utf8')), changedCode);
       assert.equal((await readFile(join(source, 'src', 'Example.cs'), 'utf8')),
         changedCode);
+      const newerSyntax = await get(endpoint + '/' + secondId + '/csharp-syntax', session);
+      assert.equal(newerSyntax.status, 200);
+      const newerReport = await newerSyntax.json();
+      assert.ok(newerReport.declarations.some(d =>
+        d.kind === 'property' && d.name === 'X' && d.containingType === 'Example'));
+      const originalSyntax = await (await get(endpoint + '/' + firstId +
+        '/csharp-syntax', session)).json();
+      assert.equal(originalSyntax.declarations.some(d => d.name === 'X'), false);
     });
 
     await t.test('old idempotency key still resolves to old captured content', async () => {
@@ -336,6 +382,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         const rejected = await get(endpoint + '/' + firstId + '/manifest', session);
         assert.equal(rejected.status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -351,6 +398,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         const rejected = await get(endpoint + '/' + firstId + '/manifest', session);
         assert.equal(rejected.status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/csharp-syntax', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -385,6 +433,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       const inventory = await get(endpoint + '/' + firstId + '/inventory', session);
       assert.equal(inventory.status, 200);
       assert.equal((await inventory.json()).fingerprintSha256, firstFingerprint);
+      const syntax = await get(endpoint + '/' + firstId + '/csharp-syntax', session);
+      assert.equal(syntax.status, 200);
+      assert.equal((await syntax.json()).snapshotId, firstId);
 
       // Same key must resolve the same completed capture after restart.
       const retry = await post(endpoint, session, undefined, { key: secondKey });
@@ -400,6 +451,14 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       await writeFile(join(source, 'db', 'schema.sql'),
         'CREATE TABLE Demo (Id INT);\n');
       await writeFile(join(source, 'package.json'), '{"private":true}\n');
+      await writeFile(join(source, 'src', 'Shapes.cs'),
+        'namespace Demo.Shapes;\n' +
+        'public interface IService { int Execute(string input); }\n' +
+        'public sealed record Entry(int Id);\n' +
+        'public sealed class Service { public int Size { get; init; } ' +
+        'public Service() {} public int Run(int value) => value; }\n');
+      await writeFile(join(source, 'src', 'Broken.cs'),
+        'namespace Demo.Shapes; public class Broken { public void Bad( }\n');
 
       const created = await post(endpoint, session);
       assert.equal(created.status, 201);
@@ -421,6 +480,23 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(dependencies?.role, 'dependency-manifest');
       assert.ok(report.limitations.some(text => text.includes('not parsed')));
       assert.notEqual(snapshot.id, firstId);
+      const syntaxResponse = await get(endpoint + '/' + snapshot.id + '/csharp-syntax', session);
+      assert.equal(syntaxResponse.status, 200);
+      const syntax = await syntaxResponse.json();
+      assert.equal(syntax.hasSyntaxErrors, true);
+      assert.ok(syntax.syntaxErrorCount > 0);
+      assert.ok(syntax.diagnostics.some(d => d.filePath === 'src/Broken.cs'));
+      assert.ok(syntax.declarations.some(d =>
+        d.kind === 'interface' && d.name === 'IService'));
+      assert.ok(syntax.declarations.some(d =>
+        d.kind === 'record' && d.name === 'Entry'));
+      assert.ok(syntax.declarations.some(d =>
+        d.kind === 'method' && d.name === 'Run' && d.parameterCount === 1 &&
+        d.containingNamespace === 'Demo.Shapes' && d.containingType === 'Service'));
+      assert.ok(syntax.declarations.some(d =>
+        d.kind === 'constructor' && d.name === 'Service'));
+      assert.ok(syntax.declarations.some(d =>
+        d.kind === 'property' && d.name === 'Size'));
     });
   } finally {
     await stopApi(api);

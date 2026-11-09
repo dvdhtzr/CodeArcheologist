@@ -125,3 +125,12 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .inventory-summaries ul { margin: 0; padding: 0; display: grid; gap: 6px; list-style: none; }
 .inventory-summaries li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; background: transparent; padding: 2px 0; border: 0; }
 .inventory-summaries li span { font-size: 0.78rem; overflow-wrap: anywhere; }
+
+.syntax-kind-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.syntax-kind-summary span { border: 1px solid #547396; border-radius: 999px; padding: 5px 9px; font-size: 0.75rem; color: #d1e5fc; }
+.syntax-declaration-list { display: grid; gap: 7px; list-style: none; padding: 0; margin: 12px 0; }
+.syntax-declaration-list li { display: grid; gap: 4px; border: 1px solid #365575; border-radius: 6px; background: #102038; padding: 10px; }
+.syntax-declaration-list strong { font-size: 0.83rem; font-weight: 650; color: #e1efff; }
+.syntax-declaration-list span { font-size: 0.78rem; color: #b4cee9; overflow-wrap: anywhere; }
+.syntax-declaration-list code { overflow-wrap: anywhere; }
+.syntax-view details { margin-top: 14px; }

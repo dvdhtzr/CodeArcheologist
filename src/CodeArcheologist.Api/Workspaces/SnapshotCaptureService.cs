@@ -171,6 +171,60 @@ public sealed class SnapshotCaptureService(WorkspaceStore store)
         return manifest;
     }
 
+    /// <summary>
+    /// Re-opens one copied artifact after the caller has verified the manifest.
+    /// Does not access the mutable registered source or execute imported code.
+    /// The hash is checked again after reading to catch changes between calls.
+    /// This is not an OS-enforced, race-free no-follow filesystem sandbox.
+    /// </summary>
+    public byte[] ReadVerifiedSnapshotFile(SnapshotRecord record, SnapshotFile file)
+    {
+        var segments = file.Path.Split('/');
+        if (segments.Any(segment => string.IsNullOrEmpty(segment) ||
+            segment is "." or ".." || segment.Any(char.IsControl) ||
+            segment.Contains('\\')))
+        {
+            throw new SnapshotCaptureException("Unsafe saved source artifact path.");
+        }
+
+        if (file.SizeBytes < 0 || file.SizeBytes > SnapshotPolicy.MaxFileBytes)
+            throw new SnapshotCaptureException("Saved artifact exceeds the allowed read limit.");
+
+        var root = Path.Combine(GetSnapshotRoot(), record.Id.ToString("D"), "files");
+        var location = Path.GetFullPath(Path.Combine(root,
+            file.Path.Replace('/', Path.DirectorySeparatorChar)));
+        if (!SnapshotPolicy.IsSameOrChildOf(location, root))
+            throw new SnapshotCaptureException("Saved artifact escaped its snapshot.");
+
+        try
+        {
+            SnapshotPolicy.VerifyDirectoryAncestry(Path.GetDirectoryName(location)!, root);
+            var info = new FileInfo(location);
+            if (!info.Exists ||
+                (info.Attributes & (FileAttributes.ReparsePoint |
+                    FileAttributes.Directory | FileAttributes.Device)) != 0 ||
+                info.LinkTarget is not null ||
+                info.Length != file.SizeBytes)
+            {
+                throw new SnapshotCaptureException("Saved artifact size or file type changed.");
+            }
+
+            var bytes = File.ReadAllBytes(location);
+            if (bytes.LongLength != file.SizeBytes ||
+                !string.Equals(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                    file.Sha256, StringComparison.Ordinal))
+            {
+                throw new SnapshotCaptureException("Saved artifact hash mismatch.");
+            }
+
+            return bytes;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new SnapshotCaptureException("Saved artifact cannot be read safely.");
+        }
+    }
+
     private async Task<SnapshotCaptureOutcome> CaptureAttemptAsync(
         RepositorySourceRecord source, string sourceRoot,
         Guid requestKey, string requestDigest, CancellationToken cancellationToken)
