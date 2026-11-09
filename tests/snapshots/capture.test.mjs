@@ -569,6 +569,18 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal((await get(foreign, session)).status, 404);
       assert.equal((await get(endpoint + '/' + randomUUID() + '/csharp-type-links',
         session)).status, 404);
+
+      await stopApi(api);
+      api = null;
+      api = await startApi(data);
+      assert.equal((await get(url, session)).status, 401,
+        'previous browser session must not survive API restart');
+      session = await pair();
+      const reopened = await get(url, session);
+      assert.equal(reopened.status, 200);
+      const afterRestart = await reopened.json();
+      assert.equal(afterRestart.snapshotId, snapshot.id);
+      assert.deepEqual(afterRestart.usages, report.usages);
     });
   } finally {
     await stopApi(api);
