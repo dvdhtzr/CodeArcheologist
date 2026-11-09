@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using CodeArcheologist.Api.Security;
+using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Workspaces;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services.AddSingleton<CSharpTypeRelationshipInspector>();
 builder.Services.AddSingleton<StaticCSharpProjectInspector>();
 builder.Services.AddSingleton<CSharpProjectLinkContextInspector>();
 builder.Services.AddSingleton<CSharpEvidenceGraphBuilder>();
+builder.Services.AddSingleton<LocalFunctionalityInvestigator>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -390,6 +392,39 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     catch (IOException)
     {
         return Results.Conflict(new { error = "Saved graph evidence could not be verified." });
+    }
+}).RequireAuthorization();
+
+// Explicit user-initiated, snapshot-only MAF + localhost Ollama investigation.
+// This is a bounded POST because it invokes an LLM; protected by the existing
+// authenticated session, local Origin/Host guard, and CSRF middleware.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/http-attribute",
+    async (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+        LocalInvestigationRequest request, WorkspaceStore store,
+        LocalFunctionalityInvestigator investigator, CancellationToken cancellationToken) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(request.EntryPointId) ||
+        request.EntryPointId.Length > 800)
+        return Results.BadRequest(new { error = "A bounded saved HTTP annotation identity is required." });
+
+    try
+    {
+        return Results.Ok(await investigator.InvestigateAsync(
+            snapshot, request.EntryPointId, cancellationToken));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved investigation evidence could not be verified." });
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Json(new { error = "Saved investigation evidence is not accessible." }, statusCode: 422);
     }
 }).RequireAuthorization();
 
