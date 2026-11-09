@@ -23,7 +23,13 @@ internal static class GateBSelfTests
             ],
             [
                 new(relationId, "annotates-method", "candidate", entry, target,
-                    "src/Controller.cs", fingerprint, 1, 1, "candidate", null)
+                    "src/Controller.cs", fingerprint, 1, 1, "candidate", null),
+                new("observed-containment", "contains-invocation", "observed-syntax",
+                    entry, target, "src/Controller.cs", fingerprint, 2, 1,
+                    "observed context only", null),
+                new("provisional-callee", "candidate-callee", "provisional-local",
+                    entry, target, "src/Controller.cs", fingerprint, 2, 1,
+                    "provisional context only", null)
             ],
             ["Runtime state is not known"], ["Only source syntax was inspected"]);
 
@@ -39,6 +45,21 @@ internal static class GateBSelfTests
             } },
             unknowns = new[] { "Runtime endpoint registration is not established." }
         };
+        using (var projection = JsonDocument.Parse(
+            GateBInvestigator.BuildAgentEvidenceJson(package)))
+        {
+            var root = projection.RootElement;
+            if (root.TryGetProperty("relations", out _) ||
+                root.GetProperty("eligibleRelations").GetArrayLength() != 1)
+                throw new InvalidOperationException(
+                    "The model must only receive a selectable candidate relationship list.");
+            var edge = root.GetProperty("eligibleRelations")[0];
+            if (edge.GetProperty("id").GetString() != relationId ||
+                edge.GetProperty("evidenceStatus").GetString() != "candidate")
+                throw new InvalidOperationException("Eligible relation was not correctly scoped.");
+            if (root.GetProperty("references").GetArrayLength() != 2)
+                throw new InvalidOperationException("Source-context references were removed.");
+        }
         var validJson = JsonSerializer.Serialize(accepted);
         Expect(validJson, "valid-structural-claim");
         Expect(null, "empty-model-response");
