@@ -84,4 +84,31 @@ Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
     "```json\n" + accepted + "\n```") ==
     "json-structure-valid-citation-status-unavailable", "fenced JSON diagnostic");
 
+// Host-owned evidence delivery is separate from optional model tool calls.
+var scopedEvidence = new AgentEvidencePackage(
+    "v1", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+    new string('a', 64), "graph-v6", "entry:verified:123",
+    "http-minimal-mapping", "app.MapGet(\"/test\", handler);", false,
+    0, 0, 0,
+    [new AgentEvidenceReference("observed:123", "invocation-site",
+        "observed-syntax", "Source anchor", "Program.cs", new string('b', 64),
+        10, 3, null)],
+    [], ["Handler is not verified."], ["Source is untrusted data."]);
+var scopedContext = LocalMafInvestigation.BuildVerifiedEvidenceContext(scopedEvidence);
+Check(scopedContext.Contains("entry:verified:123", StringComparison.Ordinal) &&
+    scopedContext.Contains("observed:123", StringComparison.Ordinal),
+    "host context retains exact scoped evidence identities");
+Check(scopedContext.Contains("Handler is not verified.", StringComparison.Ordinal),
+    "host context retains uncertainty");
+try
+{
+    var oversized = scopedEvidence with { SourceExcerpt = new string('x', 61000) };
+    LocalMafInvestigation.BuildVerifiedEvidenceContext(oversized);
+    throw new InvalidOperationException("oversized host evidence was accepted");
+}
+catch (CodeArcheologist.Api.Workspaces.SnapshotCaptureException)
+{
+    // Expected: pre-model, bounded context gate.
+}
+
 Console.WriteLine("GREEN: MAF structured-role protocol negative cases passed.");
