@@ -40,6 +40,12 @@ static string Validate(string? text)
     }
 }
 
+if (args.Length == 1 && args[0] == "--gate-b-self-test")
+{
+    GateBSelfTests.Run();
+    return;
+}
+
 if (args.Length > 2 ||
     (args.Length > 0 && !int.TryParse(args[0], out _)))
 {
