@@ -29,3 +29,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 21. Roslyn syntax observations must be extracted from hash-verified captured files without creating an MSBuild workspace, running project evaluation, loading source generators or executing third-party analyzers.
 22. Namespace/type/member declarations and their spans are syntactic observations only. Do not claim binding, inheritance, dependencies, call graphs, project compilation or behavior without separately verified evidence.
+
+23. Roslyn's reference-free synthetic compilation is allowed solely for provisional source-local type links; never emit it or execute imported source code, build targets, plugins, external analyzers or generators.
+24. Synthetic binding across captured files is *not* project-verified. Use status `provisional-local` or `unresolved` and never silently promote to a verified inheritance, dependency or impact edge.
