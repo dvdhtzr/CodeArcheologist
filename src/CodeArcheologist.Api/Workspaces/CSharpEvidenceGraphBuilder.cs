@@ -301,7 +301,7 @@ public sealed class CSharpEvidenceGraphBuilder(
                 invocation.Line,
                 invocation.Column,
                 invocation.ArgumentCount +
-                " written argument(s); target method not resolved"));
+                " written argument(s); no project-verified callee"));
 
             var ownerId = invocation.ContainingMethod is { } caller
                 ? "declaration:" + invocation.FilePath + ":" +
