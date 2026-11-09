@@ -55,6 +55,9 @@ type EvidenceGraphReport = {
   httpAttributeAnalyzerVersion: string;
   httpAttributeCandidateCount: number;
   nonliteralHttpAttributeRouteCount: number;
+  minimalApiAnalyzerVersion: string;
+  minimalApiCandidateCount: number;
+  nonliteralMinimalApiRouteCount: number;
   nodeCount: number;
   edgeCount: number;
   nodes: GraphNode[];
@@ -174,6 +177,17 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
         return { node, link, method };
       }), [report, nodesById]);
 
+  const minimalApiRows = useMemo(() =>
+    (report?.nodes ?? [])
+      .filter(node => node.kind === 'http-minimal-mapping')
+      .map(node => {
+        const link = report?.edges.find(edge =>
+          edge.kind === 'candidate-http-mapping' &&
+          edge.fromId === node.id && edge.status === 'candidate');
+        const invocation = link ? nodesById.get(link.toId) : undefined;
+        return { node, link, invocation };
+      }), [report, nodesById]);
+
   const visibleCalleeEdges = useMemo(
     () => calleeEdges.filter(edge =>
       calleeContextFilter === 'all' ||
@@ -276,7 +290,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             {' '}({report.methodContainedInvocationCount} in direct method/constructor bodies) ·
             {' '}{report.provisionalCalleeCount} provisional callee candidates ·
             {' '}{report.unresolvedCalleeCount} unresolved callees ·
-            {' '}{report.httpAttributeCandidateCount} HTTP attribute candidates
+            {' '}{report.httpAttributeCandidateCount} HTTP attribute candidates ·
+            {' '}{report.minimalApiCandidateCount} Minimal API mapping candidates
           </p>
           <p className="workspace-note">
             Callee project context: {report.calleeSharedCandidateCount} shared candidates ·
@@ -303,9 +318,9 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             {httpAttributeRows.length === 0 ? (
               <p role="status">
                 No conventional method-level HTTP verb attributes were identified
-                in this saved snapshot. Minimal APIs, convention routes and
-                external endpoints are not covered. This does not prove that
-                the application has no HTTP endpoints.
+                in this saved snapshot. Minimal API mapping spellings are inventoried
+                separately below; convention routes and external endpoints remain
+                unexamined. This does not prove that the application has no HTTP endpoints.
               </p>
             ) : (
               <>
@@ -358,6 +373,70 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                     Showing 30 of {httpAttributeRows.length} annotations.
                     All candidates and their evidence are available in the
                     authenticated local graph API.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+          <section className="graph-http-entrypoints" aria-label="Candidate Minimal API mapping invocations">
+            <h4>Find Minimal API mapping candidates</h4>
+            <p className="workspace-note">
+              This inventory recognizes written MapGet, MapPost, MapPut, MapPatch
+              and MapDelete member calls. Such names can also belong to unrelated
+              methods; these are candidates, never verified route registrations.
+              Displayed route literals have not been composed into effective URLs.
+            </p>
+            {minimalApiRows.length === 0 ? (
+              <p role="status">
+                No supported Minimal API mapping spellings were identified in
+                this saved snapshot. This does not prove the absence of HTTP
+                endpoints or route registrations; other mapping styles are
+                outside the inspector's current scope.
+              </p>
+            ) : (
+              <>
+                <p>
+                  {report.minimalApiCandidateCount} mapping syntax candidates ·
+                  {' '}{report.nonliteralMinimalApiRouteCount} with missing,
+                  dynamic or unsupported route arguments.
+                </p>
+                <ul className="syntax-declaration-list">
+                  {minimalApiRows.slice(0, 40).map(({ node, link, invocation }) => (
+                    <li key={node.id}>
+                      <strong>{node.label}</strong>
+                      {node.filePath && node.fileSha256 && (
+                        <EvidenceAddress
+                          path={node.filePath}
+                          hash={node.fileSha256}
+                          line={node.line}
+                          column={node.column}
+                        />
+                      )}
+                      <span>
+                        {link?.kind ?? 'Source-only candidate'} ·
+                        {' '}<strong>{link?.status ?? 'unresolved'}</strong>
+                        {' '}· {invocation
+                          ? 'observed invocation: ' + invocation.label
+                          : 'invocation evidence unavailable'}
+                      </span>
+                      <p>{node.detail}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(node.id);
+                          setKind('http-minimal-mapping');
+                          setSearch('');
+                        }}
+                      >
+                        Inspect mapping and source invocation in graph
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {minimalApiRows.length > 40 && (
+                  <p className="workspace-note">
+                    Showing the first 40 of {minimalApiRows.length} candidates.
+                    Full evidence is available in the authenticated local graph API.
                   </p>
                 )}
               </>
@@ -646,6 +725,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                 <option value="syntax-declaration">Parsed declarations (unreferenced)</option>
                 <option value="invocation-site">Invocation sites (candidate or unresolved)</option>
                 <option value="http-endpoint-attribute">HTTP attribute candidates (not registered endpoints)</option>
+                <option value="http-minimal-mapping">Minimal API mapping candidates (not registered endpoints)</option>
                 <option value="unresolved-use">Unresolved occurrences</option>
               </select>
             </label>
