@@ -13,6 +13,7 @@ builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(5127));
 builder.Services.AddSingleton<LocalAccessState>();
 builder.Services.AddSingleton<WorkspaceStore>();
 builder.Services.AddSingleton<SnapshotCaptureService>();
+builder.Services.AddSingleton<CSharpSyntaxInspector>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -264,6 +265,30 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     catch (IOException)
     {
         return Results.Conflict(new { error = "Snapshot inventory could not be verified." });
+    }
+}).RequireAuthorization();
+
+// Roslyn syntax-only inspection over verified, copied source bytes. This
+// does NOT evaluate projects, compile code, resolve references or execute
+// build targets/source generators/analyzers from imported repositories.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/csharp-syntax",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     WorkspaceStore store, CSharpSyntaxInspector inspector, CancellationToken cancellationToken) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+
+    try
+    {
+        return Results.Ok(inspector.Inspect(snapshot, cancellationToken));
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved C# source could not be verified." });
     }
 }).RequireAuthorization();
 
