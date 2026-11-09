@@ -23,9 +23,12 @@ static string Validate(string? modelText)
             answer.ValueKind != JsonValueKind.String ||
             unknown.ValueKind != JsonValueKind.String)
             return "schema-mismatch";
-        if (answer.GetString() is not { Length: >= 5 and <= MaxAnswerLength } ||
-            unknown.GetString() is not { Length: >= 5 and <= MaxUnknownLength })
-            return "invalid-field-length";
+        var answerLength = answer.GetString()!.Length;
+        var unknownLength = unknown.GetString()!.Length;
+        if (answerLength is < 5 or > MaxAnswerLength)
+            return "answer-length-invalid(" + answerLength + ")";
+        if (unknownLength is < 5 or > MaxUnknownLength)
+            return "unknown-length-invalid(" + unknownLength + ")";
         return "valid";
     }
     catch (JsonException)
@@ -45,7 +48,7 @@ static void SelfTest()
         ("{}", "schema-mismatch"),
         ("[]", "root-not-object"),
         ("{\"answer\":\"fine\",\"unknown\":\"none yet\",\"extra\":1}", "schema-mismatch"),
-        ("{\"answer\":\"fine\",\"unknown\":\"\"}", "invalid-field-length"),
+        ("{\"answer\":\"fine\",\"unknown\":\"\"}", "unknown-length-invalid(0)"),
         ("{\"answer\":\"A concise answer\",\"unknown\":\"Runtime unverified\"}", "valid"),
         (new string('x', 4097), "oversize-model-response")
     };
@@ -91,8 +94,8 @@ var schema = new
     type = "object",
     properties = new
     {
-        answer = new { type = "string" },
-        unknown = new { type = "string" }
+        answer = new { type = "string", minLength = 5, maxLength = MaxAnswerLength },
+        unknown = new { type = "string", minLength = 5, maxLength = MaxUnknownLength }
     },
     required = new[] { "answer", "unknown" },
     additionalProperties = false
@@ -107,6 +110,7 @@ for (var i = 1; i <= attempts; i++)
         {
             model,
             prompt = "Respond ONLY as a JSON object with answer and unknown. " +
+                     "Both string fields must be at least 5 and at most 240 characters. " +
                      "Question: Does the C# text 'app.MapGet' alone prove that an HTTP endpoint " +
                      "was registered at runtime? Answer cautiously and identify uncertainty.",
             format = schema,
