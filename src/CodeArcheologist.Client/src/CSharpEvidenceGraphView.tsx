@@ -105,6 +105,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState('all');
   const [calleeContextFilter, setCalleeContextFilter] = useState('all');
+  const [impactSearch, setImpactSearch] = useState('');
+  const [impactMethodId, setImpactMethodId] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -124,6 +126,14 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
         const data: EvidenceGraphReport = await response.json();
         if (!controller.signal.aborted) {
           setReport(data);
+          // Start with a candidate-backed target when possible, so users
+          // immediately see meaningful evidence rather than an empty example.
+          const firstCallee = data.edges.find(edge => edge.kind === 'candidate-callee');
+          const firstMethod = data.nodes.find(node =>
+            node.kind === 'syntax-declaration' &&
+            node.detail?.startsWith('method syntax declaration'));
+          setImpactMethodId(firstCallee?.toId ?? firstMethod?.id ?? '');
+          setImpactSearch('');
           setSelectedId(data.nodes.find(node => node.kind === 'project-file')?.id ??
             data.nodes.find(node => node.kind === 'csharp-file')?.id ??
             data.nodes[0]?.id ?? '');
@@ -156,6 +166,56 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
       edge.projectContextStatus === calleeContextFilter),
     [calleeEdges, calleeContextFilter]
   );
+
+  // A one-hop *reverse* projection of already supplied graph evidence.
+  // Never infer a caller by a matching method name, and never recursively
+  // traverse candidate-callee links into a verified impact path.
+  const methodTargetIds = useMemo(
+    () => new Set(calleeEdges.map(edge => edge.toId)), [calleeEdges]
+  );
+  const impactMethods = useMemo(() =>
+    (report?.nodes ?? []).filter(node =>
+      (node.kind === 'syntax-declaration' &&
+        node.detail?.startsWith('method syntax declaration')) ||
+      methodTargetIds.has(node.id)
+    ).sort((a, b) => {
+      const candidateOrder =
+        Number(methodTargetIds.has(b.id)) - Number(methodTargetIds.has(a.id));
+      return candidateOrder !== 0 ? candidateOrder :
+        a.label < b.label ? -1 : a.label > b.label ? 1 :
+        a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    }), [report, methodTargetIds]);
+  const impactMethod = impactMethods.find(node => node.id === impactMethodId);
+  const impactMethodMatches = impactMethods.filter(node =>
+    (node.label + ' ' + (node.filePath ?? ''))
+      .toLocaleLowerCase().includes(impactSearch.trim().toLocaleLowerCase()));
+  const inboundCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const edge of calleeEdges)
+      counts.set(edge.toId, (counts.get(edge.toId) ?? 0) + 1);
+    return counts;
+  }, [calleeEdges]);
+  const sourceOwnerByInvocation = useMemo(() =>
+    new Map((report?.edges ?? [])
+      .filter(edge => edge.kind === 'contains-invocation' &&
+        edge.status === 'observed-syntax')
+      .map(edge => [edge.toId, edge] as const)), [report]);
+  const directImpactCandidates = useMemo(() => calleeEdges
+    .filter(edge => edge.toId === impactMethodId)
+    .flatMap(edge => {
+      const invocation = nodesById.get(edge.fromId);
+      const observedContainment = sourceOwnerByInvocation.get(edge.fromId);
+      const sourceOwner = observedContainment
+        ? nodesById.get(observedContainment.fromId) : undefined;
+      if (!invocation || !observedContainment || !sourceOwner) return [];
+      return [{ edge, invocation, sourceOwner, observedContainment }];
+    }), [calleeEdges, impactMethodId, nodesById, sourceOwnerByInvocation]);
+  const directlyObservedCallerMethods = new Set(directImpactCandidates
+    .filter(item => item.sourceOwner.kind === 'syntax-declaration' &&
+      /^(method|constructor) syntax declaration/.test(item.sourceOwner.detail ?? ''))
+    .map(item => item.sourceOwner.id)).size;
+  const fileScopedImpactSites = directImpactCandidates.filter(
+    item => item.sourceOwner.kind === 'csharp-file').length;
 
   const selectedNode = nodesById.get(selectedId);
   const allNeighbors = useMemo((): AdjacentEvidence[] => {
@@ -310,6 +370,164 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                     Showing the first 25 matching candidate links. Select a narrower
                     project-context classification or inspect more links in the graph.
                   </p>
+                )}
+              </>
+            )}
+          </section>
+          <section className="graph-impact-explorer" aria-label="Direct change-impact candidates">
+            <h4>Explore direct change-impact candidates</h4>
+            <p className="workspace-note">
+              Choose a captured C# method and inspect written invocation sites
+              that Roslyn provisionally linked to it. This is a one-hop
+              review checklist, not a prediction of a broken method, verified
+              call graph, or transitive impact analysis.
+            </p>
+            {impactMethods.length === 0 ? (
+              <p role="status">
+                No supported method declarations were found in this saved
+                snapshot. Direct change-impact exploration is unavailable
+                for this snapshot, not evidence that changes are safe.
+              </p>
+            ) : (
+              <>
+                <label>
+                  Find a method to examine
+                  <input
+                    type="search"
+                    value={impactSearch}
+                    onChange={event => setImpactSearch(event.target.value)}
+                    placeholder="Method name or captured source path"
+                  />
+                </label>
+                <div className="graph-impact-method-picker" aria-label="Choose an impact method">
+                  {impactMethodMatches.length === 0 ? (
+                    <p>No methods match this search. Try a different name or path.</p>
+                  ) : (
+                    <ul>
+                      {impactMethodMatches.slice(0, 25).map(method => (
+                        <li key={method.id}>
+                          <button
+                            type="button"
+                            aria-pressed={impactMethodId === method.id}
+                            className={impactMethodId === method.id ? 'graph-selected' : ''}
+                            onClick={() => setImpactMethodId(method.id)}
+                          >
+                            <span>{method.label}</span>
+                            <small>
+                              {method.filePath}:{method.line ?? '?'} ·
+                              {' '}{inboundCounts.get(method.id) ?? 0} candidate invocation sites
+                            </small>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {impactMethodMatches.length > 25 && (
+                    <p className="workspace-note">
+                      Showing 25 of {impactMethodMatches.length} matching methods.
+                      Refine your search to find a particular declaration or overload.
+                    </p>
+                  )}
+                </div>
+                {impactMethod && (
+                  <div className="graph-impact-results">
+                    <h4>Potential direct callers of {impactMethod.label}</h4>
+                    {impactMethod.filePath && impactMethod.fileSha256 && (
+                      <EvidenceAddress
+                        path={impactMethod.filePath}
+                        hash={impactMethod.fileSha256}
+                        line={impactMethod.line}
+                        column={impactMethod.column}
+                      />
+                    )}
+                    <p>
+                      {directImpactCandidates.length} provisional invocation sites ·
+                      {' '}{directlyObservedCallerMethods} distinct directly enclosing
+                      methods/constructors · {fileScopedImpactSites} file-scoped sites
+                      without an identified caller.
+                    </p>
+                    {directImpactCandidates.length === 0 ? (
+                      <p role="status">
+                        No inbound provisional callee candidates were found for
+                        this method in this saved snapshot. This does NOT establish
+                        that it has no callers or that changing it is safe.
+                      </p>
+                    ) : (
+                      <ul className="syntax-declaration-list">
+                        {directImpactCandidates.slice(0, 40).map(item => (
+                          <li key={item.edge.id}>
+                            <strong>
+                              {item.sourceOwner.kind === 'csharp-file'
+                                ? 'File-scoped invocation; enclosing caller not identified'
+                                : 'Observed containing declaration: ' + item.sourceOwner.label}
+                            </strong>
+                            {item.sourceOwner.filePath && item.sourceOwner.fileSha256 && (
+                              <EvidenceAddress
+                                path={item.sourceOwner.filePath}
+                                hash={item.sourceOwner.fileSha256}
+                                line={item.sourceOwner.line}
+                                column={item.sourceOwner.column}
+                              />
+                            )}
+                            <span>
+                              Written invocation: {item.invocation.label} ·
+                              observed source containment (<strong>observed-syntax</strong>)
+                            </span>
+                            <EvidenceAddress
+                              path={item.edge.evidencePath}
+                              hash={item.edge.evidenceSha256}
+                              line={item.edge.line}
+                              column={item.edge.column}
+                            />
+                            <span>
+                              Callee hypothesis: <strong>{item.edge.status}</strong>
+                              {' '}· {item.edge.projectContextStatus}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedId(item.invocation.id);
+                                setKind('invocation-site');
+                                setSearch('');
+                              }}
+                            >
+                              Inspect invocation and candidate in graph
+                            </button>
+                            <details>
+                              <summary>See candidate reasoning and project evidence</summary>
+                              <p>{item.edge.explanation}</p>
+                              <ProjectCandidateList
+                                label="Source project candidates"
+                                candidates={item.edge.sourceProjectCandidates}
+                              />
+                              <ProjectCandidateList
+                                label="Target project candidates"
+                                candidates={item.edge.targetProjectCandidates}
+                              />
+                              <ProjectCandidateList
+                                label="Shared project candidates"
+                                candidates={item.edge.sharedProjectCandidates}
+                              />
+                            </details>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {directImpactCandidates.length > 40 && (
+                      <p className="workspace-note">
+                        Showing the first 40 of {directImpactCandidates.length}
+                        provisional call-site candidates. The full list is
+                        available from the authenticated local evidence graph API.
+                      </p>
+                    )}
+                    <p className="workspace-note">
+                      The snapshot also contains {report.unresolvedCalleeCount}
+                      unresolved invocation sites that cannot be assigned to this
+                      or any other target by the current binder. They are not
+                      counted above. No transitive callers, external consumers,
+                      test effects or actual breakages are inferred.
+                    </p>
+                  </div>
                 )}
               </>
             )}
