@@ -25,7 +25,8 @@ each agent. This is **not** two fake, deterministic persona responses.
   `qwen3.5:9b` configured in checked-in
   `src/CodeArcheologist.Api/appsettings.json`. User can configure
   model via local app settings; no Azure, cloud subscription, secrets
-  or automatic model installation.
+  or automatic model installation. The API explicitly loads its packaged
+  appsettings from its built directory, not the process working directory.
 - Explicit session-authorized, CSRF-protected `POST .../investigations/local-maf`
   with only `{ "entryPointId": "<exact candidate ID>" }`.
 - Both roles have only a **parameterless**, application-owned,
@@ -77,7 +78,10 @@ authoritative gate.
 
 The disposable tests cover unauthenticated/forged-CSRF launch,
 foreign snapshot scopes, non-entry-point ID, malformed ID and
-tool-authorization failure **without invoking Ollama**. A real
+tool-authorization failure **without invoking Ollama**. A pure .NET
+console regression project also runs through `scripts/check.ps1` and
+`scripts/check.sh` to reject malformed/oversized model JSON, missing
+unknowns and duplicate citation IDs without contacting Ollama. A real
 local browser smoke run must additionally verify both MAF executors,
 real evidence-tool calls, trace and structured citation outcome.
 A result of `inconclusive` is an observed failure, not success.
