@@ -166,6 +166,14 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '/evidence-tools/entry-point?entryPointId=anything')).status, 401);
       assert.equal((await post(endpoint + '/' + randomUUID() +
         '/evidence-tools/check-citations', null, {})).status, 401);
+      assert.equal((await post(endpoint + '/' + randomUUID() +
+        '/investigations/local-maf', null, {})).status, 401);
+      assert.equal((await post(endpoint + '/' + randomUUID() +
+        '/investigations/local-maf', session, { entryPointId: 'unknown' },
+        { csrf: null })).status, 403);
+      assert.equal((await post(endpoint + '/' + randomUUID() +
+        '/investigations/local-maf', session, { entryPointId: 'unknown' },
+        { origin: 'https://attacker.example' })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -1040,6 +1048,20 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + randomUUID() +
           '/evidence-tools/entry-point?entryPointId=' +
           encodeURIComponent(httpEntry.id), session)).status, 404);
+
+        const mafEndpoint = endpoint + '/' + snapshot.id + '/investigations/local-maf';
+        assert.equal((await post('/api/v1/workspaces/' + randomUUID() +
+          '/repositories/' + rid + '/snapshots/' + snapshot.id +
+          '/investigations/local-maf', session,
+          { entryPointId: httpEntry.id })).status, 404);
+        assert.equal((await post(mafEndpoint, session,
+          { entryPointId: 'invented-entrypoint-id' })).status, 404,
+          'an invalid source scope is refused before any Ollama call');
+        assert.equal((await post(mafEndpoint, session,
+          { entryPointId: diEntry.id })).status, 404,
+          'DI syntax candidates cannot launch an HTTP investigation');
+        assert.equal((await post(mafEndpoint, session,
+          { entryPointId: '' })).status, 400);
 
         const httpUrl = toolsBase + '/entry-point?entryPointId=' +
           encodeURIComponent(httpEntry.id);
