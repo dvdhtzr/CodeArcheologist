@@ -33,6 +33,9 @@ public sealed record CSharpEvidenceGraphReport(
     string ProjectAnalyzerVersion,
     string SyntaxAnalyzerVersion,
     int SyntaxDeclarationCount,
+    string InvocationAnalyzerVersion,
+    int InvocationCount,
+    int MethodContainedInvocationCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -49,9 +52,10 @@ public sealed class CSharpEvidenceGraphBuilder(
     SnapshotCaptureService capture,
     StaticCSharpProjectInspector projectInspector,
     CSharpProjectLinkContextInspector linkContextInspector,
-    CSharpSyntaxInspector syntaxInspector)
+    CSharpSyntaxInspector syntaxInspector,
+    CSharpInvocationSyntaxInspector invocationInspector)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v2";
+    public const string Version = "csharp-snapshot-evidence-graph-v3";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -61,6 +65,7 @@ public sealed class CSharpEvidenceGraphBuilder(
         var context = linkContextInspector.Inspect(snapshot, cancellationToken);
         var projects = projectInspector.Inspect(snapshot, cancellationToken);
         var syntax = syntaxInspector.Inspect(snapshot, cancellationToken);
+        var invocations = invocationInspector.Inspect(snapshot, cancellationToken);
         var manifest = capture.ReadManifest(snapshot);
         if (context.WorkspaceId != snapshot.WorkspaceId ||
             context.RepositoryId != snapshot.RepositoryId ||
@@ -71,6 +76,11 @@ public sealed class CSharpEvidenceGraphBuilder(
             syntax.WorkspaceId != snapshot.WorkspaceId ||
             syntax.RepositoryId != snapshot.RepositoryId ||
             syntax.SnapshotId != snapshot.Id ||
+            invocations.WorkspaceId != snapshot.WorkspaceId ||
+            invocations.RepositoryId != snapshot.RepositoryId ||
+            invocations.SnapshotId != snapshot.Id ||
+            !string.Equals(invocations.FingerprintSha256,
+                snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(syntax.FingerprintSha256,
                 snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(context.FingerprintSha256,
@@ -260,6 +270,54 @@ public sealed class CSharpEvidenceGraphBuilder(
             }
         }
 
+        // These are call-expression occurrences, NOT links to the called
+        // method. The nearest directly enclosing method/constructor is
+        // observable syntax. All unsupported execution scopes (lambdas,
+        // accessors, local functions, initializers) remain file-scoped rather
+        // than assigning a potentially false caller.
+        foreach (var invocation in invocations.Invocations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var invocationId = "invocation:" + invocation.FilePath + ":" +
+                invocation.FileSha256 + ":" + invocation.SpanStart +
+                ":" + invocation.SpanLength;
+            AddNode(new EvidenceGraphNode(
+                invocationId,
+                "invocation-site",
+                invocation.WrittenExpression + "(…)",
+                invocation.FilePath,
+                invocation.FileSha256,
+                invocation.Line,
+                invocation.Column,
+                invocation.ArgumentCount +
+                " written argument(s); target method not resolved"));
+
+            var ownerId = invocation.ContainingMethod is { } caller
+                ? "declaration:" + invocation.FilePath + ":" +
+                    invocation.FileSha256 + ":" + caller.SpanStart +
+                    ":" + caller.SpanLength
+                : "file:" + invocation.FilePath;
+
+            AddEdge(new EvidenceGraphEdge(
+                "contains-invocation:" + invocationId,
+                ownerId,
+                invocationId,
+                "contains-invocation",
+                "observed-syntax",
+                null,
+                invocation.FilePath,
+                invocation.FileSha256,
+                invocation.Line,
+                invocation.Column,
+                "Observed invocation expression with " + invocation.ArgumentCount +
+                " argument(s), contained in " +
+                (invocation.ContainingMethod is null
+                    ? "this source file (caller not assigned)"
+                    : "the enclosing " + invocation.ContainingMethod.Kind +
+                      " declaration") +
+                ". No callee binding, runtime execution or project compilation verified."));
+        }
+
         return new CSharpEvidenceGraphReport(
             snapshot.WorkspaceId,
             snapshot.RepositoryId,
@@ -270,6 +328,9 @@ public sealed class CSharpEvidenceGraphBuilder(
             projects.AnalyzerVersion,
             syntax.AnalyzerVersion,
             syntax.Declarations.Count,
+            invocations.AnalyzerVersion,
+            invocations.InvocationCount,
+            invocations.MethodContainedCount,
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -283,7 +344,9 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "Existing target-declaration nodes are reused when their saved file hash and source span match a syntax declaration.",
                 "Preprocessor conditions, partial types, generated code and overloads may prevent a complete semantic symbol inventory.",
                 "An unresolved-use node records the written source occurrence and never fabricates a declaration or external dependency.",
-                "Only base-type clauses and explicit object creations are covered, not method calls, DI, data flow or runtime behavior.",
+                "Invocation syntax sites are observed and attributed to direct method/constructor syntax where possible; no callee resolution or actual call graph is established.",
+                "The earlier provisional type links cover only base-type clauses and explicit object creations; DI, data flow and runtime behavior remain unexamined.",
+                "Lambda, local function, accessor and initializer invocations are file-scoped to avoid claiming an incorrect containing method.",
                 "The nodes and links are derived entirely from verified saved snapshot file paths, hashes and source spans."
             });
     }

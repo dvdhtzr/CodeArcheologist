@@ -655,15 +655,23 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       await writeFile(join(source, 'src', 'Orphan.cs'),
         'namespace Orphans; public class Orphan { ' +
         'public object Build() => new global::Shared.Contract(); }\n');
-      // No type usages inside this declaration fixture: these nodes must
-      // appear solely because syntax declarations are now in the graph.
+      // This fixture has two source-level Act overloads with matching
+      // written call names, plus nested lambda/local-function invocation
+      // sites which must NOT be attributed to the outer method.
       await writeFile(join(source, 'src', 'ExtraMembers.cs'),
         'namespace Structure;\n' +
         'public class Parent {\n' +
         ' public sealed class Child {}\n' +
-        ' public void Act() {}\n' +
-        ' public void Act(int value) {}\n' +
+        ' public void Act() { Helper(5); }\n' +
+        ' public void Act(int value) { Helper(value); }\n' +
         ' public int Count { get; set; }\n' +
+        ' public int Compute() {\n' +
+        '  System.Func<int> lambda = () => HelperAndReturn();\n' +
+        '  int Local() { Helper(9); return 2; }\n' +
+        '  return lambda() + Local();\n' +
+        ' }\n' +
+        ' private void Helper(int input) {}\n' +
+        ' private int HelperAndReturn() { return 3; }\n' +
         '}\n');
 
       const created = await post(endpoint, session);
@@ -769,7 +777,10 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v2');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v3');
+      assert.equal(graph.invocationAnalyzerVersion, 'roslyn-invocation-sites-v1');
+      assert.ok(graph.invocationCount >= 6);
+      assert.ok(graph.methodContainedInvocationCount >= 4);
       assert.equal(graph.syntaxAnalyzerVersion, 'roslyn-csharp-syntax-v1');
       assert.ok(graph.syntaxDeclarationCount >= 6);
       assert.equal(graph.linkContextAnalyzerVersion, 'project-type-link-context-v1');
@@ -822,6 +833,58 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(overloads.length, 2,
         'overloads have distinct source spans and cannot collapse by name');
       assert.notEqual(overloads[0].id, overloads[1].id);
+      const invocationSites = graph.nodes.filter(node =>
+        node.kind === 'invocation-site' && node.filePath === parsedFilePath);
+      assert.equal(invocationSites.length, 6,
+        'two direct Helpers, a lambda HelperAndReturn, local Helper, lambda() and Local()');
+      assert.ok(invocationSites.every(node =>
+        node.fileSha256 === parsedFileSha && node.line > 0 && node.column > 0 &&
+        node.detail.includes('target method not resolved')));
+      const helperSites = invocationSites.filter(node => node.label === 'Helper(…)');
+      assert.equal(helperSites.length, 3,
+        'repeated written names are separate source spans, never a deduplicated callee');
+      assert.equal(new Set(helperSites.map(node => node.id)).size, 3);
+      const linkedToAct = helperSites.map(site => ({
+        site,
+        edge: graph.edges.find(edge => edge.toId === site.id &&
+          edge.kind === 'contains-invocation')
+      })).filter(item => overloads.some(method => method.id === item.edge?.fromId));
+      assert.equal(linkedToAct.length, 2,
+        'direct method calls are attributed to the correct observed method declarations');
+      assert.equal(new Set(linkedToAct.map(item => item.edge.fromId)).size, 2,
+        'identically named overloads must each own their own invocation observation');
+      const localHelper = helperSites.find(site =>
+        !linkedToAct.some(item => item.site.id === site.id));
+      assert.ok(localHelper);
+      const localEdge = graph.edges.find(edge => edge.toId === localHelper.id);
+      assert.equal(localEdge.fromId, parsedFile.id,
+        'invocation inside a local function must not be assigned to enclosing Compute');
+      const lambdaCall = invocationSites.find(node =>
+        node.label === 'HelperAndReturn(…)');
+      assert.ok(lambdaCall);
+      assert.equal(graph.edges.find(edge => edge.toId === lambdaCall.id)?.fromId,
+        parsedFile.id,
+        'lambda invocation must remain file-scoped instead of claiming a caller method');
+      const compute = syntaxOnly.find(node => node.label === 'Structure.Parent.Compute');
+      assert.ok(compute);
+      for (const name of ['lambda(…)', 'Local(…)']) {
+        const site = invocationSites.find(node => node.label === name);
+        assert.ok(site);
+        assert.equal(graph.edges.find(edge => edge.toId === site.id)?.fromId, compute.id,
+          'direct method-body expression belongs to the observed Compute declaration');
+      }
+      for (const site of invocationSites) {
+        const siteEdges = graph.edges.filter(edge => edge.toId === site.id);
+        assert.equal(siteEdges.length, 1);
+        assert.equal(siteEdges[0].status, 'observed-syntax');
+        assert.equal(siteEdges[0].evidencePath, parsedFilePath);
+        assert.equal(siteEdges[0].evidenceSha256, parsedFileSha);
+        assert.ok(siteEdges[0].line > 0 && siteEdges[0].column > 0);
+        assert.ok(!graph.edges.some(edge => edge.fromId === site.id),
+          'no unverified invocation-to-callee edges should be manufactured');
+      }
+      assert.ok(graph.limitations.some(text => text.includes('no callee resolution')));
+
       assert.ok(overloads.every(node =>
         node.fileSha256 === parsedFileSha && node.line > 0 && node.column > 0 &&
         node.detail.includes('syntax declaration')));
@@ -932,6 +995,26 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         context.usages);
       assert.deepEqual((await (await get(graphUrl, session)).json()).edges,
         graph.edges);
+    });
+
+    await t.test('invocation inspection refuses excessive call sites without a partial graph', async () => {
+      const flood = join(source, 'src', 'InvocationFlood.cs');
+      await writeFile(flood,
+        'namespace Limits; public class Flood { public void Run() {' +
+        'Ping();'.repeat(4501) + '} }');
+      try {
+        const created = await post(endpoint, session);
+        assert.equal(created.status, 201);
+        const snapshot = await created.json();
+        const response = await get(endpoint + '/' + snapshot.id + '/csharp-evidence-graph',
+          session);
+        assert.equal(response.status, 413);
+        assert.match((await response.json()).error, /4500-site limit/);
+        assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status,
+          200, 'saved snapshot remains readable when graph inspection fails closed');
+      } finally {
+        await rm(flood);
+      }
     });
 
     await t.test('project XML DTD is prohibited and never evaluated', async () => {

@@ -44,3 +44,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 31. Syntax declaration graph nodes represent captured Roslyn parse locations; these are not compiler-verified symbols or runtime behavior. Reuse exact file/hash/span target identities and their containment edges instead of duplicating nodes.
 32. Do not identify overloads solely by name; preserve distinct source spans. An expanded syntax graph must not claim a method-call, resolved project dependency, or complete symbol inventory.
+
+33. Invocation sites are captured syntax, NOT compiler-bound methods or runtime calls. Method/constructor containment is allowed only when that declaration is the nearest supported execution scope; never assign lambda/local-function/accessor invocations to an enclosing method by convenience.
+34. Do not add a written-name-based callee edge to the evidence graph. Every invocation site must have exact saved file/hash/span evidence and honor bounded fail-closed inspection limits.
