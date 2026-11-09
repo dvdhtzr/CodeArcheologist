@@ -136,6 +136,43 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .syntax-view details { margin-top: 14px; }
 
 
+/* A direct, bounded discovery path for provisional callee context. */
+.evidence-graph .graph-callee-finder {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #395877;
+  border-radius: 8px;
+  background: #0d2038;
+}
+.evidence-graph .graph-callee-finder h4 { margin: 0 0 8px; }
+.evidence-graph .graph-callee-finder > label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  max-width: 440px;
+}
+.evidence-graph .graph-callee-finder select {
+  padding: 9px 10px;
+  border: 1px solid #527397;
+  border-radius: 6px;
+  background: #0b1729;
+  color: #eef3ff;
+  font: inherit;
+}
+.evidence-graph .graph-callee-finder li button {
+  justify-self: start;
+  text-align: left;
+  overflow-wrap: anywhere;
+  padding: 6px 10px;
+  border: 1px solid #6184ad;
+  border-radius: 5px;
+  background: #223e5e;
+  color: #e4f2ff;
+}
+.evidence-graph .graph-callee-finder li details { margin: 4px 0; }
+.evidence-graph .graph-callee-finder li summary { cursor: pointer; }
+.evidence-graph .graph-callee-finder .graph-project-evidence { min-width: 0; }
+
 /* Bounded, accessible snapshot-evidence graph explorer. */
 .evidence-graph .graph-controls {
   display: flex;
