@@ -91,7 +91,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setInventory(null);
       setSyntaxSnapshotId(null);
       setTypeLinksSnapshotId(null);
-      setProjectsSnapshotId(null);
+    setProjectsSnapshotId(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
@@ -159,7 +159,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setInventory(null);
     setSyntaxSnapshotId(null);
     setTypeLinksSnapshotId(null);
-      setProjectsSnapshotId(null);
+    setProjectsSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/manifest', {
         credentials: 'same-origin',
@@ -181,7 +181,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setManifest(null);
     setSyntaxSnapshotId(null);
     setTypeLinksSnapshotId(null);
-      setProjectsSnapshotId(null);
+    setProjectsSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/inventory', {
         credentials: 'same-origin',
@@ -238,7 +238,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                   setManifest(null);
                   setInventory(null);
                   setTypeLinksSnapshotId(null);
-      setProjectsSnapshotId(null);
+    setProjectsSnapshotId(null);
                   setSyntaxSnapshotId(snapshot.id);
                 }}
               >
