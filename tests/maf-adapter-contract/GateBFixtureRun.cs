@@ -9,12 +9,17 @@ internal static class GateBFixtureRun
     /// </summary>
     public static async Task<int> RunAsync(string[] args)
     {
-        if (args.Length != 2 || args[0] != "--gate-b-fixture" ||
-            !int.TryParse(args[1], out var attempts) || attempts is < 1 or > 10)
+        var faults = args.Length == 1 && args[0] == "--gate-b-fixture-faults";
+        var normal = args.Length == 2 && args[0] == "--gate-b-fixture" &&
+            int.TryParse(args[1], out var requested) && requested is >= 1 and <= 10;
+        if (!faults && !normal)
         {
-            Console.Error.WriteLine("Usage: --gate-b-fixture <attempts 1..10>");
+            Console.Error.WriteLine(
+                "Usage: --gate-b-fixture <attempts 1..10> OR --gate-b-fixture-faults");
             return 2;
         }
+        var attempts = faults ? 1 : int.Parse(args[1],
+            System.Globalization.CultureInfo.InvariantCulture);
 
         var priorDataDir = Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR");
         var temp = Path.Combine(Path.GetTempPath(),
@@ -74,6 +79,8 @@ internal static class GateBFixtureRun
 
             Console.WriteLine("Disposable attribute-based fixture captured and verified.");
             Console.WriteLine("No existing application workspace or snapshot is used.");
+            if (faults)
+                return await GateBLocalRun.RunAsync(["--gate-b-faults"]);
             return await GateBLocalRun.RunAsync(
                 ["--gate-b-run", attempts.ToString(
                     System.Globalization.CultureInfo.InvariantCulture),
