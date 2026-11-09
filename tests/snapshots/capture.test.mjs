@@ -178,7 +178,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
     let originalManifest;
     await t.test('explicit capture produces files, hashes and honest exclusions', async () => {
       const response = await post(endpoint, session, undefined, { key: firstKey });
-      assert.equal(response.status, 201);
+      assert.equal(response.status, 201,
+        'First snapshot capture must return 201. Response: ' +
+        (response.status === 201 ? '<created>' : await response.clone().text()));
       const result = await response.json();
       firstId = result.id;
       firstFingerprint = result.fingerprintSha256;
@@ -216,6 +218,11 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       }
       assert.equal((await get(endpoint + '/' + firstId, session)).status, 200);
     });
+
+    if (!firstId) {
+      t.diagnostic('Dependent snapshot tests skipped because the initial capture failed.');
+      return;
+    }
 
     await t.test('identical request retry is idempotent, no duplicate snapshot', async () => {
       const retry = await post(endpoint, session, undefined, { key: firstKey });
