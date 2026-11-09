@@ -109,19 +109,36 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
         if (validation.Result is null)
             return new("inconclusive", validation.Diagnostic, null,
                 "not-checked", evidence.ContractVersion);
+        // The model's prose is NEVER elevated into a verified source claim.
+        // The accepted result is rendered solely from exact checked relations.
+        var canonical = validation.Result with
+        {
+            Summary = "Saved source contains an HTTP entry-point candidate; runtime behavior is unverified.",
+            Findings = validation.Result.Findings.Select(f =>
+            {
+                var relation = evidence.Relations.Single(r => r.Id == f.RelationId);
+                return f with
+                {
+                    Statement = relation.Kind == "annotates-method"
+                        ? "A written HTTP attribute has a candidate annotation-to-method source relationship."
+                        : "A written Minimal API mapping has a candidate mapping-to-invocation source relationship."
+                };
+            }).ToArray(),
+            Unknowns = evidence.Unknowns.Take(5).ToArray()
+        };
         try
         {
             var citations = evidenceTools.CheckCitations(snapshot,
                 new AgentCitationCheckRequest(evidence.EntryPointId,
                     evidence.FingerprintSha256,
-                    validation.Result.Findings.Select(f =>
+                    canonical.Findings.Select(f =>
                         new AgentCitationClaim(f.ClaimKind, f.Statement,
                             [f.RelationId])).ToArray()), cancellationToken);
             if (citations.Outcome != "all-reference-checks-passed")
                 return new("inconclusive", "citation-check-rejected", null,
                     citations.Outcome, evidence.ContractVersion);
             return new("accepted-reference-valid-not-semantic-proof",
-                "bounded-structural-claims", validation.Result,
+                "bounded-structural-claims", canonical,
                 citations.Outcome, evidence.ContractVersion);
         }
         catch (OperationCanceledException)
