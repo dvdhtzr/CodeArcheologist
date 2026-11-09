@@ -278,7 +278,7 @@ public sealed class LocalMafInvestigation(
         if (trimmed.StartsWith("```", StringComparison.Ordinal) &&
             trimmed.EndsWith("```", StringComparison.Ordinal))
         {
-            var nl = trimmed.IndexOf('\\n');
+            var nl = trimmed.IndexOf('\n');
             if (nl < 0) return "malformed-json-fence";
             trimmed = trimmed[(nl + 1)..^3].Trim();
         }
