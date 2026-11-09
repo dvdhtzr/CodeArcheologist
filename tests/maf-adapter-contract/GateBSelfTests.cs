@@ -57,9 +57,11 @@ internal static class GateBSelfTests
         Expect(Alter(root => root["extra"] = "untrusted"),
             "invalid-root-shape");
         Expect(Alter(root => root["findings"]![0]!["relationId"] = "fabricated"),
-            "unsupported-or-foreign-relationship");
+            "relationship-id-not-in-evidence-package");
         Expect(Alter(root => root["findings"]![0]!["fromId"] = "another-source"),
-            "unsupported-or-foreign-relationship");
+            "relationship-from-id-mismatch");
+        Expect(Alter(root => root["findings"]![0]!["toId"] = "another-target"),
+            "relationship-to-id-mismatch");
         Expect(Alter(root => root["findings"]![0]!["claimKind"] = "registered-runtime-endpoint"),
             "invalid-finding-shape");
         Expect(Alter(root => root["findings"]![0]!["statement"] = "x"),
