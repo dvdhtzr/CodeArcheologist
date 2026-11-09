@@ -54,7 +54,7 @@ public sealed partial class WorkspaceStore
     {
         using var connection = Open();
         using var query = connection.CreateCommand();
-        query.CommandText = SnapshotColumns + """
+        query.CommandText = SnapshotColumns + "\n" + """
             WHERE repository_id = $repo AND fingerprint_sha256 = $fingerprint;
             """;
         query.Parameters.AddWithValue("$repo", repositoryId.ToString("D"));
@@ -67,7 +67,7 @@ public sealed partial class WorkspaceStore
     {
         using var connection = Open();
         using var query = connection.CreateCommand();
-        query.CommandText = SnapshotColumns + """
+        query.CommandText = SnapshotColumns + "\n" + """
             WHERE workspace_id = $workspace AND repository_id = $repo AND id = $id;
             """;
         query.Parameters.AddWithValue("$workspace", workspaceId.ToString("D"));
@@ -81,7 +81,7 @@ public sealed partial class WorkspaceStore
     {
         using var connection = Open();
         using var query = connection.CreateCommand();
-        query.CommandText = SnapshotColumns + """
+        query.CommandText = SnapshotColumns + "\n" + """
             WHERE workspace_id = $workspace AND repository_id = $repo
             ORDER BY captured_at_unix_ms DESC, id DESC LIMIT $limit;
             """;
