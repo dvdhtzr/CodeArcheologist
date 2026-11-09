@@ -212,3 +212,45 @@ reclassify observed-syntax or provisional relationships as candidate.
 Gate B still requires full owner `scripts/check.ps1` GREEN, then five
 independent real MAF runs. The empirical 4/5 and 2/5 outcomes must not
 be relabeled as GREEN.
+
+## Gate B hardening — candidate diversity, tamper and usefulness
+
+The owner confirmed 5/5 accepted MAF results for a single captured
+Minimal API candidate, with the full local `scripts/check.ps1` GREEN.
+This is *repeatability for that candidate*, not full Gate B acceptance.
+
+Follow-up hardening on the same draft PR:
+
+- Model-free validator tests reject observed-syntax, provisional-local,
+  disallowed relation kinds, foreign endpoints, missing source references
+  and mismatched saved snapshot IDs. These tests deliberately mutate the
+  authoritative evidence while leaving model JSON otherwise valid.
+- The existing snapshot integration test corrupts saved bytes and now
+  asserts that the authenticated Gate B route returns HTTP 409 **before**
+  any provider call, in addition to rejecting the deterministic graph
+  and evidence-tool reads.
+- The existing real-MAF harness now supports optional
+  `http-endpoint-attribute` or `http-minimal-mapping` kind selection
+  and an excluded snapshot ID. It searches at most 100 saved snapshots;
+  when no eligible snapshot exists, it reports RED rather than fabricating
+  coverage. The first accepted investigation prints only **host-derived**
+  canonical summary, structural findings and fixed source limitations
+  for human review. Model prose and saved source bytes are not printed.
+
+Suggested verification after `scripts/check.ps1` GREEN:
+```powershell
+dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release --no-build -- --gate-b-run 5 http-endpoint-attribute
+dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj --configuration Release --no-build -- --gate-b-run 5 http-minimal-mapping --exclude-snapshot 2b58ba3a-8069-4a76-b129-fbc8ad684160
+```
+
+The second exercise requires another captured eligible snapshot; an
+absence is an evidence-coverage gap, *not* a model defect. The existing
+saved snapshot in the first 5/5 batch was
+`2b58ba3a-8069-4a76-b129-fbc8ad684160`; it is intentionally excluded
+by the second command.
+
+Provider disconnect/timeout/cancellation handling already exists in
+the Investigator, but simulated provider fault-injection is still
+**pending**; do not claim those paths are independently tested.
+Human inspection of canonical claims, scope and usefulness remains
+required before marking broader Gate B GREEN or merging the PR.
