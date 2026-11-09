@@ -51,6 +51,9 @@ public sealed record CSharpEvidenceGraphReport(
     string MinimalApiAnalyzerVersion,
     int MinimalApiCandidateCount,
     int NonliteralMinimalApiRouteCount,
+    string DiRegistrationAnalyzerVersion,
+    int DiRegistrationCandidateCount,
+    int DiUnresolvedShapeCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -71,9 +74,10 @@ public sealed class CSharpEvidenceGraphBuilder(
     CSharpInvocationSyntaxInspector invocationInspector,
     CSharpProvisionalInvocationBinder calleeBinder,
     CSharpHttpAttributeInspector httpInspector,
-    CSharpMinimalApiInspector minimalApiInspector)
+    CSharpMinimalApiInspector minimalApiInspector,
+    CSharpDiRegistrationInspector diInspector)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v7";
+    public const string Version = "csharp-snapshot-evidence-graph-v8";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -87,6 +91,7 @@ public sealed class CSharpEvidenceGraphBuilder(
         var callees = calleeBinder.Inspect(snapshot, cancellationToken);
         var http = httpInspector.Inspect(snapshot, cancellationToken);
         var minimal = minimalApiInspector.Inspect(snapshot, cancellationToken);
+        var di = diInspector.Inspect(snapshot, cancellationToken);
         var manifest = capture.ReadManifest(snapshot);
         if (context.WorkspaceId != snapshot.WorkspaceId ||
             context.RepositoryId != snapshot.RepositoryId ||
@@ -110,6 +115,11 @@ public sealed class CSharpEvidenceGraphBuilder(
             minimal.WorkspaceId != snapshot.WorkspaceId ||
             minimal.RepositoryId != snapshot.RepositoryId ||
             minimal.SnapshotId != snapshot.Id ||
+            di.WorkspaceId != snapshot.WorkspaceId ||
+            di.RepositoryId != snapshot.RepositoryId ||
+            di.SnapshotId != snapshot.Id ||
+            !string.Equals(di.FingerprintSha256,
+                snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(minimal.FingerprintSha256,
                 snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(http.FingerprintSha256,
@@ -515,6 +525,68 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "method and is NOT a registered or reachable HTTP endpoint."));
         }
 
+        // DI candidates are conventional *written member names*. A source
+        // AddScoped<TService,TImplementation>() does NOT prove the real DI
+        // extension method, service identity, lifetime or runtime instance.
+        // Preserve the independently observed invocation syntax and refuse
+        // to invent a resolved registration edge between type declarations.
+        foreach (var registration in di.Candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var invocationId = "invocation:" + registration.FilePath + ":" +
+                registration.FileSha256 + ":" + registration.SpanStart + ":" +
+                registration.SpanLength;
+            if (!invocationNodes.TryGetValue(invocationId, out var observed) ||
+                !nodes.TryGetValue(invocationId, out var callNode) ||
+                callNode.Kind != "invocation-site" ||
+                observed.FileSha256 != registration.FileSha256 ||
+                observed.Line != registration.Line ||
+                observed.Column != registration.Column)
+            {
+                throw new SnapshotCaptureException(
+                    "DI registration did not match an observed saved invocation site.", 409);
+            }
+
+            var registrationId = "di-registration:" + registration.FilePath +
+                ":" + registration.FileSha256 + ":" + registration.SpanStart +
+                ":" + registration.SpanLength;
+            var service = registration.ServiceTypeSyntax ?? "(unresolved)";
+            var implementation = registration.ImplementationTypeSyntax ??
+                "(unresolved)";
+            AddNode(new EvidenceGraphNode(
+                registrationId,
+                "di-registration-candidate",
+                registration.Lifetime + " " + registration.WrittenMemberName +
+                    " " + service + " → " + implementation,
+                registration.FilePath,
+                registration.FileSha256,
+                registration.Line,
+                registration.Column,
+                "Written receiver: " + registration.WrittenReceiver +
+                "; lifetime by member spelling: " + registration.Lifetime +
+                "; registration shape: " + registration.RegistrationShape +
+                "; factory/instance status: " + registration.FactoryStatus +
+                "; service type syntax: " + service +
+                "; implementation type syntax: " + implementation +
+                ". This is a source-syntax candidate, NOT a compiler-bound " +
+                "Microsoft DI registration or runtime-resolved service."));
+            AddEdge(new EvidenceGraphEdge(
+                "di-registration-invocation:" + registrationId,
+                registrationId,
+                invocationId,
+                "candidate-di-registration",
+                "candidate",
+                null,
+                registration.FilePath,
+                registration.FileSha256,
+                registration.Line,
+                registration.Column,
+                "Observed conventional DI member name " +
+                registration.WrittenMemberName + " at this exact invocation. " +
+                "Service/implementation text and lifetime are source-only " +
+                "hypotheses; runtime registration and resolution were NOT verified."));
+        }
+
         // Join the two independent reports by exact saved file/hash/span,
         // never by a method spelling. Missing or inconsistent occurrence
         // evidence invalidates the whole derived graph, not a subset.
@@ -645,6 +717,9 @@ public sealed class CSharpEvidenceGraphBuilder(
             minimal.AnalyzerVersion,
             minimal.CandidateCount,
             minimal.NonliteralRouteCount,
+            di.AnalyzerVersion,
+            di.CandidateCount,
+            di.UnresolvedShapeCount,
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -663,13 +738,15 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "Callee project context is an independent static .csproj membership cross-check: shared, disjoint and unknown statuses never establish real compilation, project references, or execution.",
                 "Candidate source/target/shared project evidence retains the saved .csproj SHA-256, inclusion basis and unresolved-rule count.",
                 "Missing, ambiguous and unsupported callee targets have no outgoing candidate-callee edge; no name-based fallback is permitted.",
-                "The earlier provisional type links cover only base-type clauses and explicit object creations; DI, data flow and runtime behavior remain unexamined.",
+                "The earlier provisional type links cover only base-type clauses and explicit object creations; data flow and runtime behavior remain unexamined.",
                 "HTTP endpoint attribute candidates recognize only simple conventional HTTP verb spellings on parsed methods; these are not resolved ASP.NET symbols, verified routes or runtime endpoints.",
                 "HTTP attribute, method-level and type-level route strings are reported separately, never composed, substituted or interpreted as effective URLs.",
                 "Controller attributes and Minimal API method spellings are distinct candidate inventories; neither provides verified ASP.NET symbols, registration or effective URL routes.",
                 "Minimal API MapGet/MapPost/MapPut/MapPatch/MapDelete invocations are mapped only to exact saved invocation syntax nodes, without claiming handler binding.",
                 "Same-named unrelated extension methods and conditional mappings may produce false-positive or incomplete Minimal API candidate sets.",
-                "MapGroup/MapMethods/MapFallback, route composition, middleware, authorization, DI and runtime configuration are not analyzed.",
+                "MapGroup/MapMethods/MapFallback, route composition, middleware, authorization and runtime configuration are not analyzed.",
+                "DI candidate registrations recognize conventional AddScoped/AddSingleton/AddTransient member spellings with source-only service/implementation syntax; they do not prove Microsoft DI binding or runtime lifetime.",
+                "DI factory/instance overloads, unresolved types, conditional overrides, registration order and real service resolution remain explicitly unknown.",
                 "Lambda, local function, accessor and initializer invocations are file-scoped to avoid claiming an incorrect containing method.",
                 "The nodes and links are derived entirely from verified saved snapshot file paths, hashes and source spans."
             });
