@@ -28,7 +28,7 @@ static string Payload(
     });
 
 static bool Accept(string response) =>
-    LocalMafInvestigation.TryParse(response, out _, out _);
+    LocalMafInvestigation.TryParseRoleResponse(response, out _, out _);
 
 var accepted = Payload();
 Check(Accept(accepted), "valid, bounded typed finding must parse");
