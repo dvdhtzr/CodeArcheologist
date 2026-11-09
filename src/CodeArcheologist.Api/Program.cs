@@ -14,6 +14,7 @@ builder.Services.AddSingleton<LocalAccessState>();
 builder.Services.AddSingleton<WorkspaceStore>();
 builder.Services.AddSingleton<SnapshotCaptureService>();
 builder.Services.AddSingleton<CSharpSyntaxInspector>();
+builder.Services.AddSingleton<CSharpInvocationSyntaxInspector>();
 builder.Services.AddSingleton<CSharpTypeRelationshipInspector>();
 builder.Services.AddSingleton<StaticCSharpProjectInspector>();
 builder.Services.AddSingleton<CSharpProjectLinkContextInspector>();
