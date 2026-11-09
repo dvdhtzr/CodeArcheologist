@@ -11,6 +11,13 @@ type GraphNode = {
   detail: string | null;
 };
 
+type ProjectEvidence = {
+  projectPath: string;
+  projectSha256: string;
+  inclusionBasis: string;
+  unresolvedRuleCount: number;
+};
+
 type GraphEdge = {
   id: string;
   fromId: string;
@@ -23,6 +30,9 @@ type GraphEdge = {
   line: number | null;
   column: number | null;
   explanation: string;
+  sourceProjectCandidates: ProjectEvidence[] | null;
+  targetProjectCandidates: ProjectEvidence[] | null;
+  sharedProjectCandidates: ProjectEvidence[] | null;
 };
 
 type EvidenceGraphReport = {
@@ -39,6 +49,9 @@ type EvidenceGraphReport = {
   calleeAnalyzerVersion: string;
   provisionalCalleeCount: number;
   unresolvedCalleeCount: number;
+  calleeSharedCandidateCount: number;
+  calleeDisjointCandidateCount: number;
+  calleeUnknownProjectCount: number;
   nodeCount: number;
   edgeCount: number;
   nodes: GraphNode[];
@@ -50,6 +63,27 @@ type AdjacentEvidence = { edge: GraphEdge; other: GraphNode; outgoing: boolean }
 
 function Short({ value, length = 24 }: { value: string; length?: number }) {
   return <>{value.length > length ? value.slice(0, length - 1) + '…' : value}</>;
+}
+
+function ProjectCandidateList({ label, candidates }: {
+  label: string;
+  candidates: ProjectEvidence[] | null;
+}) {
+  return (
+    <div className="workspace-note">
+      <strong>{label}:</strong>{' '}
+      {!candidates?.length
+        ? 'No static project candidates'
+        : candidates.map(candidate => (
+          <div key={candidate.projectPath}>
+            <code>{candidate.projectPath}</code>
+            {' '}· project SHA-256 {candidate.projectSha256.slice(0, 16)}…
+            {' '}· {candidate.inclusionBasis}
+            {' '}· {candidate.unresolvedRuleCount} unresolved rules
+          </div>
+        ))}
+    </div>
+  );
 }
 
 function EvidenceAddress({ path, hash, line, column }: {
@@ -150,13 +184,22 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
             {' '}{report.invocationCount} invocation sites
             {' '}({report.methodContainedInvocationCount} in direct method/constructor bodies) ·
             {' '}{report.provisionalCalleeCount} provisional callee candidates ·
-            {' '}{report.unresolvedCalleeCount} unresolved callees</p>
+            {' '}{report.unresolvedCalleeCount} unresolved callees
+          </p>
+          <p className="workspace-note">
+            Callee project context: {report.calleeSharedCandidateCount} shared candidates ·
+            {' '}{report.calleeDisjointCandidateCount} disjoint candidates ·
+            {' '}{report.calleeUnknownProjectCount} unknown memberships.
+            All candidate callees remain provisional-local.
+          </p>
           <p className="workspace-note">
             {report.analyzerVersion}. Every project membership is a candidate;
             every type reference is provisional or unresolved. Parsed declaration nodes
             are observed source syntax, not proven compiler symbols. Invocation sites
             may have a synthetic source-only candidate target, but none are project-verified
-            calls to named methods. This is not a verified dependency graph.
+            calls to named methods. Shared project candidates do not verify compilation,
+            and disjoint candidates do not prove the call is impossible.
+            This is not a verified dependency graph.
           </p>
           <div className="graph-controls">
             <label>
@@ -288,6 +331,22 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                           column={item.edge.column}
                         />
                         <span>{item.edge.explanation}</span>
+                        {item.edge.kind === 'candidate-callee' && (
+                          <div className="graph-project-evidence">
+                            <ProjectCandidateList
+                              label="Source project candidates"
+                              candidates={item.edge.sourceProjectCandidates}
+                            />
+                            <ProjectCandidateList
+                              label="Target project candidates"
+                              candidates={item.edge.targetProjectCandidates}
+                            />
+                            <ProjectCandidateList
+                              label="Shared project candidates"
+                              candidates={item.edge.sharedProjectCandidates}
+                            />
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
