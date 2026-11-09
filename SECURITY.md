@@ -10,6 +10,8 @@ To report a vulnerability, use the repository's **Report a vulnerability** / pri
 
 **Minimal API mapping candidate inventory** independently recognizes conventional written `MapGet/MapPost/MapPut/MapPatch/MapDelete` member invocations in SHA-256-verified saved source. It joins exact file/hash/span IDs to the existing invocation syntax report; a mismatch fails closed rather than inferring a handler or publishing a fake endpoint. This does not load metadata/assemblies, execute imported projects, evaluate MSBuild, infer runtime registrations or call external models. Same-named unrelated member methods can produce source-only false positives. Route literals are not effective URLs; nonliteral first arguments remain explicitly unresolved. See [ADR 0017](docs/decisions/0017-minimal-api-syntax-candidates.md).
 
+**DI registration candidate inventory** uses bounded Roslyn syntax inspection of SHA-256-verified saved C# snapshots only, never loading imported assemblies or evaluating MSBuild. Written `AddScoped`/`AddSingleton`/`AddTransient` names and generic or `typeof` type texts are **candidate source evidence**, not compiler-bound Microsoft DI calls or a runtime service graph. Exact saved path/hash/span joins to independently observed invocation sites fail closed on mismatch; factories, overloads and non-matching method names remain explicitly unresolved or outside coverage. See [ADR 0018](docs/decisions/0018-csharp-di-registration-candidates.md).
+
 ## Security commitments
 
 - Default analysis never executes imported source, MSBuild targets, dependency lifecycle scripts or tests.
