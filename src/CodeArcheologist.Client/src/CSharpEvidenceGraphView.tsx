@@ -36,6 +36,9 @@ type EvidenceGraphReport = {
   invocationAnalyzerVersion: string;
   invocationCount: number;
   methodContainedInvocationCount: number;
+  calleeAnalyzerVersion: string;
+  provisionalCalleeCount: number;
+  unresolvedCalleeCount: number;
   nodeCount: number;
   edgeCount: number;
   nodes: GraphNode[];
@@ -145,12 +148,15 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
           <p>{report.nodeCount} evidence nodes · {report.edgeCount} typed edges ·
             {' '}{report.syntaxDeclarationCount} syntax declarations ·
             {' '}{report.invocationCount} invocation sites
-            {' '}({report.methodContainedInvocationCount} in direct method/constructor bodies)</p>
+            {' '}({report.methodContainedInvocationCount} in direct method/constructor bodies) ·
+            {' '}{report.provisionalCalleeCount} provisional callee candidates ·
+            {' '}{report.unresolvedCalleeCount} unresolved callees</p>
           <p className="workspace-note">
             {report.analyzerVersion}. Every project membership is a candidate;
             every type reference is provisional or unresolved. Parsed declaration nodes
             are observed source syntax, not proven compiler symbols. Invocation sites
-            are written expressions, not proven calls to named methods. This is not a verified dependency graph.
+            may have a synthetic source-only candidate target, but none are project-verified
+            calls to named methods. This is not a verified dependency graph.
           </p>
           <div className="graph-controls">
             <label>
@@ -169,7 +175,7 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
                 <option value="csharp-file">C# source files</option>
                 <option value="target-declaration">Referenced declarations</option>
                 <option value="syntax-declaration">Parsed declarations (unreferenced)</option>
-                <option value="invocation-site">Invocation sites (callee unresolved)</option>
+                <option value="invocation-site">Invocation sites (candidate or unresolved)</option>
                 <option value="unresolved-use">Unresolved occurrences</option>
               </select>
             </label>

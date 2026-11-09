@@ -672,6 +672,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         ' }\n' +
         ' private void Helper(int input) {}\n' +
         ' private int HelperAndReturn() { return 3; }\n' +
+        ' private void Poke() {}\n' +
+        ' public void Dispatch() { Poke(); ArcheologistNoSuchMethodForFixture(); }\n' +
         '}\n');
 
       const created = await post(endpoint, session);
@@ -777,7 +779,12 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v3');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v4');
+      assert.equal(graph.calleeAnalyzerVersion, 'roslyn-synthetic-callees-v1');
+      assert.ok(graph.provisionalCalleeCount >= 1);
+      assert.ok(graph.unresolvedCalleeCount >= 1);
+      assert.equal(graph.provisionalCalleeCount + graph.unresolvedCalleeCount,
+        graph.invocationCount);
       assert.equal(graph.invocationAnalyzerVersion, 'roslyn-invocation-sites-v1');
       assert.ok(graph.invocationCount >= 6);
       assert.ok(graph.methodContainedInvocationCount >= 4);
@@ -835,11 +842,11 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.notEqual(overloads[0].id, overloads[1].id);
       const invocationSites = graph.nodes.filter(node =>
         node.kind === 'invocation-site' && node.filePath === parsedFilePath);
-      assert.equal(invocationSites.length, 6,
-        'two direct Helpers, a lambda HelperAndReturn, local Helper, lambda() and Local()');
+      assert.equal(invocationSites.length, 8,
+        'six original expressions plus resolved Poke() and unresolved missing method');
       assert.ok(invocationSites.every(node =>
         node.fileSha256 === parsedFileSha && node.line > 0 && node.column > 0 &&
-        node.detail.includes('target method not resolved')));
+        node.detail.includes('no project-verified callee')));
       const helperSites = invocationSites.filter(node => node.label === 'Helper(…)');
       assert.equal(helperSites.length, 3,
         'repeated written names are separate source spans, never a deduplicated callee');
@@ -880,10 +887,36 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal(siteEdges[0].evidencePath, parsedFilePath);
         assert.equal(siteEdges[0].evidenceSha256, parsedFileSha);
         assert.ok(siteEdges[0].line > 0 && siteEdges[0].column > 0);
-        assert.ok(!graph.edges.some(edge => edge.fromId === site.id),
-          'no unverified invocation-to-callee edges should be manufactured');
+        assert.ok(graph.edges.filter(edge => edge.fromId === site.id)
+          .every(edge => edge.kind === 'candidate-callee' &&
+            edge.status === 'provisional-local'),
+          'any outgoing invocation edges must be explicitly provisional');
       }
-      assert.ok(graph.limitations.some(text => text.includes('no callee resolution')));
+      const poke = syntaxOnly.find(node =>
+        node.label === 'Structure.Parent.Poke');
+      assert.ok(poke);
+      const pokeSite = invocationSites.find(node => node.label === 'Poke(…)');
+      assert.ok(pokeSite);
+      const pokeCandidate = graph.edges.find(edge =>
+        edge.fromId === pokeSite.id && edge.toId === poke.id &&
+        edge.kind === 'candidate-callee');
+      assert.ok(pokeCandidate,
+        'unique source method selected by reference-free Roslyn should be a candidate');
+      assert.equal(pokeCandidate.status, 'provisional-local');
+      assert.equal(pokeCandidate.evidencePath, parsedFilePath);
+      assert.equal(pokeCandidate.evidenceSha256, parsedFileSha);
+      assert.ok(pokeCandidate.line > 0 && pokeCandidate.column > 0);
+      assert.ok(pokeCandidate.explanation.includes('unverified'));
+      const missingSite = invocationSites.find(node =>
+        node.label === 'ArcheologistNoSuchMethodForFixture(…)');
+      assert.ok(missingSite);
+      assert.equal(graph.edges.filter(edge => edge.fromId === missingSite.id).length, 0,
+        'missing method must not create a target or name-matching fallback');
+      assert.ok(!graph.nodes.some(node =>
+        node.kind === 'syntax-declaration' &&
+        node.label.includes('ArcheologistNoSuchMethodForFixture')));
+      assert.ok(graph.limitations.some(text => text.includes('source-only')));
+
 
       assert.ok(overloads.every(node =>
         node.fileSha256 === parsedFileSha && node.line > 0 && node.column > 0 &&

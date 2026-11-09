@@ -47,3 +47,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 33. Invocation sites are captured syntax, NOT compiler-bound methods or runtime calls. Method/constructor containment is allowed only when that declaration is the nearest supported execution scope; never assign lambda/local-function/accessor invocations to an enclosing method by convenience.
 34. Do not add a written-name-based callee edge to the evidence graph. Every invocation site must have exact saved file/hash/span evidence and honor bounded fail-closed inspection limits.
+
+35. Callee edges from reference-free synthetic Roslyn models must be explicitly `provisional-local` and target an existing, SHA-256-verified saved source method declaration. Never promote them to real compiler, project, runtime or impact edges.
+36. Never resolve an invocation by matching names, argument counts or candidate symbols when unique Roslyn source binding fails. Join independent invocation observations by exact source file/hash/span; inconsistent or missing evidence must fail closed rather than silently drop edges.

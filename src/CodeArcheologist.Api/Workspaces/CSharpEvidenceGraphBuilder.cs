@@ -36,6 +36,9 @@ public sealed record CSharpEvidenceGraphReport(
     string InvocationAnalyzerVersion,
     int InvocationCount,
     int MethodContainedInvocationCount,
+    string CalleeAnalyzerVersion,
+    int ProvisionalCalleeCount,
+    int UnresolvedCalleeCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -53,9 +56,10 @@ public sealed class CSharpEvidenceGraphBuilder(
     StaticCSharpProjectInspector projectInspector,
     CSharpProjectLinkContextInspector linkContextInspector,
     CSharpSyntaxInspector syntaxInspector,
-    CSharpInvocationSyntaxInspector invocationInspector)
+    CSharpInvocationSyntaxInspector invocationInspector,
+    CSharpProvisionalInvocationBinder calleeBinder)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v3";
+    public const string Version = "csharp-snapshot-evidence-graph-v4";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -66,6 +70,7 @@ public sealed class CSharpEvidenceGraphBuilder(
         var projects = projectInspector.Inspect(snapshot, cancellationToken);
         var syntax = syntaxInspector.Inspect(snapshot, cancellationToken);
         var invocations = invocationInspector.Inspect(snapshot, cancellationToken);
+        var callees = calleeBinder.Inspect(snapshot, cancellationToken);
         var manifest = capture.ReadManifest(snapshot);
         if (context.WorkspaceId != snapshot.WorkspaceId ||
             context.RepositoryId != snapshot.RepositoryId ||
@@ -79,6 +84,12 @@ public sealed class CSharpEvidenceGraphBuilder(
             invocations.WorkspaceId != snapshot.WorkspaceId ||
             invocations.RepositoryId != snapshot.RepositoryId ||
             invocations.SnapshotId != snapshot.Id ||
+            callees.WorkspaceId != snapshot.WorkspaceId ||
+            callees.RepositoryId != snapshot.RepositoryId ||
+            callees.SnapshotId != snapshot.Id ||
+            callees.InvocationCount != invocations.InvocationCount ||
+            !string.Equals(callees.FingerprintSha256,
+                snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(invocations.FingerprintSha256,
                 snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(syntax.FingerprintSha256,
@@ -290,7 +301,7 @@ public sealed class CSharpEvidenceGraphBuilder(
                 invocation.Line,
                 invocation.Column,
                 invocation.ArgumentCount +
-                " written argument(s); target method not resolved"));
+                " written argument(s); no project-verified callee"));
 
             var ownerId = invocation.ContainingMethod is { } caller
                 ? "declaration:" + invocation.FilePath + ":" +
@@ -318,6 +329,75 @@ public sealed class CSharpEvidenceGraphBuilder(
                 ". No callee binding, runtime execution or project compilation verified."));
         }
 
+        // Join the two independent reports by exact saved file/hash/span,
+        // never by a method spelling. Missing or inconsistent occurrence
+        // evidence invalidates the whole derived graph, not a subset.
+        var observedSites = invocations.Invocations.ToDictionary(
+            item => "invocation:" + item.FilePath + ":" +
+                item.FileSha256 + ":" + item.SpanStart + ":" + item.SpanLength,
+            item => item,
+            StringComparer.Ordinal);
+        var matchedIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var binding in callees.Bindings)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var siteId = "invocation:" + binding.FilePath + ":" +
+                binding.FileSha256 + ":" + binding.SpanStart +
+                ":" + binding.SpanLength;
+            if (!observedSites.TryGetValue(siteId, out var observed) ||
+                !matchedIds.Add(siteId) ||
+                !nodes.TryGetValue(siteId, out var siteNode) ||
+                siteNode.Kind != "invocation-site" ||
+                observed.FileSha256 != binding.FileSha256)
+            {
+                throw new SnapshotCaptureException(
+                    "Synthetic call binding did not match an observed saved invocation site.", 409);
+            }
+
+            if (binding.Target is not { } target)
+            {
+                if (binding.Status != "unresolved")
+                    throw new SnapshotCaptureException(
+                        "Unresolved callee evidence has an invalid status.", 409);
+                continue; // No invented callee node or target edge.
+            }
+
+            if (binding.Status != "provisional-local")
+                throw new SnapshotCaptureException(
+                    "Candidate callee evidence has an invalid status.", 409);
+
+            var targetId = "declaration:" + target.FilePath + ":" +
+                target.FileSha256 + ":" + target.SpanStart +
+                ":" + target.SpanLength;
+            if (!nodes.TryGetValue(targetId, out var targetNode) ||
+                (targetNode.Kind != "syntax-declaration" &&
+                    targetNode.Kind != "target-declaration") ||
+                targetNode.FileSha256 != target.FileSha256 ||
+                targetNode.FilePath != target.FilePath)
+            {
+                throw new SnapshotCaptureException(
+                    "Synthetic callee target was not present in saved syntax declarations.", 409);
+            }
+
+            AddEdge(new EvidenceGraphEdge(
+                "provisional-callee:" + siteId,
+                siteId, targetId,
+                "candidate-callee", "provisional-local",
+                null,
+                binding.FilePath,
+                binding.FileSha256,
+                observed.Line,
+                observed.Column,
+                binding.Reason));
+        }
+
+        if (matchedIds.Count != observedSites.Count)
+        {
+            throw new SnapshotCaptureException(
+                "Synthetic callee report omitted an observed invocation site.", 409);
+        }
+
         return new CSharpEvidenceGraphReport(
             snapshot.WorkspaceId,
             snapshot.RepositoryId,
@@ -331,6 +411,9 @@ public sealed class CSharpEvidenceGraphBuilder(
             invocations.AnalyzerVersion,
             invocations.InvocationCount,
             invocations.MethodContainedCount,
+            callees.AnalyzerVersion,
+            callees.ProvisionalCount,
+            callees.UnresolvedCount,
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -344,7 +427,9 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "Existing target-declaration nodes are reused when their saved file hash and source span match a syntax declaration.",
                 "Preprocessor conditions, partial types, generated code and overloads may prevent a complete semantic symbol inventory.",
                 "An unresolved-use node records the written source occurrence and never fabricates a declaration or external dependency.",
-                "Invocation syntax sites are observed and attributed to direct method/constructor syntax where possible; no callee resolution or actual call graph is established.",
+                "Invocation syntax sites are observed and attributed to direct method/constructor syntax where possible; only provisional source-local callee bindings are proposed.",
+                "A candidate-callee edge is a source-only reference-free synthetic Roslyn hypothesis, not a project-verified or runtime method-to-method call.",
+                "Missing, ambiguous and unsupported callee targets have no outgoing candidate-callee edge; no name-based fallback is permitted.",
                 "The earlier provisional type links cover only base-type clauses and explicit object creations; DI, data flow and runtime behavior remain unexamined.",
                 "Lambda, local function, accessor and initializer invocations are file-scoped to avoid claiming an incorrect containing method.",
                 "The nodes and links are derived entirely from verified saved snapshot file paths, hashes and source spans."
