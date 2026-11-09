@@ -166,6 +166,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '/evidence-tools/entry-point?entryPointId=anything')).status, 401);
       assert.equal((await post(endpoint + '/' + randomUUID() +
         '/evidence-tools/check-citations', null, {})).status, 401);
+      assert.equal((await post(endpoint + '/' + randomUUID() +
+        '/investigations/gate-b', null, {})).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -1041,6 +1043,22 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
           '/evidence-tools/entry-point?entryPointId=' +
           encodeURIComponent(httpEntry.id), session)).status, 404);
 
+        const gateB = endpoint + '/' + snapshot.id + '/investigations/gate-b';
+        assert.equal((await post(gateB, session,
+          { entryPointId: 'invented:never-captured' })).status, 404,
+          'invalid entry point must be rejected before Ollama is contacted');
+        assert.equal((await post(gateB, session,
+          { entryPointId: diEntry.id })).status, 404,
+          'DI-only nodes must never become agent entry points');
+        assert.equal((await post(gateB, session,
+          { entryPointId: httpEntry.id }, { csrf: null })).status, 403);
+        assert.equal((await post(gateB, session,
+          { entryPointId: httpEntry.id },
+          { origin: 'https://attacker.example' })).status, 403);
+        assert.equal((await post(endpoint + '/' + randomUUID() +
+          '/investigations/gate-b', session,
+          { entryPointId: httpEntry.id })).status, 404);
+
         const httpUrl = toolsBase + '/entry-point?entryPointId=' +
           encodeURIComponent(httpEntry.id);
         const httpResponse = await get(httpUrl, session);
@@ -1516,6 +1534,11 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + snapshot.id +
           '/evidence-tools/entry-point?entryPointId=' +
           encodeURIComponent(httpNodes[0].id), session)).status, 409);
+        const gateBTamper = await post(endpoint + '/' + snapshot.id +
+          '/investigations/gate-b', session,
+          { entryPointId: httpNodes[0].id });
+        assert.equal(gateBTamper.status, 409,
+          'tampered saved snapshot must fail before any local MAF invocation');
       } finally {
         await writeFile(savedProject, original);
       }

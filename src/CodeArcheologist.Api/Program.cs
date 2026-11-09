@@ -25,6 +25,7 @@ builder.Services.AddSingleton<StaticCSharpProjectInspector>();
 builder.Services.AddSingleton<CSharpProjectLinkContextInspector>();
 builder.Services.AddSingleton<CSharpEvidenceGraphBuilder>();
 builder.Services.AddSingleton<SnapshotEvidenceTools>();
+builder.Services.AddSingleton<GateBInvestigator>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -450,6 +451,36 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
     }
 }).RequireAuthorization();
 
+// Gate B: explicit request for a single real local MAF investigator. The
+// application resolves and verifies the exact saved snapshot before model use.
+// The request has no model-supplied path, command, tool, or arbitrary prompt.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/gate-b",
+    async (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+        GateBInvestigationRequest request, WorkspaceStore store,
+        GateBInvestigator investigator, CancellationToken cancellationToken) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+    try
+    {
+        var result = await investigator.InvestigateAsync(
+            snapshot, request.EntryPointId, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = error.Message }, statusCode: error.StatusCode);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved investigator evidence could not be verified." });
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Json(new { error = "Saved investigator evidence is not accessible." }, statusCode: 422);
+    }
+}).RequireAuthorization();
+
 app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots",
     async (Guid workspaceId, Guid repositoryId, HttpContext context,
         WorkspaceStore store, SnapshotCaptureService service, CancellationToken cancellationToken) =>
@@ -489,4 +520,5 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
 app.Run();
 
 public sealed record LoginRequest(string? Code);
+public sealed record GateBInvestigationRequest(string? EntryPointId);
 public partial class Program { }
