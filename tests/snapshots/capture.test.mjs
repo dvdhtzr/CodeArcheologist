@@ -1177,6 +1177,15 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.ok(minimal.unknowns.some(item => item.includes('runtime handler')));
         assert.ok(minimal.references.every(ref =>
           graph.nodes.some(node => node.id === ref.id)));
+        const foreign = await (await post(checkEndpoint, session, {
+          ...goodClaim,
+          claims: [{ claimKind: 'candidate-relationship', statement:
+            'A real but different entry-point ID must not authorize a citation.',
+            evidenceIds: [minimalEntry.id] }],
+        })).json();
+        assert.equal(foreign.outcome, 'reference-checks-rejected');
+        assert.equal(foreign.claims[0].outcome, 'invalid-citation-reference',
+          'even an actual graph ID is invalid outside the selected tool package');
       }
 
 
