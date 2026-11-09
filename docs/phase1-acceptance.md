@@ -302,7 +302,8 @@ After owner GREEN and squash merge, revisit [issue #21](https://github.com/dvdht
 - [ ] Each role actually invokes its own read-only, parameterless `ReadSnapshotEvidence` tool within the bounded tool budget. No arbitrary live files, shell, source execution or external URL access.
 - [ ] Browser **Investigate using real local MAF + Ollama** is discoverable on both controller-style and Minimal API source candidate lists and shows live execution status, tool calls, role responses and typed citation outcomes.
 - [ ] Two independently observed role responses and application-owned citation reference checks must pass before a finding appears. Inconclusive reports never masquerade as success.
-- [ ] Negative cases: missing Ollama provider, model output invalid/non-JSON or fabricated IDs, model skips tool, overlong response, timeout/cancellation and HTTP failures have explicit transport/workflow/quality categories.
+- [ ] Model-free local `tests/maf-protocol/MafProtocolChecks.csproj` runs under `scripts/check.ps1` and `check.sh` and rejects malformed/oversized model JSON, missing unknowns and duplicate citation IDs without contacting Ollama.
+- [ ] Negative cases: missing Ollama provider, model output invalid/non-JSON or fabricated IDs, model skips tool, overlong response, timeout/cancellation and HTTP failures have explicit transport/workflow/quality categories. Real provider failures require separate browser smoke evidence; the build suite must never depend on an Ollama server.
 - [ ] Unknowns accurately state source-only route/callee candidates, unsupported dynamic/runtime behavior, unverified narrative semantics and missing durable checkpoints.
 - [ ] Browser session accepts one bounded real local run with traceable role and evidence-tool diagnostics. A failure remains RED/inconclusive and requires improvement before owner approval; no guessed successes.
 
