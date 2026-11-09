@@ -53,3 +53,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 37. Qualifying a provisional method callee with source/target .csproj membership **never** upgrades its original `provisional-local` status. Shared/disjoint/unknown static project candidates are evidence, not verified compiler membership, real project references or runtime behavior.
 38. When enriching call edges, reuse the existing hash-verified project inspection report and preserve exact .csproj SHA-256, inclusion basis and unresolved-rule count; never fabricate project candidates for unresolved callees.
+
+39. Direct change-impact views may reverse existing `candidate-callee` / `provisional-local` edges by exact graph node ID and attach source-observed caller containment. Never construct method callers from written names, similar labels, project heuristics or external text.
+40. One-hop candidate review is NOT a verified call graph, a breaking-change risk estimate or transitive impact propagation. Unresolved invocation targets and empty inbound candidate sets must remain explicitly unknown; show bounded counts and SHA-256 anchors without implying completeness.

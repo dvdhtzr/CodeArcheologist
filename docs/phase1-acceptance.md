@@ -215,6 +215,24 @@ This enriches existing synthetic call edges with **unevaluated static
 project evidence**; it does not load projects, resolve real compiler
 symbols or certify runtime dependencies.
 
+## PR #17 — first one-hop C# change-impact explorer (pending owner verification)
+
+- [ ] Windows .NET 10 API, React/TypeScript/Vite build and local HTTP/security integration suites GREEN.
+- [ ] **Explore direct change-impact candidates** panel is discoverable in the existing graph explorer and starts with a candidate-backed method when one exists.
+- [ ] Method picker supports substring search by name or saved path, displays distinct source-line identities for overloads and warns when its 25-entry display limit is reached.
+- [ ] A selected method shows only direct incoming `candidate-callee` / `provisional-local` invocation sites to that exact saved declaration ID.
+- [ ] Every candidate result preserves the invocation's observed source location/SHA-256 and `observed-syntax` method/constructor or file containment.
+- [ ] An indirect `Run -> Call -> Ping` chain does not falsely include `Run` as a direct caller of `Ping`.
+- [ ] Project context, source/target/shared candidate hashes and unresolved-rule warnings remain visible without confidence promotion.
+- [ ] Zero inbound candidates displays **not proof of safety**; unresolved invocation sites are reported as unallocated, not silently treated as no impact.
+- [ ] UI navigation from candidate finder to the target method's one-hop review and from results into the full graph works.
+- [ ] Existing exact snapshot authorization, tamper 409, unsafe XML 422, size 413 and restart/read-only source invariants remain GREEN.
+- [ ] Owner browser acceptance confirms honest evidence classifications before PR is made ready.
+
+This is an **on-demand direct candidate review checklist**. No
+new persistence, analyzer, real call graph, transitive inference or
+tested breakage prediction is part of PR #17.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.

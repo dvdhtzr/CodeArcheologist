@@ -638,7 +638,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         '<Exec Command="DO_NOT_RUN"/></Target></Project>');
       await writeFile(join(source, 'ProjectOne', 'Main.cs'),
         'namespace One; public class Main : global::Shared.Contract { ' +
-         'public void Call() { global::Shared.Contract.Ping(); } }\n');
+         'public void Call() { global::Shared.Contract.Ping(); } ' +
+         'public void Run() { Call(); } }\n');
       await writeFile(join(source, 'ProjectOne', 'Skip.cs'),
         'namespace One; public class Skip {}\n');
       await writeFile(join(source, 'Shared', 'Shared.cs'),
@@ -935,6 +936,60 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         edge.evidencePath === 'ProjectTwo/Direct.cs');
       assert.ok(sharedCall && disjointCall,
         'both source projects have an observed synthetic candidate for Shared.Contract.Ping');
+      // Direct-impact review reverses ONLY existing candidate-callee edges,
+      // then follows each call site to its observed enclosing method/file.
+      // Run() -> Call() -> Ping() must NOT imply Run() is a direct Ping caller.
+      assert.equal(projectQualified.length, 2,
+        'Ping has two observed direct candidate call sites, not transitive callers');
+      const pingTargetId = sharedCall.toId;
+      assert.equal(disjointCall.toId, pingTargetId);
+      const directPingCandidates = graph.edges.filter(edge =>
+        edge.kind === 'candidate-callee' && edge.toId === pingTargetId);
+      assert.equal(directPingCandidates.length, 2);
+      const pingCallerPaths = [];
+      for (const edge of directPingCandidates) {
+        const site = graph.nodes.find(node =>
+          node.id === edge.fromId && node.kind === 'invocation-site');
+        assert.ok(site, 'a direct impact candidate must originate at a saved invocation');
+        const observedContainment = graph.edges.find(candidate =>
+          candidate.kind === 'contains-invocation' &&
+          candidate.toId === site.id && candidate.status === 'observed-syntax');
+        assert.ok(observedContainment,
+          'the saved callsite must have independently observed source containment');
+        const owner = graph.nodes.find(node =>
+          node.id === observedContainment.fromId);
+        assert.ok(owner && owner.kind === 'syntax-declaration');
+        assert.equal(owner.label.endsWith('.Call'), true);
+        assert.equal(owner.filePath, edge.evidencePath);
+        assert.equal(edge.status, 'provisional-local');
+        assert.equal(edge.evidenceSha256, site.fileSha256);
+        assert.ok(edge.line > 0 && edge.column > 0);
+        assert.ok(owner.line > 0 && owner.fileSha256);
+        pingCallerPaths.push(owner.filePath);
+      }
+      assert.deepEqual(pingCallerPaths.sort(), [
+        'ProjectOne/Main.cs', 'ProjectTwo/Direct.cs']);
+      const run = graph.nodes.find(node =>
+        node.kind === 'syntax-declaration' &&
+        node.filePath === 'ProjectOne/Main.cs' &&
+        node.label === 'One.Main.Run');
+      const oneCall = graph.nodes.find(node =>
+        node.kind === 'syntax-declaration' &&
+        node.filePath === 'ProjectOne/Main.cs' &&
+        node.label === 'One.Main.Call');
+      assert.ok(run && oneCall);
+      const runToCall = graph.edges.find(edge =>
+        edge.kind === 'candidate-callee' && edge.toId === oneCall.id &&
+        edge.evidencePath === 'ProjectOne/Main.cs');
+      assert.ok(runToCall, 'nested Run -> Call candidate exists separately');
+      assert.ok(graph.edges.some(edge =>
+        edge.kind === 'contains-invocation' &&
+        edge.fromId === run.id && edge.toId === runToCall.fromId));
+      assert.ok(!graph.edges.some(edge =>
+        edge.kind === 'candidate-callee' && edge.fromId === runToCall.fromId &&
+        edge.toId === pingTargetId),
+        'reverse Ping impact must not traverse the Run -> Call link');
+
       assert.equal(sharedCall.status, 'provisional-local');
       assert.equal(sharedCall.projectContextStatus, 'shared-project-candidate');
       assert.equal(sharedCall.sourceProjectCandidates.length, 1);
