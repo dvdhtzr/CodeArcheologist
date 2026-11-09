@@ -185,3 +185,30 @@ only after GREEN, run `--gate-b-run 5` to test five independent *real
 MAF* investigations. Any remaining inconclusive diagnostic must be
 investigated, not silently repaired or retried. Gate B remains RED until
 these checks and owner acceptance.
+
+## Gate B candidate-status rejection investigation
+
+After explicitly disabling thinking through MAF, one owner real-model
+batch returned 4/5 structurally accepted; the next returned 2/5. Three
+failures were `relationship-status-not-candidate`. The original
+`SnapshotEvidenceTools.ReadEntryPoint` correctly returns multiple
+source statuses (candidate HTTP edges, observed-syntax containment,
+and sometimes provisional callees). The Gate B acceptance contract,
+however, intentionally permits only two candidate HTTP edge kinds.
+
+The agent-facing view now includes a separately named
+`eligibleRelations` array restricted by the host to scoped candidate
+`annotates-method` and `candidate-http-mapping` edges. Source
+references, excerpt, unknowns and limitations remain available as context.
+The authoritative original evidence package is **not filtered** for
+host validation: all scope/status/kind/endpoint checks and
+`CheckCitations` remain unchanged. The same projection is used by the
+native diagnostic, keeping it comparable to the MAF path. Model-free
+tests assert that observed-syntax/provisional relations are not selectable
+and that references are preserved.
+
+This is an intervention to reduce ambiguity, not an approval to
+reclassify observed-syntax or provisional relationships as candidate.
+Gate B still requires full owner `scripts/check.ps1` GREEN, then five
+independent real MAF runs. The empirical 4/5 and 2/5 outcomes must not
+be relabeled as GREEN.
