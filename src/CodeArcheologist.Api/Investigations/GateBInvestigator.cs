@@ -154,17 +154,12 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
                 cancellationToken: timeLimit.Token);
             responseText = response.Text ?? "";
         }
-        catch (OperationCanceledException)
-        {
-            return new("inconclusive", cancellationToken.IsCancellationRequested
-                ? "cancelled" : "provider-timeout", null,
-                "not-checked", evidence.ContractVersion);
-        }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            // Never expose provider output or imported source in diagnostic text.
-            return new("inconclusive", "provider-or-adapter-" + error.GetType().Name,
-                null, "not-checked", evidence.ContractVersion);
+            // Never expose provider output, imported source, URLs or exception
+            // messages in a diagnostic. Fail closed and do not retry.
+            return ClassifyProviderFailure(error, cancellationToken.IsCancellationRequested,
+                evidence.ContractVersion);
         }
 
         var validation = ValidateModelText(responseText, evidence);
@@ -280,6 +275,26 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
         {
             return new("native-" + ex.GetType().Name, 0, 0, "", 0, 0, 0);
         }
+    }
+
+    /// <summary>
+    /// Pure, model-free classification of provider failures. Used by the
+    /// real MAF invocation and negative tests; never exposes exception text.
+    /// A failure must not become an accepted structural claim.
+    /// </summary>
+    public static GateBInvestigation ClassifyProviderFailure(Exception error,
+        bool callerCancelled, string evidenceContractVersion)
+    {
+        var diagnostic = error switch
+        {
+            OperationCanceledException when callerCancelled => "cancelled",
+            OperationCanceledException => "provider-timeout",
+            HttpRequestException => "provider-unavailable",
+            JsonException => "provider-invalid-response",
+            _ => "provider-or-adapter-failure"
+        };
+        return new("inconclusive", diagnostic, null, "not-checked",
+            evidenceContractVersion);
     }
 
     /// <summary>Resolve handles against the complete authoritative package.</summary>
