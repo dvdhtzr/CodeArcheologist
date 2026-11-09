@@ -98,8 +98,17 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
                 name: "FunctionalInvestigator",
                 instructions: Instructions);
             var prompt = BuildPrompt(evidenceJson);
+            // OllamaSharp 5.5.2 maps ReasoningEffort.None to Ollama's
+            // top-level "think": false. MAF still owns the agent invocation.
+            var runOptions = new ChatClientAgentRunOptions(new ChatOptions
+            {
+                Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None }
+            })
+            {
+                ResponseFormat = format
+            };
             var response = await agent.RunAsync(prompt,
-                options: new AgentRunOptions { ResponseFormat = format },
+                options: runOptions,
                 cancellationToken: timeLimit.Token);
             responseText = response.Text ?? "";
         }
