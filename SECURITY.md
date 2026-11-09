@@ -7,7 +7,7 @@ To report a vulnerability, use the repository's **Report a vulnerability** / pri
 ## Security commitments
 
 - Default analysis never executes imported source, MSBuild targets, dependency lifecycle scripts or tests.
-- Localhost binding alone is not sufficient authorization. This development shell requires console pairing, authenticated session cookies, explicit Host/Origin checks and CSRF headers for unsafe methods. Local runtime checks for pairing passed in PR #2. PR #3 adds only authenticated SQLite workspace **metadata** creation, with CSRF and idempotency checks; no repository-import or agent-command routes are present. This is not proof of a fully hardened browser security surface.
+- Localhost binding alone is not sufficient authorization. This development shell requires console pairing, authenticated session cookies, explicit Host/Origin checks and CSRF headers for unsafe methods. Local runtime checks for pairing passed in PR #2. Later milestones add authenticated local repository registration and explicit read-only snapshot capture. Registered sources are not executed, and file inventory classification reads only previously captured and hash-verified snapshot data; agent-command routes are still absent. This is not proof of a fully hardened browser security surface.
 - Plugins are executable code; no assumed sandbox guarantee from in-process loading or process separation alone.
 - No external LLM calls or source disclosure by default; no raw credentials in repository evidence or logs.
 - Evidence provenance, safe snapshots, reversible vault reconciliation and user permissions are independent hard gates.
