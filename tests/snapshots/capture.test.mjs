@@ -156,6 +156,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
     await t.test('authenticated and CSRF-protected endpoints', async () => {
       assert.equal((await get(endpoint)).status, 401);
       assert.equal((await post(endpoint, null)).status, 401);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/inventory')).status, 401);
       assert.equal((await post(endpoint, session, undefined,
         { csrf: null })).status, 403);
       assert.equal((await post(endpoint, session, undefined,
@@ -223,6 +224,44 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       t.diagnostic('Dependent snapshot tests skipped because the initial capture failed.');
       return;
     }
+
+    await t.test('filename inventory is deterministic and evidence-scoped', async () => {
+      const url = endpoint + '/' + firstId + '/inventory';
+      const response = await get(url, session);
+      assert.equal(response.status, 200,
+        'inventory response: ' + (response.status === 200 ? 'OK' : await response.clone().text()));
+      const inventory = await response.json();
+
+      assert.equal(inventory.workspaceId, wid);
+      assert.equal(inventory.repositoryId, rid);
+      assert.equal(inventory.snapshotId, firstId);
+      assert.equal(inventory.fingerprintSha256, firstFingerprint);
+      assert.equal(inventory.analyzerVersion, 'manifest-inventory-v1');
+      assert.equal(inventory.detectionMethod, 'path-and-extension-only');
+      assert.equal(inventory.includedFileCount, 3);
+      assert.equal(inventory.excludedEntryCount, originalManifest.exclusions.length);
+      assert.deepEqual(inventory.files.map(file => file.path),
+        ['Demo.csproj', 'README.md', 'src/Example.cs']);
+      assert.deepEqual(inventory.files.map(file => file.role),
+        ['project-manifest', 'documentation', 'source-code']);
+      assert.deepEqual(inventory.files.map(file => file.language),
+        ['XML', 'Markdown', 'C#']);
+      assert.deepEqual(inventory.files.map(file => file.sha256),
+        originalManifest.files.map(file => file.sha256));
+      assert.ok(inventory.languages.some(group =>
+        group.name === 'C#' && group.fileCount === 1));
+      assert.ok(inventory.roles.some(group =>
+        group.name === 'source-code' && group.fileCount === 1));
+      assert.ok(inventory.exclusions.some(entry => entry.path === '.env'));
+      assert.ok(inventory.limitations.some(text => text.includes('filenames only')));
+      assert.equal((await get(url, session)).status, 200);
+
+      const otherScope = '/api/v1/workspaces/' + randomUUID() +
+        '/repositories/' + rid + '/snapshots/' + firstId + '/inventory';
+      assert.equal((await get(otherScope, session)).status, 404);
+      assert.equal((await get(endpoint + '/' + randomUUID() + '/inventory',
+        session)).status, 404);
+    });
 
     await t.test('identical request retry is idempotent, no duplicate snapshot', async () => {
       const retry = await post(endpoint, session, undefined, { key: firstKey });
@@ -296,6 +335,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       try {
         const rejected = await get(endpoint + '/' + firstId + '/manifest', session);
         assert.equal(rejected.status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -310,6 +350,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       try {
         const rejected = await get(endpoint + '/' + firstId + '/manifest', session);
         assert.equal(rejected.status, 409);
+        assert.equal((await get(endpoint + '/' + firstId + '/inventory', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -341,6 +382,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(manifest.status, 200);
       const first = await manifest.json();
       assert.deepEqual(first.files, originalManifest.files);
+      const inventory = await get(endpoint + '/' + firstId + '/inventory', session);
+      assert.equal(inventory.status, 200);
+      assert.equal((await inventory.json()).fingerprintSha256, firstFingerprint);
 
       // Same key must resolve the same completed capture after restart.
       const retry = await post(endpoint, session, undefined, { key: secondKey });
