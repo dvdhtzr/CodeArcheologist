@@ -160,8 +160,8 @@ public sealed class CSharpTypeRelationshipInspector(SnapshotCaptureService captu
                                 syntax.Span, cancellationToken);
                             target = new CSharpTypeTarget(
                                 named.Name,
-                                named.ContainingNamespace.IsGlobalNamespace
-                                    ? "" : named.ContainingNamespace.ToDisplayString(),
+                                named.ContainingNamespace is { IsGlobalNamespace: false } ns
+                                    ? ns.ToDisplayString() : "",
                                 targetPath,
                                 targetFile.Sha256,
                                 targetLine.StartLinePosition.Line + 1,
