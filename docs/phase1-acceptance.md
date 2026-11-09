@@ -134,6 +134,23 @@ This milestone does not authorize project evaluation, resolved dependency graphs
 
 No project evaluation, resolved dependency graph, method-call graph or automatic confidence promotion is implemented.
 
+## PR #12 — navigable C# snapshot evidence graph (pending owner-run verification)
+
+- [ ] Existing .NET 10 API, TypeScript/Vite build and localhost HTTP suites GREEN on Windows.
+- [ ] Graph endpoint is authenticated, correctly scope-restricted and tied to a saved snapshot fingerprint.
+- [ ] Graph includes project, source, observed candidate declaration and unresolved-occurrence nodes.
+- [ ] Every directed edge joins existing nodes and preserves a captured project or source SHA-256.
+- [ ] Compile membership remains candidate-only and type-use edges remain provisional-local or unresolved.
+- [ ] No unresolved type spelling becomes a fabricated target declaration.
+- [ ] Node/edge IDs, order and provenance are deterministic across repeated calls and restart.
+- [ ] Live tree changes cannot modify saved graph results; saved-byte/manifest tampering returns 409.
+- [ ] Unsafe project DTD returns 422 and upstream file/byte/usage limits fail 413 with no partial graph.
+- [ ] Browser graph search, node selection, bounded neighborhood view and one-hop navigation work.
+- [ ] Browser labels graph limitations and never claims verified compiler dependencies.
+
+This is an in-memory on-demand evidence graph, **not** durable typed graph persistence,
+real solution compilation, call graph or proof of architectural behavior.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
