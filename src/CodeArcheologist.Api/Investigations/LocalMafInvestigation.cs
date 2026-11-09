@@ -148,8 +148,8 @@ public sealed class LocalMafInvestigation(
             LocalMafRoleResult? first = null;
             LocalMafRoleResult? second = null;
             if (transport == "succeeded" && textByExecutor.Count == 2 &&
-                toolCalls.Any(call => call == "FunctionalInvestigator") &&
-                toolCalls.Any(call => call == "SkepticReviewer"))
+                toolCalls.Count(call => call == "FunctionalInvestigator") is >= 1 and <= 4 &&
+                toolCalls.Count(call => call == "SkepticReviewer") is >= 1 and <= 4)
             {
                 // Role names are MAF executor names; never assign two arbitrary
                 // model outputs to fictional roles.
@@ -161,6 +161,18 @@ public sealed class LocalMafInvestigation(
                     second = CheckRole("SkepticReviewer", review, snapshot,
                         evidence.EntryPointId);
                 }
+            }
+            if (transport == "succeeded")
+            {
+                diagnostics.Add("Complete role responses: " + textByExecutor.Count +
+                    "; investigator evidence-tool calls: " +
+                    toolCalls.Count(call => call == "FunctionalInvestigator") +
+                    "; reviewer evidence-tool calls: " +
+                    toolCalls.Count(call => call == "SkepticReviewer") + ".");
+                if (first is not null)
+                    diagnostics.Add("Investigator citation gate: " + first.CitationOutcome + ".");
+                if (second is not null)
+                    diagnostics.Add("Reviewer citation gate: " + second.CitationOutcome + ".");
             }
             var accepted = first is not null && second is not null &&
                 first.CitationOutcome == "all-reference-checks-passed" &&
@@ -288,6 +300,8 @@ public sealed class LocalMafInvestigation(
         [Description("Read exact saved-snapshot bounded source evidence. No arguments, files, commands, or network.")]
         public string ReadSnapshotEvidence()
         {
+            if (calls.Count(call => call == ownedRole) >= 4)
+                return "{\"error\":\"role tool-call budget exhausted\"}";
             calls.Add(ownedRole);
             return JsonSerializer.Serialize(new
             {
