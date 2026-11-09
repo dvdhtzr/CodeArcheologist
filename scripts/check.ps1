@@ -12,6 +12,10 @@ if (Get-NetTCPConnection -LocalPort 5127 -State Listen -ErrorAction SilentlyCont
 }
 & dotnet build $apiProject --configuration Release
 if ($LASTEXITCODE -ne 0) { throw 'API build failed.' }
+# Pure typed MAF protocol regression tests; never call an LLM or Ollama.
+$mafTests = Join-Path $root 'tests/maf-protocol/MafProtocolChecks.csproj'
+& dotnet run --project $mafTests --configuration Release
+if ($LASTEXITCODE -ne 0) { throw 'MAF protocol tests failed.' }
 & npm ci --prefix $client --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation (npm ci) failed.' }
 & npm --prefix $client run typecheck
@@ -26,4 +30,4 @@ if ($LASTEXITCODE -ne 0) { throw 'SQLite workspace integration tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Local repository registration integration tests failed.' }
 & node --test (Join-Path $root 'tests/snapshots/capture.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Read-only snapshot integration tests failed.' }
-Write-Host 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
+Write-Host 'GREEN: Local build, MAF protocol, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
