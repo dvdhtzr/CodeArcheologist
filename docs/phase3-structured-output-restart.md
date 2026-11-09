@@ -152,3 +152,36 @@ source, run repository code, or require manually supplying IDs.
 
 This is an initial real-model Gate B reliability exercise, not full semantic
 verification or evidence of C# runtime behavior. Stop on RED and diagnose.
+
+## Gate B thinking-budget investigation (November 9, 2026)
+
+The first full real-MAF Gate B experiment returned `empty-model-response`
+on all five attempts, while the rest of `scripts/check.ps1` passed.
+A bounded native Ollama `/api/chat` diagnostic using the actual saved
+evidence package and exact Gate B schema showed:
+
+| Native diagnostic | Default thinking | Explicit `think: false` |
+| --- | ---: | ---: |
+| Final content characters | 0 | 1674 |
+| Thinking characters | 8698 | 0 |
+| Generation tokens | 2025 | 670 |
+| Done reason | `length` | `stop` |
+
+This isolates a real output-budget failure: reasoning used the generation
+budget before a final answer could be produced. It does not prove that
+the returned JSON passes Gate B's structural/citation validator.
+
+OllamaSharp **5.5.2** source `MicrosoftAi/AbstractionMapper.cs`
+was checked: `ChatOptions.Reasoning.Effort = ReasoningEffort.None`
+maps to native `request.Think = false`. Microsoft Agent Framework
+supports `ChatClientAgentRunOptions(ChatOptions)`. The production
+Investigator now requests this explicit setting through MAF, retains
+`AgentRunOptions.ResponseFormat`, and preserves every existing evidence
+validation step. No model, schema, trust-boundary, agent or architecture
+change was made.
+
+**Next gate:** owner runs `scripts/check.ps1` on the new branch head;
+only after GREEN, run `--gate-b-run 5` to test five independent *real
+MAF* investigations. Any remaining inconclusive diagnostic must be
+investigated, not silently repaired or retried. Gate B remains RED until
+these checks and owner acceptance.
