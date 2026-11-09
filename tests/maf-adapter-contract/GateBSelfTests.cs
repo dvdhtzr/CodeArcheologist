@@ -37,94 +37,147 @@ internal static class GateBSelfTests
         {
             snapshotId = snapshotId.ToString("D"),
             fingerprintSha256 = fingerprint,
-            summary = "An HTTP attribute candidate appears in saved source.",
-            findings = new[] { new {
-                statement = "The annotation is linked to a declaration as a candidate.",
-                claimKind = "candidate-relationship",
-                relationId, fromId = entry, toId = target
-            } },
-            unknowns = new[] { "Runtime endpoint registration is not established." }
+            selectedHandles = new[] { "R1" },
+            nextQuestion = "verify-effective-route"
         };
+        var validJson = JsonSerializer.Serialize(accepted);
+
+        // The agent sees short handles, not copied opaque identity strings.
         using (var projection = JsonDocument.Parse(
             GateBInvestigator.BuildAgentEvidenceJson(package)))
         {
             var root = projection.RootElement;
             if (root.TryGetProperty("Relations", out _) ||
+                root.TryGetProperty("EntryPointId", out _) ||
+                root.TryGetProperty("References", out _) ||
                 root.GetProperty("eligibleRelations").GetArrayLength() != 1)
                 throw new InvalidOperationException(
-                    "The model must only receive a selectable candidate relationship list.");
+                    "Agent must only receive scoped selectable handles.");
             var edge = root.GetProperty("eligibleRelations")[0];
-            if (edge.GetProperty("Id").GetString() != relationId ||
-                edge.GetProperty("EvidenceStatus").GetString() != "candidate")
-                throw new InvalidOperationException("Eligible relation was not correctly scoped.");
-            if (root.GetProperty("References").GetArrayLength() != 2)
-                throw new InvalidOperationException("Source-context references were removed.");
+            if (edge.GetProperty("Handle").GetString() != "R1" ||
+                edge.GetProperty("Kind").GetString() != "annotates-method" ||
+                edge.TryGetProperty("Id", out _) ||
+                edge.TryGetProperty("FromId", out _) ||
+                edge.TryGetProperty("ToId", out _))
+                throw new InvalidOperationException(
+                    "Agent projection exposed canonical IDs or wrong handle.");
+            if (root.GetProperty("contextReferences").GetArrayLength() != 2)
+                throw new InvalidOperationException(
+                    "Agent context was removed.");
         }
-        var validJson = JsonSerializer.Serialize(accepted);
-        Expect(validJson, "valid-structural-claim");
+
+        var valid = GateBInvestigator.ValidateModelText(validJson, package);
+        if (valid.Outcome != "valid-structural-claim" ||
+            valid.Result is null ||
+            valid.Result.Findings.Count != 1 ||
+            valid.Result.Findings[0].RelationId != relationId ||
+            valid.Result.Findings[0].FromId != entry ||
+            valid.Result.Findings[0].ToId != target ||
+            valid.Result.SuggestedNextQuestion !=
+                "Which effective HTTP route, if any, is registered at runtime?")
+            throw new InvalidOperationException(
+                "Known handle did not resolve to the full verified source edge.");
+
         Expect(null, "empty-model-response");
         Expect("", "empty-model-response");
         Expect("not JSON", "invalid-json-or-extra-text");
         Expect(validJson + " trailing", "invalid-json-or-extra-text");
         Expect(new string('x', 8193), "oversize-model-response");
-        Expect(Alter(root => root["fingerprintSha256"] = new string('b', 64)),
-            "stale-or-foreign-snapshot");
         Expect(Alter(root => root["snapshotId"] = Guid.NewGuid().ToString("D")),
             "stale-or-foreign-snapshot");
-        Expect(Alter(root => root["unknowns"] = System.Text.Json.JsonSerializer.SerializeToNode(Array.Empty<string>())),
-            "missing-or-invalid-unknowns");
-        Expect(Alter(root => root["findings"] = System.Text.Json.JsonSerializer.SerializeToNode(Array.Empty<object>())),
-            "invalid-finding-count");
+        Expect(Alter(root => root["fingerprintSha256"] = new string('b', 64)),
+            "stale-or-foreign-snapshot");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(Array.Empty<string>())),
+            "invalid-handle-count");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { "R1", "R1" })),
+            "duplicate-handle");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { "R2" })),
+            "unknown-or-foreign-handle");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { "R01" })),
+            "unknown-or-foreign-handle");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { "R0" })),
+            "unknown-or-foreign-handle");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { 1 })),
+            "invalid-handle-shape");
+        Expect(Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { "R1", "R2", "R3", "R4" })),
+            "invalid-handle-count");
+        Expect(Alter(root => root["nextQuestion"] = "verified-execution"),
+            "unsupported-next-question");
         Expect(Alter(root => root["extra"] = "untrusted"),
             "invalid-root-shape");
-        Expect(Alter(root => root["findings"]![0]!["relationId"] = "fabricated"),
-            "relationship-id-not-in-evidence-package");
-        Expect(Alter(root => root["findings"]![0]!["fromId"] = "another-source"),
-            "relationship-from-id-mismatch");
-        Expect(Alter(root => root["findings"]![0]!["toId"] = "another-target"),
-            "relationship-to-id-mismatch");
-        Expect(Alter(root => root["findings"]![0]!["claimKind"] = "registered-runtime-endpoint"),
-            "invalid-finding-shape");
-        Expect(Alter(root => root["findings"]![0]!["statement"] = "x"),
-            "invalid-finding-shape");
-        Expect(Alter(root => root["findings"]!.AsArray().Add(root["findings"]![0]!.DeepClone())),
-            "duplicate-relationship");
-        // The same syntactically valid model response cannot upgrade an
-        // observed, provisional, wrong-kind or foreign edge to an eligible
-        // candidate by presenting a real ID.
-        ExpectWithEvidence(validJson, package with
+
+        // A correct-looking local handle cannot authenticate foreign, stale,
+        // invalid-status or missing-source relations. Never loosen this gate.
+        ExpectWithEvidence(package with { SnapshotId = Guid.NewGuid() },
+            "stale-or-foreign-snapshot");
+        ExpectWithEvidence(package with { FingerprintSha256 = new string('b', 64) },
+            "stale-or-foreign-snapshot");
+        ExpectWithEvidence(package with
         {
             Relations = package.Relations.Select(r => r.Id == relationId
                 ? r with { EvidenceStatus = "observed-syntax" } : r).ToArray()
-        }, "relationship-status-not-candidate");
-        ExpectWithEvidence(validJson, package with
+        }, "unknown-or-foreign-handle");
+        ExpectWithEvidence(package with
         {
             Relations = package.Relations.Select(r => r.Id == relationId
                 ? r with { EvidenceStatus = "provisional-local" } : r).ToArray()
-        }, "relationship-status-not-candidate");
-        ExpectWithEvidence(validJson, package with
+        }, "unknown-or-foreign-handle");
+        ExpectWithEvidence(package with
         {
             Relations = package.Relations.Select(r => r.Id == relationId
                 ? r with { Kind = "contains-invocation" } : r).ToArray()
-        }, "relationship-kind-not-allowlisted");
-        ExpectWithEvidence(validJson, package with
+        }, "unknown-or-foreign-handle");
+        ExpectWithEvidence(package with
         {
             Relations = package.Relations.Select(r => r.Id == relationId
-                ? r with { FromId = "other-entry-point" } : r).ToArray()
-        }, "relationship-entry-point-mismatch");
-        ExpectWithEvidence(validJson, package with
+                ? r with { FromId = "foreign-entry" } : r).ToArray()
+        }, "unknown-or-foreign-handle");
+        ExpectWithEvidence(package with
         {
             References = package.References.Where(r => r.Id != target).ToArray()
-        }, "relationship-to-reference-missing");
-        Expect(Alter(root => root["findings"]![0]!["relationId"] =
-            "observed-containment"), "relationship-status-not-candidate");
-        Expect(Alter(root => root["findings"]![0]!["relationId"] =
-            "provisional-callee"), "relationship-status-not-candidate");
-        // No change to snapshot identity is permitted, even when the edge
-        // happens to have the same textual ID in a different package.
-        ExpectWithEvidence(validJson, package with { SnapshotId = Guid.NewGuid() },
-            "stale-or-foreign-snapshot");
-        Console.WriteLine("GREEN: Gate B model-free schema, scope and structural rejection cases passed.");
+        }, "unknown-or-foreign-handle");
+        ExpectWithEvidence(package with
+        {
+            Relations = package.Relations.Append(package.Relations[0]).ToArray()
+        }, "ambiguous-source-relation-id");
+
+        // A second eligible candidate must receive R2 and resolve back to its
+        // own IDs, independent of input enumeration order.
+        var secondTarget = "method:src/Controller.cs:a:40:15";
+        var secondRelation = "second-candidate";
+        var two = package with
+        {
+            References = package.References.Append(new AgentEvidenceReference(
+                secondTarget, "syntax-declaration", "observed-syntax", "Other",
+                "src/Controller.cs", fingerprint, 4, 1, null)).ToArray(),
+            Relations = package.Relations.Append(new AgentEvidenceRelation(
+                secondRelation, "annotates-method", "candidate", entry,
+                secondTarget, "src/Controller.cs", fingerprint, 4, 1,
+                "second candidate", null)).Reverse().ToArray()
+        };
+        using (var projectedTwo = JsonDocument.Parse(
+            GateBInvestigator.BuildAgentEvidenceJson(two)))
+        {
+            var choices = projectedTwo.RootElement.GetProperty("eligibleRelations");
+            if (choices.GetArrayLength() != 2 ||
+                choices[0].GetProperty("Handle").GetString() != "R1" ||
+                choices[1].GetProperty("Handle").GetString() != "R2")
+                throw new InvalidOperationException("Candidate handles not stable in ID order.");
+        }
+        var secondJson = Alter(root => root["selectedHandles"] =
+            JsonSerializer.SerializeToNode(new[] { "R2" }));
+        var secondResult = GateBInvestigator.ValidateModelText(secondJson, two);
+        if (secondResult.Result?.Findings.Single().RelationId != secondRelation)
+            throw new InvalidOperationException("Second host handle resolved wrong relation.");
+
+        Console.WriteLine("GREEN: Gate B handle mapping, scope, invalid selections, and model-free trust checks passed.");
 
         void Expect(string? text, string expected)
         {
@@ -133,16 +186,13 @@ internal static class GateBSelfTests
                 throw new InvalidOperationException(
                     $"Gate B expected {expected}, got {actual.Diagnostic}/{actual.Outcome}");
         }
-        void ExpectWithEvidence(string text, AgentEvidencePackage checkPackage,
-            string expected)
+        void ExpectWithEvidence(AgentEvidencePackage mutated, string expected)
         {
-            var actual = GateBInvestigator.ValidateModelText(text, checkPackage);
+            var actual = GateBInvestigator.ValidateModelText(validJson, mutated);
             if ((actual.Result is null ? actual.Diagnostic : actual.Outcome) != expected)
                 throw new InvalidOperationException(
-                    $"Gate B with mutated evidence expected {expected}, got " +
-                    $"{actual.Diagnostic}/{actual.Outcome}");
+                    $"Gate B mutated evidence expected {expected}, got {actual.Diagnostic}/{actual.Outcome}");
         }
-
         string Alter(Action<System.Text.Json.Nodes.JsonObject> change)
         {
             var node = System.Text.Json.Nodes.JsonNode.Parse(validJson)!.AsObject();
