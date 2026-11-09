@@ -173,6 +173,85 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .evidence-graph .graph-callee-finder li summary { cursor: pointer; }
 .evidence-graph .graph-callee-finder .graph-project-evidence { min-width: 0; }
 
+/* One-hop reverse callee evidence stays a review checklist, not a risk score. */
+.evidence-graph .graph-impact-explorer {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #466987;
+  border-radius: 8px;
+  background: #0d2038;
+}
+.evidence-graph .graph-impact-explorer h4 { margin: 0 0 9px; }
+.evidence-graph .graph-impact-explorer > label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  max-width: 480px;
+}
+.evidence-graph .graph-impact-explorer input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #527397;
+  border-radius: 6px;
+  background: #0b1729;
+  color: #eef3ff;
+  font: inherit;
+}
+.evidence-graph .graph-impact-method-picker {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #385673;
+  border-radius: 6px;
+  background: #0b1d34;
+  padding: 9px;
+}
+.evidence-graph .graph-impact-method-picker ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evidence-graph .graph-impact-method-picker button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  border: 1px solid #3e5d7e;
+  border-radius: 6px;
+  color: #dceeff;
+  background: #152b46;
+  overflow-wrap: anywhere;
+}
+.evidence-graph .graph-impact-method-picker button.graph-selected {
+  background: #234869;
+  border-color: #a8cfff;
+}
+.evidence-graph .graph-impact-method-picker small { color: #acc2dc; }
+.evidence-graph .graph-impact-results {
+  margin: 14px 0 0;
+  padding: 12px;
+  min-width: 0;
+  border: 1px solid #365575;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.evidence-graph .graph-impact-results li button {
+  justify-self: start;
+  text-align: left;
+  border: 1px solid #6184ad;
+  border-radius: 5px;
+  padding: 6px 10px;
+  color: #e4f2ff;
+  background: #223e5e;
+}
+.evidence-graph .graph-impact-results li details {
+  margin: 4px 0;
+}
+.evidence-graph .graph-impact-results li summary { cursor: pointer; }
+
 /* Bounded, accessible snapshot-evidence graph explorer. */
 .evidence-graph .graph-controls {
   display: flex;
