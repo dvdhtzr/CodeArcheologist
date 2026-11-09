@@ -75,13 +75,13 @@ Check(LocalMafInvestigation.ClassifyRoleResponseFailure(accepted) ==
 Check(LocalMafInvestigation.ClassifyRoleResponseFailure("not JSON") ==
     "invalid-json-or-extra-text", "non-JSON diagnostic");
 Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
-    "{\\"summary\\":\\"long enough summary\\",\\"findings\\":[]}") ==
+    JsonSerializer.Serialize(new { summary = "long enough summary", findings = Array.Empty<object>() })) ==
     "findings-count-invalid", "empty findings diagnostic");
 Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
     Payload(evidenceIds: ["same-id", "same-id"])) ==
     "duplicate-evidence-ids", "duplicate citation diagnostic");
 Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
-    "```json\\n" + accepted + "\\n```") ==
+    "```json\n" + accepted + "\n```") ==
     "citation-evaluation-failed", "fenced JSON diagnostic");
 
 Console.WriteLine("GREEN: MAF structured-role protocol negative cases passed.");
