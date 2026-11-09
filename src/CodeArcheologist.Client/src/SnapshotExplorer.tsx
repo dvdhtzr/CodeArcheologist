@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { CSharpSyntaxView } from './CSharpSyntaxView';
 
 type Snapshot = {
   id: string;
@@ -68,6 +69,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
   const [list, setList] = useState<SnapshotPage | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [inventory, setInventory] = useState<InventoryReport | null>(null);
+  const [syntaxSnapshotId, setSyntaxSnapshotId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -83,6 +85,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setError('');
       setManifest(null);
       setInventory(null);
+      setSyntaxSnapshotId(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
@@ -148,6 +151,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setBusy(true);
     setError('');
     setInventory(null);
+    setSyntaxSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/manifest', {
         credentials: 'same-origin',
@@ -167,6 +171,7 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
     setBusy(true);
     setError('');
     setManifest(null);
+    setSyntaxSnapshotId(null);
     try {
       const response = await fetch(endpoint + '/' + encodeURIComponent(id) + '/inventory', {
         credentials: 'same-origin',
@@ -215,6 +220,18 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
               <button type="button" disabled={busy} onClick={() => void inspectInventory(snapshot.id)}>
                 Inspect source inventory
               </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError('');
+                  setManifest(null);
+                  setInventory(null);
+                  setSyntaxSnapshotId(snapshot.id);
+                }}
+              >
+                Inspect C# syntax
+              </button>
             </div>
             <span>
               {new Date(snapshot.capturedAtUtc).toLocaleString()} —
@@ -229,6 +246,12 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       {list?.hasMore && <p className="workspace-note">
         Showing the newest {list.items.length} of {list.totalCount} snapshots.
       </p>}
+      {syntaxSnapshotId && (
+        <CSharpSyntaxView
+          key={syntaxSnapshotId}
+          endpoint={endpoint + '/' + encodeURIComponent(syntaxSnapshotId) + '/csharp-syntax'}
+        />
+      )}
       {inventory && (
         <section className="snapshot-manifest" aria-label="Snapshot source inventory">
           <h4>Source inventory (filename-based)</h4>
