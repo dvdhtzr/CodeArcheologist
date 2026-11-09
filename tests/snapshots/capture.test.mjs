@@ -395,6 +395,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-link-context', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-evidence-graph', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId +
+          '/evidence-tools/entry-point?entryPointId=anything', session)).status, 409);
       } finally {
         await writeFile(manifestFile, actual);
       }
@@ -415,6 +417,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-projects', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-link-context', session)).status, 409);
         assert.equal((await get(endpoint + '/' + firstId + '/csharp-evidence-graph', session)).status, 409);
+        assert.equal((await get(endpoint + '/' + firstId +
+          '/evidence-tools/entry-point?entryPointId=anything', session)).status, 409);
       } finally {
         await writeFile(capturedFile, bytes);
       }
@@ -621,6 +625,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         'joined context must not publish partial type relationships after analyzer limit');
       assert.equal((await get(endpoint + '/' + snapshot.id + '/csharp-evidence-graph', session)).status, 413,
         'graph must not return partial output after upstream type-link limits');
+      assert.equal((await get(endpoint + '/' + snapshot.id +
+        '/evidence-tools/entry-point?entryPointId=anything', session)).status, 413,
+        'agent tool must not emit partial source evidence on an oversized snapshot');
       assert.equal((await get(endpoint + '/' + snapshot.id + '/manifest', session)).status, 200,
         'safe captured snapshot remains inspectable even when this analyzer declines it');
     });
@@ -1483,6 +1490,12 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.deepEqual((await (await get(graphUrl, session)).json()).edges,
         graph.edges);
 
+      assert.equal((await get(endpoint + '/' + snapshot.id +
+        '/evidence-tools/entry-point?entryPointId=' +
+        encodeURIComponent(httpNodes.find(node =>
+          node.label === 'GET [HttpGet] Details').id), session)).status, 200,
+        'changing mutable original source must not change saved tool evidence');
+
       const savedProject = join(data, 'snapshots', snapshot.id,
         'files', 'ProjectOne', 'One.csproj');
       const original = await readFile(savedProject);
@@ -1491,6 +1504,9 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal((await get(url, session)).status, 409);
         assert.equal((await get(contextUrl, session)).status, 409);
         assert.equal((await get(graphUrl, session)).status, 409);
+        assert.equal((await get(endpoint + '/' + snapshot.id +
+          '/evidence-tools/entry-point?entryPointId=' +
+          encodeURIComponent(httpNodes[0].id), session)).status, 409);
       } finally {
         await writeFile(savedProject, original);
       }
@@ -1506,6 +1522,13 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         context.usages);
       assert.deepEqual((await (await get(graphUrl, session)).json()).edges,
         graph.edges);
+      const reopened = await get(endpoint + '/' + snapshot.id +
+        '/evidence-tools/entry-point?entryPointId=' +
+        encodeURIComponent(httpNodes.find(node =>
+          node.label === 'GET [HttpGet] Details').id), session);
+      assert.equal(reopened.status, 200);
+      assert.equal((await reopened.json()).fingerprintSha256,
+        snapshot.fingerprintSha256);
     });
 
     await t.test('invocation inspection refuses excessive call sites without a partial graph', async () => {
