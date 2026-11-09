@@ -201,7 +201,8 @@ export function CSharpEvidenceGraphView({ endpoint }: { endpoint: string }) {
         edge.status === 'observed-syntax')
       .map(edge => [edge.toId, edge] as const)), [report]);
   const directImpactCandidates = useMemo(() => calleeEdges
-    .filter(edge => edge.toId === impactMethodId)
+    .filter(edge => edge.toId === impactMethodId &&
+      edge.status === 'provisional-local')
     .flatMap(edge => {
       const invocation = nodesById.get(edge.fromId);
       const observedContainment = sourceOwnerByInvocation.get(edge.fromId);
