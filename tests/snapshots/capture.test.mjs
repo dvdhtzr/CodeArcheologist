@@ -678,6 +678,23 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         'app.CustomMapGet("/ignored", Handler); ' +
         'app.MapGroup("/group"); ' +
         '} private void Handler() {} }\n');
+      // Written dependency-injection registration syntax includes generic
+      // service/implementation pairs, a self-or-service form, a factory,
+      // typeof arguments, an unrelated same-named method, and unresolved
+      // dynamic arguments. No imported application code is executed.
+      await writeFile(join(source, 'src', 'Registrations.cs'),
+        'namespace Injection; public interface IDemo {} ' +
+        'public class Demo : IDemo {} ' +
+        'public class Configure { ' +
+        'public void Setup(bool enabled) { ' +
+        'services.AddScoped<IDemo, Demo>(); ' +
+        'services.AddSingleton<Demo>(); ' +
+        'services.AddTransient<IDemo>(_ => new Demo()); ' +
+        'services.AddScoped(typeof(IDemo), typeof(Demo)); ' +
+        'custom.AddSingleton<Demo>(); ' +
+        'services.AddSingleton("dynamic", enabled); ' +
+        'services.TryAddScoped<IDemo, Demo>(); ' +
+        '} }\n');
       // This fixture has two source-level Act overloads with matching
       // written call names, plus nested lambda/local-function invocation
       // sites which must NOT be attributed to the outer method.
@@ -802,7 +819,10 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v7');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v8');
+      assert.equal(graph.diRegistrationAnalyzerVersion, 'roslyn-di-registration-candidates-v1');
+      assert.equal(graph.diRegistrationCandidateCount, 6);
+      assert.equal(graph.diUnresolvedShapeCount, 1);
       assert.equal(graph.minimalApiAnalyzerVersion, 'roslyn-minimal-api-candidates-v1');
       assert.equal(graph.minimalApiCandidateCount, 4);
       assert.equal(graph.nonliteralMinimalApiRouteCount, 1);
@@ -929,6 +949,65 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       }
       assert.ok(graph.limitations.some(text =>
         text.includes('MapGet/MapPost/MapPut/MapPatch/MapDelete')));
+
+      const diNodes = graph.nodes.filter(node =>
+        node.kind === 'di-registration-candidate');
+      const diEdges = graph.edges.filter(edge =>
+        edge.kind === 'candidate-di-registration');
+      assert.equal(diNodes.length, 6);
+      assert.equal(diEdges.length, 6);
+      assert.ok(diNodes.some(node =>
+        node.label === 'scoped AddScoped IDemo → Demo' &&
+        node.detail.includes('generic-service-implementation')));
+      assert.ok(diNodes.some(node =>
+        node.label === 'scoped AddScoped IDemo → Demo' &&
+        node.detail.includes('typeof-service-implementation')));
+      assert.ok(diNodes.some(node =>
+        node.label === 'singleton AddSingleton Demo → (unresolved)' &&
+        node.detail.includes('generic-self-or-service')));
+      assert.ok(diNodes.some(node =>
+        node.label === 'transient AddTransient IDemo → (unresolved)' &&
+        node.detail.includes('lambda-factory-syntax-unresolved')));
+      assert.ok(diNodes.some(node =>
+        node.detail.includes('Written receiver: custom') &&
+        node.detail.includes('source-syntax candidate'),
+        'unrelated same-name custom method remains a candidate, not a verified registration');
+      assert.ok(diNodes.some(node =>
+        node.detail.includes('registration shape: unresolved')));
+      assert.ok(!diNodes.some(node => node.label.includes('TryAddScoped')));
+      const registrationsSha = sha256(await readFile(join(data, 'snapshots',
+        snapshot.id, 'files', 'src', 'Registrations.cs')));
+      for (const candidate of diNodes) {
+        assert.equal(candidate.filePath, 'src/Registrations.cs');
+        assert.equal(candidate.fileSha256, registrationsSha);
+        assert.ok(candidate.line > 0 && candidate.column > 0);
+        assert.ok(candidate.detail.includes('NOT a compiler-bound'));
+        const related = diEdges.filter(edge => edge.fromId === candidate.id);
+        assert.equal(related.length, 1);
+        const edge = related[0];
+        assert.equal(edge.status, 'candidate');
+        assert.equal(edge.evidencePath, candidate.filePath);
+        assert.equal(edge.evidenceSha256, registrationsSha);
+        assert.equal(edge.line, candidate.line);
+        assert.equal(edge.column, candidate.column);
+        assert.ok(edge.explanation.includes('NOT verified'));
+        const invocation = graph.nodes.find(node =>
+          node.id === edge.toId && node.kind === 'invocation-site');
+        assert.ok(invocation);
+        assert.equal(invocation.fileSha256, registrationsSha);
+        assert.equal(invocation.line, candidate.line);
+        assert.equal(invocation.column, candidate.column);
+        const observed = graph.edges.find(other =>
+          other.kind === 'contains-invocation' &&
+          other.status === 'observed-syntax' &&
+          other.toId === invocation.id);
+        assert.ok(observed);
+        const caller = graph.nodes.find(node => node.id === observed.fromId);
+        assert.equal(caller?.label, 'Injection.Configure.Setup');
+      }
+      assert.ok(graph.limitations.some(message =>
+        message.includes('AddScoped/AddSingleton/AddTransient')));
+
 
 
       assert.ok(graph.nodeCount > 0 && graph.edgeCount > 0);
