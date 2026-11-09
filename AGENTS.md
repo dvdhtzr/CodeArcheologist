@@ -32,3 +32,6 @@ The ratified specification is in docs/architecture, with owner approval recorded
 
 23. Roslyn's reference-free synthetic compilation is allowed solely for provisional source-local type links; never emit it or execute imported source code, build targets, plugins, external analyzers or generators.
 24. Synthetic binding across captured files is *not* project-verified. Use status `provisional-local` or `unresolved` and never silently promote to a verified inheritance, dependency or impact edge.
+
+25. Project membership obtained from static `.csproj` XML and SDK patterns is candidate-only. Do not evaluate imported MSBuild targets or claim the candidate list is effective compiler input.
+26. Reject XML DTD/external entities and report conditional, wildcard, imported or property-expanded Compile rules as unresolved; do not silently infer their effect.
