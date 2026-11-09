@@ -90,6 +90,7 @@ type AgentEvidenceRelation = {
   evidenceSha256: string;
   line: number | null;
   column: number | null;
+  explanation: string;
   projectContextStatus: string | null;
 };
 
@@ -694,6 +695,7 @@ export function CSharpEvidenceGraphView({
                         <strong>{link.kind} · {link.evidenceStatus}</strong>
                         <code>{link.id}</code>
                         <span>From {link.fromId} → {link.toId}</span>
+                        <p>{link.explanation}</p>
                         <EvidenceAddress path={link.evidencePath} hash={link.evidenceSha256}
                           line={link.line} column={link.column} />
                         {link.projectContextStatus && <span>{link.projectContextStatus}</span>}
