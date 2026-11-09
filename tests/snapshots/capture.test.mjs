@@ -677,7 +677,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         'custom.MapGet("/maybe-not-route", Handler); ' +
         'app.CustomMapGet("/ignored", Handler); ' +
         'app.MapGroup("/group"); ' +
-        '} private void Handler() {} }\\n');
+        '} private void Handler() {} }\n');
       // This fixture has two source-level Act overloads with matching
       // written call names, plus nested lambda/local-function invocation
       // sites which must NOT be attributed to the outer method.
@@ -904,8 +904,6 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         assert.equal(mapping.fileSha256, minimalSha);
         assert.ok(mapping.line > 0 && mapping.column > 0);
         assert.ok(mapping.detail.includes('not a verified ASP.NET method'));
-        assert.ok(mapping.detail.includes('not a verified ASP.NET method') ||
-          mapping.detail.includes('Candidate source spelling only'));
         const edges = minimalEdges.filter(edge => edge.fromId === mapping.id);
         assert.equal(edges.length, 1);
         const edge = edges[0];
