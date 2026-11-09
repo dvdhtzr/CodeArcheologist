@@ -289,3 +289,47 @@ injection or semantic usefulness review.
 If the fixture run is GREEN, continue with the independent saved
 snapshot diversity check as applicable; if RED, stop and inspect the
 specific result. PR remains draft and unmerged until user acceptance.
+
+## Gate B host-owned handles and bounded interpretation (proposed, not yet GREEN)
+
+The owner approved simplifying the LLM selection boundary after the
+disposable controller fixture succeeded 4/5 times; the remaining
+attempt returned `relationship-id-not-in-evidence-package`. Copying long
+source IDs was unnecessarily fragile.
+
+Gate B now constructs an ordered set of scoped candidate HTTP relations
+from the exact verified source package and supplies only local handles
+(`R1`, `R2`, etc.), edge kind, status and explanatory context to the
+model. Canonical relation and endpoint IDs are **not present** in the
+agent-facing selectable relations. The JSON schema requires the saved
+snapshot ID and fingerprint, `selectedHandles` and one enumerated
+`nextQuestion`; it no longer requests copied source IDs or free-text
+factual claims. The model is instructed to select one existing handle.
+Handles are ephemeral per evidence package, not persistent citations.
+
+The host resolves every handle against the **full original** verified
+package, rejects unknown, duplicate, out-of-scope and ambiguous source
+identity, authors the structural finding, and re-verifies citations
+against the saved snapshot. No deterministic provenance, candidate
+status, or citation gate is bypassed. If the model selects an invalid
+handle, the outcome remains **inconclusive**; no retry or substitution.
+
+The model's separately enumerated `nextQuestion` lets it prioritize
+one useful follow-up: effective route, runtime handler, or direct
+invocations. The host translates the enum to a bounded question and
+labels it **AI-selected, NOT verified**. This is an investigative
+recommendation, not new source evidence or semantic proof.
+
+Model-free tests now cover handle ordering/resolution, unknown,
+fabricated, duplicated or malformed handles, stale/foreign fingerprints,
+observed or provisional status, disallowed kinds, missing references,
+ambiguous source IDs, and bounded follow-up selection.
+
+**Next owner verification:** `scripts/check.ps1` GREEN first, followed
+by 5 real MAF/Ollama runs of the disposable
+`--gate-b-fixture 5` attribute-controller test; optionally rerun
+`--gate-b-run 5 http-minimal-mapping` for independent route-style
+coverage. Inspect both the deterministic finding and the AI-selected
+question for usefulness. Do not call this change GREEN until the owner
+reports these outputs. Provider-fault injection and real-repository
+diversity remain pending.
