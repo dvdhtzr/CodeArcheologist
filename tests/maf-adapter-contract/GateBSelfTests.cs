@@ -50,21 +50,21 @@ internal static class GateBSelfTests
             "stale-or-foreign-snapshot");
         Expect(Alter(root => root["snapshotId"] = Guid.NewGuid().ToString("D")),
             "stale-or-foreign-snapshot");
-        Expect(Alter(root => root["unknowns"] = Array.Empty<string>()),
+        Expect(Alter(root => root["unknowns"] = System.Text.Json.JsonSerializer.SerializeToNode(Array.Empty<string>())),
             "missing-or-invalid-unknowns");
-        Expect(Alter(root => root["findings"] = Array.Empty<object>()),
+        Expect(Alter(root => root["findings"] = System.Text.Json.JsonSerializer.SerializeToNode(Array.Empty<object>())),
             "invalid-finding-count");
         Expect(Alter(root => root["extra"] = "untrusted"),
             "invalid-root-shape");
-        Expect(Alter(root => root["findings"][0]["relationId"] = "fabricated"),
+        Expect(Alter(root => root["findings"]![0]!["relationId"] = "fabricated"),
             "unsupported-or-foreign-relationship");
-        Expect(Alter(root => root["findings"][0]["fromId"] = "another-source"),
+        Expect(Alter(root => root["findings"]![0]!["fromId"] = "another-source"),
             "unsupported-or-foreign-relationship");
-        Expect(Alter(root => root["findings"][0]["claimKind"] = "registered-runtime-endpoint"),
+        Expect(Alter(root => root["findings"]![0]!["claimKind"] = "registered-runtime-endpoint"),
             "invalid-finding-shape");
-        Expect(Alter(root => root["findings"][0]["statement"] = "x"),
+        Expect(Alter(root => root["findings"]![0]!["statement"] = "x"),
             "invalid-finding-shape");
-        Expect(Alter(root => root["findings"].Add(root["findings"][0].DeepClone())),
+        Expect(Alter(root => root["findings"]!.AsArray().Add(root["findings"]![0]!.DeepClone())),
             "duplicate-relationship");
         Console.WriteLine("GREEN: Gate B model-free schema, scope and structural rejection cases passed.");
 
