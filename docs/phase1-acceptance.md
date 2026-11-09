@@ -280,6 +280,20 @@ This is one finite readiness step under [issue #21](https://github.com/dvdhtzr/C
 
 This is the DI evidence step of [agent-tool readiness #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21). Next milestone: typed, read-only, exact-snapshot agent-tool contracts and negative tests, then real local MAF/Ollama investigations.
 
+## Typed agent-ready snapshot evidence tools — owner verification pending
+
+- [ ] Windows .NET 10 API compilation, React/TypeScript/Vite, and disposable local HTTP/security integration tests GREEN.
+- [ ] A direct read-only `ReadEntryPoint` contract accepts only exact existing HTTP attribute/Minimal API candidate IDs under an authorized workspace/repository/snapshot, and returns versioned typed source anchors, SHA-256, bounded excerpt and original observed/candidate statuses.
+- [ ] Controller candidates include a method excerpt and **only** direct observed containing invocation sites (maximum 12), preserving any `provisional-local` callee edges. Minimal API mappings show their own invocation and containing source method/file **without claiming that it is the handler**.
+- [ ] Counts disclose total versus returned direct sites and snapshot-wide unresolved callees without assigning unknown targets; source excerpt truncation and untrusted-content warning are explicit.
+- [ ] Citation checker validates exact package IDs and source-appropriate observed/candidate relationship status, while rejecting fabricated, duplicate or foreign IDs, runtime-verified claim kinds, invalid input and stale fingerprint. **Valid IDs must never be called semantic claim verification.**
+- [ ] Existing unauthorized 401, unsafe CSRF 403, unsupported 400/404, source tamper 409, bounds 413, invalid copied source 422, read-only source and restart behavior hold.
+- [ ] UI **Inspect agent-ready evidence package** is discoverable from both HTTP candidate lists; scrolling/focus, source excerpts, typed relationships and explicit unknowns display correctly.
+- [ ] UI **Check example observed and candidate citation IDs** uses the owner's CSRF session and displays `references-valid-not-semantic-verification`, never 'verified functionality'.
+- [ ] No new model/provider, .NET or npm package, CI pipeline, cloud API, database migration, dynamic source execution, source mutation or cross-revision claim.
+
+After owner GREEN and squash merge, revisit [issue #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21) and move into the first **real local Microsoft Agent Framework + Ollama** investigation described in [#19](https://github.com/dvdhtzr/CodeArcheologist/issues/19), with independent evidence-quality tests and a bounded failure taxonomy.
+
 ## Next foundation gates
 
 1. Continue local security hardening and adversarial browser tests as capabilities expand.
