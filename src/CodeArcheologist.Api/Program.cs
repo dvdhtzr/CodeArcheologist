@@ -7,6 +7,11 @@ using CodeArcheologist.Api.Workspaces;
 using CodeArcheologist.Api.Investigations;
 
 var builder = WebApplication.CreateBuilder(args);
+// The developer scripts run from the monorepo root. Resolve the packaged
+// local model selection independently of the process working directory.
+builder.Configuration.AddJsonFile(
+    Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+    optional: true, reloadOnChange: false);
 
 // Security invariant: never listen on LAN or wildcard addresses by default.
 builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(5127));
