@@ -846,7 +846,7 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         'six original expressions plus resolved Poke() and unresolved missing method');
       assert.ok(invocationSites.every(node =>
         node.fileSha256 === parsedFileSha && node.line > 0 && node.column > 0 &&
-        node.detail.includes('target method not resolved')));
+        node.detail.includes('no project-verified callee')));
       const helperSites = invocationSites.filter(node => node.label === 'Helper(…)');
       assert.equal(helperSites.length, 3,
         'repeated written names are separate source spans, never a deduplicated callee');
