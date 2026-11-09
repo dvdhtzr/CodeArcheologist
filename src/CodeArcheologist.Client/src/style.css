@@ -180,6 +180,33 @@ h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: 1.08; letter-spacing: -
 .evidence-graph .graph-callee-finder li summary { cursor: pointer; }
 .evidence-graph .graph-callee-finder .graph-project-evidence { min-width: 0; }
 
+/* Entry-point surface discovery is deliberately evidence-first, not a route map. */
+.evidence-graph .graph-http-entrypoints {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #466987;
+  border-radius: 8px;
+  background: #0d2038;
+}
+.evidence-graph .graph-http-entrypoints h4 { margin: 0 0 8px; }
+.evidence-graph .graph-http-entrypoints li p { overflow-wrap: anywhere; }
+.evidence-graph .graph-http-entrypoints li button {
+  justify-self: start;
+  padding: 6px 10px;
+  border: 1px solid #6184ad;
+  border-radius: 5px;
+  background: #223e5e;
+  color: #e4f2ff;
+  text-align: left;
+}
+.evidence-graph .graph-http-entrypoints li a {
+  justify-self: start;
+  color: #b9dcff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
 /* One-hop reverse callee evidence stays a review checklist, not a risk score. */
 .evidence-graph .graph-impact-explorer {
   margin: 16px 0;
