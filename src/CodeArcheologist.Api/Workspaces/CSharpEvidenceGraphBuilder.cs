@@ -48,6 +48,9 @@ public sealed record CSharpEvidenceGraphReport(
     string HttpAttributeAnalyzerVersion,
     int HttpAttributeCandidateCount,
     int NonliteralHttpAttributeRouteCount,
+    string MinimalApiAnalyzerVersion,
+    int MinimalApiCandidateCount,
+    int NonliteralMinimalApiRouteCount,
     int NodeCount,
     int EdgeCount,
     IReadOnlyList<EvidenceGraphNode> Nodes,
@@ -67,9 +70,10 @@ public sealed class CSharpEvidenceGraphBuilder(
     CSharpSyntaxInspector syntaxInspector,
     CSharpInvocationSyntaxInspector invocationInspector,
     CSharpProvisionalInvocationBinder calleeBinder,
-    CSharpHttpAttributeInspector httpInspector)
+    CSharpHttpAttributeInspector httpInspector,
+    CSharpMinimalApiInspector minimalApiInspector)
 {
-    public const string Version = "csharp-snapshot-evidence-graph-v6";
+    public const string Version = "csharp-snapshot-evidence-graph-v7";
     private const int MaxNodes = 10000;
     private const int MaxEdges = 16000;
 
@@ -82,6 +86,7 @@ public sealed class CSharpEvidenceGraphBuilder(
         var invocations = invocationInspector.Inspect(snapshot, cancellationToken);
         var callees = calleeBinder.Inspect(snapshot, cancellationToken);
         var http = httpInspector.Inspect(snapshot, cancellationToken);
+        var minimal = minimalApiInspector.Inspect(snapshot, cancellationToken);
         var manifest = capture.ReadManifest(snapshot);
         if (context.WorkspaceId != snapshot.WorkspaceId ||
             context.RepositoryId != snapshot.RepositoryId ||
@@ -102,6 +107,11 @@ public sealed class CSharpEvidenceGraphBuilder(
             http.WorkspaceId != snapshot.WorkspaceId ||
             http.RepositoryId != snapshot.RepositoryId ||
             http.SnapshotId != snapshot.Id ||
+            minimal.WorkspaceId != snapshot.WorkspaceId ||
+            minimal.RepositoryId != snapshot.RepositoryId ||
+            minimal.SnapshotId != snapshot.Id ||
+            !string.Equals(minimal.FingerprintSha256,
+                snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(http.FingerprintSha256,
                 snapshot.FingerprintSha256, StringComparison.Ordinal) ||
             !string.Equals(callees.FingerprintSha256,
@@ -443,6 +453,68 @@ public sealed class CSharpEvidenceGraphBuilder(
                 ". No callee binding, runtime execution or project compilation verified."));
         }
 
+        // Minimal API mapping spellings refer to EXISTING invocation syntax
+        // nodes by exact snapshot file/hash/span. A written MapGet can be a
+        // completely unrelated extension method: the mapping is candidate
+        // evidence only, never a registered route or bound handler.
+        var invocationNodes = invocations.Invocations.ToDictionary(
+            site => "invocation:" + site.FilePath + ":" +
+                site.FileSha256 + ":" + site.SpanStart + ":" + site.SpanLength,
+            site => site,
+            StringComparer.Ordinal);
+        foreach (var mapping in minimal.Candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var invocationId = "invocation:" + mapping.FilePath + ":" +
+                mapping.FileSha256 + ":" + mapping.SpanStart + ":" +
+                mapping.SpanLength;
+            if (!invocationNodes.TryGetValue(invocationId, out var observed) ||
+                !nodes.TryGetValue(invocationId, out var invocationNode) ||
+                invocationNode.Kind != "invocation-site" ||
+                observed.Line != mapping.Line ||
+                observed.Column != mapping.Column ||
+                observed.FileSha256 != mapping.FileSha256)
+            {
+                throw new SnapshotCaptureException(
+                    "Minimal API mapping did not match an observed saved invocation site.", 409);
+            }
+
+            var mappingId = "minimal-map:" + mapping.FilePath + ":" +
+                mapping.FileSha256 + ":" + mapping.SpanStart + ":" +
+                mapping.SpanLength;
+            var routeText = mapping.WrittenRouteLiteral is null
+                ? "(" + mapping.RouteStatus + ")"
+                : mapping.WrittenRouteLiteral;
+            AddNode(new EvidenceGraphNode(
+                mappingId,
+                "http-minimal-mapping",
+                mapping.HttpVerb + " " + mapping.WrittenMemberName + " " + routeText,
+                mapping.FilePath,
+                mapping.FileSha256,
+                mapping.Line,
+                mapping.Column,
+                "Conventional written " + mapping.WrittenMemberName +
+                " member invocation on receiver " + mapping.WrittenReceiver +
+                "; first route argument " + mapping.RouteStatus +
+                ": " + routeText + "; handler " + mapping.HandlerSyntax +
+                ". Candidate source spelling only: not a verified ASP.NET method, " +
+                "registered runtime endpoint, effective route or bound handler."));
+            AddEdge(new EvidenceGraphEdge(
+                "minimal-mapping-invocation:" + mappingId,
+                mappingId,
+                invocationId,
+                "candidate-http-mapping",
+                "candidate",
+                null,
+                mapping.FilePath,
+                mapping.FileSha256,
+                mapping.Line,
+                mapping.Column,
+                "Observed a MapGet/MapPost/MapPut/MapPatch/MapDelete spelling " +
+                "on this saved invocation. It may be an unrelated same-named " +
+                "method and is NOT a registered or reachable HTTP endpoint."));
+        }
+
         // Join the two independent reports by exact saved file/hash/span,
         // never by a method spelling. Missing or inconsistent occurrence
         // evidence invalidates the whole derived graph, not a subset.
@@ -570,6 +642,9 @@ public sealed class CSharpEvidenceGraphBuilder(
             http.AnalyzerVersion,
             http.CandidateCount,
             http.NonliteralAttributeRouteCount,
+            minimal.AnalyzerVersion,
+            minimal.CandidateCount,
+            minimal.NonliteralRouteCount,
             nodes.Count,
             edges.Count,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
@@ -591,7 +666,10 @@ public sealed class CSharpEvidenceGraphBuilder(
                 "The earlier provisional type links cover only base-type clauses and explicit object creations; DI, data flow and runtime behavior remain unexamined.",
                 "HTTP endpoint attribute candidates recognize only simple conventional HTTP verb spellings on parsed methods; these are not resolved ASP.NET symbols, verified routes or runtime endpoints.",
                 "HTTP attribute, method-level and type-level route strings are reported separately, never composed, substituted or interpreted as effective URLs.",
-                "Minimal APIs, convention routing, aliases, qualified attribute names, nonliteral route expressions and registration/hosting configuration are not analyzed.",
+                "Controller attributes and Minimal API method spellings are distinct candidate inventories; neither provides verified ASP.NET symbols, registration or effective URL routes.",
+                "Minimal API MapGet/MapPost/MapPut/MapPatch/MapDelete invocations are mapped only to exact saved invocation syntax nodes, without claiming handler binding.",
+                "Same-named unrelated extension methods and conditional mappings may produce false-positive or incomplete Minimal API candidate sets.",
+                "MapGroup/MapMethods/MapFallback, route composition, middleware, authorization, DI and runtime configuration are not analyzed.",
                 "Lambda, local function, accessor and initializer invocations are file-scoped to avoid claiming an incorrect containing method.",
                 "The nodes and links are derived entirely from verified saved snapshot file paths, hashes and source spans."
             });

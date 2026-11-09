@@ -665,6 +665,19 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       await writeFile(join(source, 'src', 'Orphan.cs'),
         'namespace Orphans; public class Orphan { ' +
         'public object Build() => new global::Shared.Contract(); }\n');
+      // Minimal API-style call spellings are test data, not valid
+      // ASP.NET route registrations. The symbols below need not compile:
+      // the default analyzer parses only verified, copied source syntax.
+      await writeFile(join(source, 'src', 'MinimalRoutes.cs'),
+        'namespace Mini; public class Routes { ' +
+        'public void Register(string routeName) { ' +
+        'app.MapGet("/catalog", () => 42); ' +
+        'app.MapPost(routeName, Handler); ' +
+        'router.MapDelete("/catalog/{id}", (int id) => id); ' +
+        'custom.MapGet("/maybe-not-route", Handler); ' +
+        'app.CustomMapGet("/ignored", Handler); ' +
+        'app.MapGroup("/group"); ' +
+        '} private void Handler() {} }\n');
       // This fixture has two source-level Act overloads with matching
       // written call names, plus nested lambda/local-function invocation
       // sites which must NOT be attributed to the outer method.
@@ -789,7 +802,10 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       assert.equal(graph.repositoryId, rid);
       assert.equal(graph.snapshotId, snapshot.id);
       assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
-      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v6');
+      assert.equal(graph.analyzerVersion, 'csharp-snapshot-evidence-graph-v7');
+      assert.equal(graph.minimalApiAnalyzerVersion, 'roslyn-minimal-api-candidates-v1');
+      assert.equal(graph.minimalApiCandidateCount, 4);
+      assert.equal(graph.nonliteralMinimalApiRouteCount, 1);
       assert.equal(graph.httpAttributeAnalyzerVersion, 'roslyn-http-attribute-candidates-v1');
       assert.equal(graph.httpAttributeCandidateCount, 3);
       assert.equal(graph.nonliteralHttpAttributeRouteCount, 1);
@@ -860,6 +876,60 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
       }
       assert.ok(graph.limitations.some(text =>
         text.includes('not resolved ASP.NET symbols')));
+      const minimalNodes = graph.nodes.filter(node =>
+        node.kind === 'http-minimal-mapping');
+      const minimalEdges = graph.edges.filter(edge =>
+        edge.kind === 'candidate-http-mapping');
+      assert.equal(minimalNodes.length, 4);
+      assert.equal(minimalEdges.length, 4);
+      assert.ok(minimalNodes.some(node =>
+        node.label === 'GET MapGet /catalog'));
+      assert.ok(minimalNodes.some(node =>
+        node.label === 'POST MapPost (nonliteral-or-unsupported)'));
+      assert.ok(minimalNodes.some(node =>
+        node.label === 'DELETE MapDelete /catalog/{id}'));
+      assert.ok(minimalNodes.some(node =>
+        node.label === 'GET MapGet /maybe-not-route'),
+        'same-named non-ASP.NET member calls may be candidates, never verified routes');
+      assert.ok(!minimalNodes.some(node =>
+        node.label.includes('CustomMapGet') || node.label.includes('MapGroup')));
+      assert.ok(minimalNodes.some(node =>
+        node.detail.includes('handler lambda-expression')));
+      assert.ok(minimalNodes.some(node =>
+        node.detail.includes('handler method-group-like-expression')));
+      const minimalSha = sha256(await readFile(join(data, 'snapshots',
+        snapshot.id, 'files', 'src', 'MinimalRoutes.cs')));
+      for (const mapping of minimalNodes) {
+        assert.equal(mapping.filePath, 'src/MinimalRoutes.cs');
+        assert.equal(mapping.fileSha256, minimalSha);
+        assert.ok(mapping.line > 0 && mapping.column > 0);
+        assert.ok(mapping.detail.includes('not a verified ASP.NET method'));
+        const edges = minimalEdges.filter(edge => edge.fromId === mapping.id);
+        assert.equal(edges.length, 1);
+        const edge = edges[0];
+        assert.equal(edge.status, 'candidate');
+        assert.equal(edge.evidencePath, mapping.filePath);
+        assert.equal(edge.evidenceSha256, mapping.fileSha256);
+        assert.equal(edge.line, mapping.line);
+        assert.equal(edge.column, mapping.column);
+        assert.ok(edge.explanation.includes('NOT a registered'));
+        const callSite = graph.nodes.find(node =>
+          node.id === edge.toId && node.kind === 'invocation-site');
+        assert.ok(callSite, 'candidate must point to an observed invocation');
+        assert.equal(callSite.fileSha256, minimalSha);
+        assert.equal(callSite.line, mapping.line);
+        assert.equal(callSite.column, mapping.column);
+        const containment = graph.edges.find(connected =>
+          connected.toId === callSite.id &&
+          connected.kind === 'contains-invocation' &&
+          connected.status === 'observed-syntax');
+        assert.ok(containment);
+        const owner = graph.nodes.find(node => node.id === containment.fromId);
+        assert.equal(owner?.label, 'Mini.Routes.Register');
+      }
+      assert.ok(graph.limitations.some(text =>
+        text.includes('MapGet/MapPost/MapPut/MapPatch/MapDelete')));
+
 
       assert.ok(graph.nodeCount > 0 && graph.edgeCount > 0);
       assert.deepEqual(graph.nodes.map(node => node.id),

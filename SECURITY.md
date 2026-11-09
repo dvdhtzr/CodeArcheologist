@@ -8,6 +8,8 @@ To report a vulnerability, use the repository's **Report a vulnerability** / pri
 
 **HTTP entry-point attribute inventory** inspects only syntax trees constructed from verified saved C# snapshot bytes. It never loads/evaluates imported projects, imports attribute assemblies, resolves effective ASP.NET routes, executes source code or invokes imported analyzers/generators. Conventional unqualified HTTP verb attribute spellings yield `candidate` edges to exact observed method declarations, not verified runtime endpoints. Raw route string literals are separate; unsupported route expressions remain unresolved. Graph hash/provenance/limit errors fail closed. See [ADR 0016](docs/decisions/0016-csharp-http-attribute-entrypoint-candidates.md).
 
+**Minimal API mapping candidate inventory** independently recognizes conventional written `MapGet/MapPost/MapPut/MapPatch/MapDelete` member invocations in SHA-256-verified saved source. It joins exact file/hash/span IDs to the existing invocation syntax report; a mismatch fails closed rather than inferring a handler or publishing a fake endpoint. This does not load metadata/assemblies, execute imported projects, evaluate MSBuild, infer runtime registrations or call external models. Same-named unrelated member methods can produce source-only false positives. Route literals are not effective URLs; nonliteral first arguments remain explicitly unresolved. See [ADR 0017](docs/decisions/0017-minimal-api-syntax-candidates.md).
+
 ## Security commitments
 
 - Default analysis never executes imported source, MSBuild targets, dependency lifecycle scripts or tests.
