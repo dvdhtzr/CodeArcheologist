@@ -69,4 +69,19 @@ Check(!Accept(missingCitation),
 Check(Accept("```json\n" + accepted + "\n```"),
     "standard fenced JSON must be accepted when otherwise valid");
 
+// Diagnostics must classify errors without echoing untrusted response data.
+Check(LocalMafInvestigation.ClassifyRoleResponseFailure(accepted) ==
+    "citation-evaluation-failed", "valid JSON reaches citation validation");
+Check(LocalMafInvestigation.ClassifyRoleResponseFailure("not JSON") ==
+    "invalid-json-or-extra-text", "non-JSON diagnostic");
+Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
+    "{\\"summary\\":\\"long enough summary\\",\\"findings\\":[]}") ==
+    "findings-count-invalid", "empty findings diagnostic");
+Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
+    Payload(evidenceIds: ["same-id", "same-id"])) ==
+    "duplicate-evidence-ids", "duplicate citation diagnostic");
+Check(LocalMafInvestigation.ClassifyRoleResponseFailure(
+    "```json\\n" + accepted + "\\n```") ==
+    "citation-evaluation-failed", "fenced JSON diagnostic");
+
 Console.WriteLine("GREEN: MAF structured-role protocol negative cases passed.");
