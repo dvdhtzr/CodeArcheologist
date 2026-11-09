@@ -260,6 +260,7 @@ operations, actual HTTP registration, or functional behavior.
 - [ ] Literal and nonliteral/missing route arguments are distinguished without constructing effective URLs or guessing runtime handlers.
 - [ ] Existing auth, 404 snapshot scope, tamper 409, invalid UTF-8 422, DTD 422, per-analyzer 413 caps and restart/read-only-source rules remain GREEN.
 - [ ] Browser **Find Minimal API mapping candidates** shows actual source mappings from a captured Code Archeologist `Program.cs` and links to observed invocation evidence. Empty results remain honest.
+- [ ] Clicking **Inspect mapping and source invocation in graph** scrolls to and keyboard-focuses **Selected graph node evidence**, displays the clicked mapping and its direct `candidate-http-mapping` relationship to the saved invocation; the behavior also works on repeat clicks and for other direct Inspect buttons.
 - [ ] No new runtime dependencies, cloud models, build of imported sources, CI workflow, state mutation or database migration.
 
 This is one finite readiness step under [issue #21](https://github.com/dvdhtzr/CodeArcheologist/issues/21). Next: bounded DI registration evidence and typed evidence-tool contracts before resuming the first MAF/Ollama workflow.
