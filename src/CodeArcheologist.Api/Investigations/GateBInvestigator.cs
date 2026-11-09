@@ -308,14 +308,23 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
                     return Reject("invalid-finding-shape");
                 var relation = evidence.Relations.SingleOrDefault(r =>
                     r.Id == relationId);
-                if (relation is null || relation.EvidenceStatus != "candidate" ||
-                    relation.Kind is not ("annotates-method" or
-                        "candidate-http-mapping") ||
-                    relation.FromId != evidence.EntryPointId ||
-                    relation.FromId != fromId || relation.ToId != toId ||
-                    !evidence.References.Any(r => r.Id == fromId) ||
-                    !evidence.References.Any(r => r.Id == toId))
-                    return Reject("unsupported-or-foreign-relationship");
+                if (relation is null)
+                    return Reject("relationship-id-not-in-evidence-package");
+                if (relation.EvidenceStatus != "candidate")
+                    return Reject("relationship-status-not-candidate");
+                if (relation.Kind is not ("annotates-method" or
+                        "candidate-http-mapping"))
+                    return Reject("relationship-kind-not-allowlisted");
+                if (relation.FromId != evidence.EntryPointId)
+                    return Reject("relationship-entry-point-mismatch");
+                if (relation.FromId != fromId)
+                    return Reject("relationship-from-id-mismatch");
+                if (relation.ToId != toId)
+                    return Reject("relationship-to-id-mismatch");
+                if (!evidence.References.Any(r => r.Id == fromId))
+                    return Reject("relationship-from-reference-missing");
+                if (!evidence.References.Any(r => r.Id == toId))
+                    return Reject("relationship-to-reference-missing");
                 if (findings.Any(f => f.RelationId == relationId))
                     return Reject("duplicate-relationship");
                 findings.Add(new(statement, kind, relationId, fromId, toId));
