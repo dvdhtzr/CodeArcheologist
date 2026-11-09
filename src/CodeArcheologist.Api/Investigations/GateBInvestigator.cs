@@ -25,6 +25,25 @@ public sealed record GateBNativeDiagnostic(string Status, int ContentLength,
 /// </summary>
 public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
 {
+    // Production always targets the local Ollama service. The alternative
+    // endpoint constructor is visible only to the explicitly trusted test
+    // assembly, never to API clients or source repository inputs.
+    private Uri _providerEndpoint = new("http://127.0.0.1:11434");
+
+    internal GateBInvestigator(SnapshotEvidenceTools tools, Uri testEndpoint)
+        : this(tools)
+    {
+        if (testEndpoint.Scheme != Uri.UriSchemeHttp ||
+            !System.Net.IPAddress.TryParse(testEndpoint.Host, out var address) ||
+            !System.Net.IPAddress.IsLoopback(address) ||
+            testEndpoint.UserInfo.Length != 0 ||
+            testEndpoint.Query.Length != 0 ||
+            testEndpoint.Fragment.Length != 0 ||
+            testEndpoint.AbsolutePath != "/")
+            throw new ArgumentException("Test provider endpoint must be a plain loopback HTTP origin.");
+        _providerEndpoint = testEndpoint;
+    }
+
     private const int MaxModelCharacters = 8192;
     private const int MaxEvidenceCharacters = 20000;
     private const string Model = "qwen3.5:9b";
@@ -134,8 +153,7 @@ public sealed class GateBInvestigator(SnapshotEvidenceTools evidenceTools)
             var format = ChatResponseFormat.ForJsonSchema(
                 schemaDocument.RootElement.Clone(), "GateBSourceRelationship",
                 "One bounded, source-scoped relationship with explicit unknowns.");
-            using var client = new OllamaApiClient(
-                new Uri("http://127.0.0.1:11434"), Model);
+            using var client = new OllamaApiClient(_providerEndpoint, Model);
             AIAgent agent = client.AsAIAgent(
                 name: "FunctionalInvestigator",
                 instructions: Instructions);
