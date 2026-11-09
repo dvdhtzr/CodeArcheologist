@@ -89,6 +89,41 @@ internal static class GateBSelfTests
             "invalid-finding-shape");
         Expect(Alter(root => root["findings"]!.AsArray().Add(root["findings"]![0]!.DeepClone())),
             "duplicate-relationship");
+        // The same syntactically valid model response cannot upgrade an
+        // observed, provisional, wrong-kind or foreign edge to an eligible
+        // candidate by presenting a real ID.
+        ExpectWithEvidence(validJson, package with
+        {
+            Relations = package.Relations.Select(r => r.Id == relationId
+                ? r with { EvidenceStatus = "observed-syntax" } : r).ToArray()
+        }, "relationship-status-not-candidate");
+        ExpectWithEvidence(validJson, package with
+        {
+            Relations = package.Relations.Select(r => r.Id == relationId
+                ? r with { EvidenceStatus = "provisional-local" } : r).ToArray()
+        }, "relationship-status-not-candidate");
+        ExpectWithEvidence(validJson, package with
+        {
+            Relations = package.Relations.Select(r => r.Id == relationId
+                ? r with { Kind = "contains-invocation" } : r).ToArray()
+        }, "relationship-kind-not-allowlisted");
+        ExpectWithEvidence(validJson, package with
+        {
+            Relations = package.Relations.Select(r => r.Id == relationId
+                ? r with { FromId = "other-entry-point" } : r).ToArray()
+        }, "relationship-entry-point-mismatch");
+        ExpectWithEvidence(validJson, package with
+        {
+            References = package.References.Where(r => r.Id != target).ToArray()
+        }, "relationship-to-reference-missing");
+        Expect(Alter(root => root["findings"]![0]!["relationId"] =
+            "observed-containment"), "relationship-status-not-candidate");
+        Expect(Alter(root => root["findings"]![0]!["relationId"] =
+            "provisional-callee"), "relationship-status-not-candidate");
+        // No change to snapshot identity is permitted, even when the edge
+        // happens to have the same textual ID in a different package.
+        ExpectWithEvidence(validJson, package with { SnapshotId = Guid.NewGuid() },
+            "stale-or-foreign-snapshot");
         Console.WriteLine("GREEN: Gate B model-free schema, scope and structural rejection cases passed.");
 
         void Expect(string? text, string expected)
@@ -98,6 +133,16 @@ internal static class GateBSelfTests
                 throw new InvalidOperationException(
                     $"Gate B expected {expected}, got {actual.Diagnostic}/{actual.Outcome}");
         }
+        void ExpectWithEvidence(string text, AgentEvidencePackage checkPackage,
+            string expected)
+        {
+            var actual = GateBInvestigator.ValidateModelText(text, checkPackage);
+            if ((actual.Result is null ? actual.Diagnostic : actual.Outcome) != expected)
+                throw new InvalidOperationException(
+                    $"Gate B with mutated evidence expected {expected}, got " +
+                    $"{actual.Diagnostic}/{actual.Outcome}");
+        }
+
         string Alter(Action<System.Text.Json.Nodes.JsonObject> change)
         {
             var node = System.Text.Json.Nodes.JsonNode.Parse(validJson)!.AsObject();
