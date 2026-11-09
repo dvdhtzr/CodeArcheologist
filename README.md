@@ -1,6 +1,6 @@
 # Code Archeologist
 
-**Status: Early local-first development. Saved snapshots, source inventory, Roslyn syntax, provisional C# type links, candidate project membership, link context and a declaration/invocation-aware evidence graph explorer are available. Optional source-only synthetic Roslyn callee candidates are explicitly provisional; project-verified call targets, dependency resolution and agent intelligence are not implemented.**
+**Status: Early local-first development. Saved snapshots, source inventory, Roslyn syntax, provisional C# type links, candidate project membership, link context and a declaration/invocation-aware evidence graph explorer are available. Synthetic callee candidates now include static shared/disjoint/unknown project-membership context. All callee edges remain provisional; project-verified call targets, dependency resolution and agent intelligence are not implemented.**
 
 Code Archeologist aims to be a local-first, cross-platform software intelligence platform that analyzes one or more source repositories, constructs evidence-backed architecture and dependency models, supports adaptive multi-agent investigation, and preserves institutionally reviewed knowledge in an Obsidian-compatible vault.
 
@@ -45,6 +45,8 @@ The API requires a paired local browser session for listing/reading workspaces, 
 For the first deterministic inventory, choose **Inspect source inventory** next to a saved snapshot. It reads only the stored and hash-verified snapshot, never the current source folder. Language and file-role labels are inferred from filenames, not from parsing code. See [ADR 0005](docs/decisions/0005-snapshot-file-inventory.md).
 
 For written call expressions, open **Explore C# evidence graph** and filter by **Invocation sites (candidate or unresolved)**, or select a method declaration to see its directly contained invocation expressions. Containment edges are `observed-syntax`; an invocation may also have a `candidate-callee` edge labeled **`provisional-local`**, selected by a reference-free synthetic Roslyn compilation, never actual project-verified binding. Unresolved invocations have no guessed target. Calls in lambdas and local functions remain associated with their file rather than falsely attributed to an outer method. See [ADRs 0012](docs/decisions/0012-csharp-invocation-sites.md) and [0013](docs/decisions/0013-provisional-callee-binding.md).
+
+On any `candidate-callee` edge, the graph now shows static **shared**, **disjoint** or **unknown** project candidates, along with source, target and shared `.csproj` candidates (project SHA-256, inclusion basis and unresolved-rule count). This helps assess the synthetic match but **never upgrades it to a real project-verified method dependency**. See [ADR 0014](docs/decisions/0014-callee-project-candidate-context.md).
 
 For syntax-observed declarations—including methods and properties that type links do not mention—filter the graph by **Parsed declarations (unreferenced)**. Existing referenced declaration nodes are reused when their saved source spans match. These nodes prove parsed source locations, not compiler symbols. See [ADR 0011](docs/decisions/0011-syntax-declarations-in-evidence-graph.md).
 
