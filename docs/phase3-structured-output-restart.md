@@ -1,6 +1,6 @@
 # Phase 3 restart: local structured-output contract first
 
-Status: planned, unimplemented. Created from the verified deterministic `main` foundation. No code from draft PR #25 is presumed valid.
+Status: Gate A provider probe implemented, awaiting owner's local compile and Ollama results. Created from verified deterministic `main`. No code from draft PR #25 is presumed valid.
 
 ## Why restart
 
@@ -20,7 +20,7 @@ Draft PR #25 established that MAF agents and Ollama can execute, but the end-to-
 
 ### Gate A — minimal provider contract
 
-1. Implement an isolated, model-backed local `ollama` contract probe inside trusted app/test code, independent of graph or MAF workflow plumbing.
+1. Implement an isolated, model-backed local `ollama` contract probe inside trusted app/test code, independent of graph or MAF workflow plumbing. The first slice talks to the documented Ollama REST API directly; **it does not yet verify OllamaSharp or MAF adapters**.
 2. Use actual installed OllamaSharp and MAF-compatible types, with supported schema/JSON constraints verified against exact package APIs.
 3. One tiny schema (e.g. answer + unknowns), deterministic host validation, explicit unknown and failure categories, bounded time/output, and no retries hiding failures.
 4. Run locally against the installed model and record aggregate compliance across repeated independent attempts. Model-free tests cover malformed, empty, oversize, extra text, cancellation and unavailable provider.
@@ -52,3 +52,15 @@ No new visualizations, additional static analyzers, agent roles, persistent task
 ## First action
 
 Research/verify provider structured-output API signatures *before writing the integration*. Prefer the smallest compile-able provider probe over another unverified API change.
+
+## Gate A provider probe — owner instructions
+
+From the project root on the fresh branch, first run `./scripts/check.ps1` (the deterministic contract tests execute automatically). Then, with Ollama running and `qwen3.5:9b` installed, run:
+
+```powershell
+dotnet run --project .\tests\ollama-contract\OllamaContractProbe.csproj --configuration Release -- 5 qwen3.5:9b
+```
+
+The command posts five independent non-streamed schema-constrained requests to `http://127.0.0.1:11434/api/generate` using `format` as a JSON Schema and `think: false`. It does not use any user repository, files, credentials, or cloud endpoint. It logs category-only outcomes; no model prose is printed. A missing provider, timeout, unsupported schema, partial JSON or field-contract failure produces RED. No retries obscure failures. An all-GREEN provider result proves **only** this narrow native-Ollama contract, not the MAF adapter, source grounding, or agent behavior.
+
+**Required next gate before an agent:** Compile a separate adapter probe against the exact pinned OllamaSharp and MAF versions, using verified API signatures and the same host schema validation. Do not infer adapter support from the REST probe alone.
