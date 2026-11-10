@@ -394,7 +394,8 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
                                 <span className="investigation-eyebrow">SKEPTIC OBJECTION · {h.id} · {concerns[h.kind] ?? 'Unknown'}</span>
                                 <p>{h.explanation}</p>
                                 <EvidenceReferences handles={h.evidenceHandles} role={roleIndex}
-                                  links={report.evidenceLinks} verified={verification} onVerify={link => void verifyEvidence(link)} />
+                                  links={report.evidenceLinks} verified={verification} onVerify={link => void verifyEvidence(link)}
+                                  onInspect={onInspectGraph} />
                               </article>
                             ))}
                             {outcome.assessment && (
