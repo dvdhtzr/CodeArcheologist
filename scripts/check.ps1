@@ -20,6 +20,8 @@ $adapterProject = Join-Path $root 'tests/maf-adapter-contract/MafAdapterContract
 if ($LASTEXITCODE -ne 0) { throw 'Gate B model-free structural contract checks failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --gate-c1-self-test
 if ($LASTEXITCODE -ne 0) { throw 'Gate C1 model-free investigation contract checks failed.' }
+& dotnet run --project $adapterProject --configuration Release -- --gate-c5-self-test
+if ($LASTEXITCODE -ne 0) { throw 'Gate C5a model-free report and persistence checks failed.' }
 & npm ci --prefix $client --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation (npm ci) failed.' }
 & npm --prefix $client run typecheck
