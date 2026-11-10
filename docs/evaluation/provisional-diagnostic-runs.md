@@ -135,3 +135,21 @@ Owner run on Windows, contract v5.
 - **Perfect consistency** (spread 0.00) may partly reflect roles converging on the same view selection. Consistency is not correctness.
 - The sample is provisional and small, and the labels are drafts.
 
+
+## Blinded owner judgment of run 5 (C6c-3a tool)
+
+The owner judged run 5's 12 diagnostic cases with `--judge` (Gate B vs Gate C, one random trial each, random LEFT/RIGHT order, names hidden until the reveal).
+
+| | Count |
+|---|---|
+| Pairs judged | 12 |
+| Gate B preferred | 2 |
+| Gate C preferred | 2 |
+| Ties | 8 |
+| Actionable: Gate B / Gate C | 100% / 100% |
+
+- **Reading:** on these cases the owner found **no usefulness difference** between the single-agent and multi-agent systems. Gate C's higher anchor recall (94% vs 35%) did not become a judged advantage. ADR 0020's ≥15-point usefulness gain over Gate B is not met on this sample.
+- **Why this may be a ceiling:** most of the 12 diagnostic cases are small fixtures or one-edit change experiments, so both reports were actionable. Real-repository cases (R01–R15) are where differences, if they exist, are more likely to appear.
+- **Caveats:** the run was provisional (its labels were still drafts when it ran); blinding is partial; n = 12 with one judge. This is direction, not the metric of record.
+
+In the same session the owner approved all 50 label sets with `--review-labels` (status `owner-approved`, provenance `assistant-draft-owner-reviewed`).
