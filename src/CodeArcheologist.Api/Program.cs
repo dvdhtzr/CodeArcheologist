@@ -592,5 +592,5 @@ app.Run();
 
 public sealed record LoginRequest(string? Code);
 public sealed record GateBInvestigationRequest(string? EntryPointId);
+public sealed record GateC5CreateRequest(string? EntryPointId);
 public partial class Program { }
-\npublic sealed record GateC5CreateRequest(string? EntryPointId);\n
