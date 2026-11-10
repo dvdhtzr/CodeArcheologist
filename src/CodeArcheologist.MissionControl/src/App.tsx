@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { AgentAvatar } from './AgentAvatar';
 import {
-  AGENTS, ROLES, SCENE_CAPTIONS, DemoScene, InspectorTab,
-  RoleId, StageState, nextScene, sceneIndex, stageFor, visibleEvents,
+  AGENTS, ROLES, SCENE_CAPTIONS, nextScene, sceneIndex, stageFor, visibleEvents,
 } from './demo';
+import type { DemoScene, InspectorTab, RoleId, StageState } from './demo';
 
 type Page = 'observatory' | 'activity' | 'design';
 const stateNames: Record<StageState, string> = {
