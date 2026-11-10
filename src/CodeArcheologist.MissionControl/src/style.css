@@ -267,7 +267,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
   .nav-link { padding: 8px; font-size: 11px; gap: 7px; }
   .nav-link > svg:last-child { display: none; }
   .sidebar-section { margin: 0; }
-  .sidebar-section:nth-of-type(3), .sidebar-divider, .sidebar-bottom { display: none; }
+  .sidebar .sidebar-divider + .sidebar-section, .sidebar-divider, .sidebar-bottom { display: none; }
   .nav-caption { display: none; }
   .topbar { min-height: 55px; }
   .hero-seal { display: none; }
