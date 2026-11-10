@@ -18,7 +18,7 @@ public sealed record InvestigationPage(IReadOnlyList<InvestigationSummary> Items
     long TotalCount, bool HasMore);
 
 public sealed record InvestigationCreateResult(InvestigationSummary? Record,
-    bool Created, bool Conflict);
+    bool Created, bool Conflict, bool Busy = false);
 
 public sealed partial class WorkspaceStore
 {
@@ -26,27 +26,58 @@ public sealed partial class WorkspaceStore
         GateCScope scope, Guid idempotencyKey)
     {
         var digest = Convert.ToHexString(SHA256.HashData(
-            Encoding.UTF8.GetBytes(string.Join("\n",
+            Encoding.UTF8.GetBytes(string.Join("\\n",
                 "gate-c5-request-v1", scope.WorkspaceId.ToString("D"),
                 scope.RepositoryId.ToString("D"), scope.SnapshotId.ToString("D"),
                 scope.FingerprintSha256, scope.EntryPointId,
                 scope.EvidenceContractVersion))));
         var now = DateTimeOffset.UtcNow;
         var id = Guid.NewGuid();
-
+        var attemptId = Guid.NewGuid();
         using var connection = Open();
-        using (var insert = connection.CreateCommand())
+        using var tx = connection.BeginTransaction(deferred: false);
+
+        // An identical replay wins even when another investigation owns the slot.
+        using (var lookup = Command(connection, tx, SummaryColumns +
+            "\\n WHERE idempotency_key=$key;"))
         {
-            insert.CommandText = """
-                INSERT INTO investigation_reports (
-                    run_id, workspace_id, repository_id, snapshot_id,
-                    fingerprint_sha256, entry_point_id, evidence_contract_version,
-                    report_contract_version, started_at_unix_ms, status, diagnostic,
-                    idempotency_key, request_digest)
-                VALUES ($id,$workspace,$repo,$snapshot,$fingerprint,$entry,$evidence,
-                    $version,$started,'running','queued',$key,$digest)
-                ON CONFLICT(idempotency_key) DO NOTHING;
-                """;
+            lookup.Parameters.AddWithValue("$key", idempotencyKey.ToString("D"));
+            using var reader = lookup.ExecuteReader();
+            if (reader.Read())
+            {
+                var existing = ReadInvestigation(reader);
+                var conflict = !string.Equals(reader.GetString(12), digest,
+                    StringComparison.Ordinal);
+                tx.Commit();
+                return new(existing, false, conflict);
+            }
+        }
+
+        // The global execution slot is acquired before any report is created.
+        // SQLite serializes competing writers across local processes.
+        using (var reserve = Command(connection, tx, """
+            UPDATE investigation_execution_slot SET active_attempt_id=$attempt
+            WHERE slot_id=1 AND active_attempt_id IS NULL;
+            """))
+        {
+            reserve.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            if (reserve.ExecuteNonQuery() != 1)
+            {
+                tx.Commit();
+                return new(null, false, false, true);
+            }
+        }
+
+        using (var insert = Command(connection, tx, """
+            INSERT INTO investigation_reports (
+                run_id, workspace_id, repository_id, snapshot_id,
+                fingerprint_sha256, entry_point_id, evidence_contract_version,
+                report_contract_version, started_at_unix_ms, status, diagnostic,
+                idempotency_key, request_digest)
+            VALUES ($id,$workspace,$repo,$snapshot,$fingerprint,$entry,$evidence,
+                $version,$started,'running','queued',$key,$digest);
+            """))
+        {
             insert.Parameters.AddWithValue("$id", id.ToString("D"));
             insert.Parameters.AddWithValue("$workspace", scope.WorkspaceId.ToString("D"));
             insert.Parameters.AddWithValue("$repo", scope.RepositoryId.ToString("D"));
@@ -58,19 +89,28 @@ public sealed partial class WorkspaceStore
             insert.Parameters.AddWithValue("$started", now.ToUnixTimeMilliseconds());
             insert.Parameters.AddWithValue("$key", idempotencyKey.ToString("D"));
             insert.Parameters.AddWithValue("$digest", digest);
-            var created = insert.ExecuteNonQuery() == 1;
-
-            using var lookup = connection.CreateCommand();
-            lookup.CommandText = SummaryColumns + "\n" + """
-                WHERE idempotency_key=$key;
-                """;
-            lookup.Parameters.AddWithValue("$key", idempotencyKey.ToString("D"));
-            using var reader = lookup.ExecuteReader();
-            if (!reader.Read()) throw new InvalidOperationException("Missing investigation request.");
-            var summary = ReadInvestigation(reader);
-            return new(summary, created,
-                !string.Equals(reader.GetString(12), digest, StringComparison.Ordinal));
+            if (insert.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Admission report was not persisted.");
         }
+        using (var insert = Command(connection, tx, """
+            INSERT INTO investigation_attempts (
+                attempt_id, run_id, attempt_number, contract_version,
+                status, diagnostic, created_at_unix_ms)
+            VALUES ($id,$run,1,$version,'queued','queued',$created);
+            """))
+        {
+            insert.Parameters.AddWithValue("$id", attemptId.ToString("D"));
+            insert.Parameters.AddWithValue("$run", id.ToString("D"));
+            insert.Parameters.AddWithValue("$version", GateC6ExecutionContract.AttemptVersion);
+            insert.Parameters.AddWithValue("$created", now.ToUnixTimeMilliseconds());
+            if (insert.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Admission attempt was not persisted.");
+        }
+        AppendEvent(connection, tx, attemptId, "attempt-admitted", "queued",
+            null, "queued");
+        tx.Commit();
+        return new(new InvestigationSummary(id, scope, GateC5ReportContract.Version,
+            "running", "queued", now, null), true, false);
     }
 
     public void FinishInvestigation(Guid runId, GateC5Report report)
@@ -81,7 +121,9 @@ public sealed partial class WorkspaceStore
                 GateCRunStatus.Cancelled or GateCRunStatus.Rejected))
             throw new InvalidOperationException("Cannot persist nonterminal or foreign report.");
         using var connection = Open();
+        using var tx = connection.BeginTransaction(deferred: false);
         using var update = connection.CreateCommand();
+        update.Transaction = tx;
         update.CommandText = """
             UPDATE investigation_reports SET
                 status=$status, diagnostic=$diagnostic, report_json=$report,
@@ -105,6 +147,8 @@ public sealed partial class WorkspaceStore
         update.Parameters.AddWithValue("$evidence", report.Scope.EvidenceContractVersion);
         if (update.ExecuteNonQuery() != 1)
             throw new InvalidOperationException("Investigation completion scope or state mismatch.");
+        FinalizeAttempt(connection, tx, runId, report.Progress.Status.ToString().ToLowerInvariant(), report.Diagnostic);
+        tx.Commit();
     }
 
     public void FailInvestigation(Guid runId, string diagnostic)
@@ -114,7 +158,9 @@ public sealed partial class WorkspaceStore
             "host-report-validation-failed" or "host-execution-rejected"))
             throw new ArgumentException("Unknown safe failure category.", nameof(diagnostic));
         using var connection = Open();
+        using var tx = connection.BeginTransaction(deferred: false);
         using var update = connection.CreateCommand();
+        update.Transaction = tx;
         update.CommandText = """
             UPDATE investigation_reports SET status=$status, diagnostic=$diagnostic,
                 finished_at_unix_ms=$finished
@@ -126,7 +172,16 @@ public sealed partial class WorkspaceStore
         update.Parameters.AddWithValue("$finished",
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         update.Parameters.AddWithValue("$id", runId.ToString("D"));
-        update.ExecuteNonQuery();
+        if (update.ExecuteNonQuery() != 1)
+            throw new InvalidOperationException("Failure record scope or state mismatch.");
+        var attemptStatus = diagnostic switch
+        {
+            "host-cancelled" => "cancelled",
+            "host-execution-rejected" or "host-report-validation-failed" => "rejected",
+            _ => "failed"
+        };
+        FinalizeAttempt(connection, tx, runId, attemptStatus, diagnostic);
+        tx.Commit();
     }
 
     public InvestigationDetail? GetInvestigation(Guid workspace, Guid repository,
