@@ -133,6 +133,52 @@ internal static class GateCSelfTests
             evidence, scope with { SnapshotId = Guid.NewGuid() }, handles),
             "invalid-host-evidence-scope");
 
+        // Only the host advances workflow state. An unvalidated Skeptic
+        // cannot be bypassed to run the Reviewer or mark the run complete.
+        var progress = GateCRunProgress.New(run);
+        AssertTransitionDenied(GateCStateTransitions.Apply(
+            progress, GateCRunEvent.BeginReviewer));
+        progress = Advance(progress, GateCRunEvent.EvidenceVerified);
+        progress = Advance(progress, GateCRunEvent.BeginIndependentAssessments);
+        progress = Advance(progress, GateCRunEvent.StartInvestigator);
+        progress = Advance(progress, GateCRunEvent.AcceptInvestigator);
+        AssertTransitionDenied(GateCStateTransitions.Apply(
+            progress, GateCRunEvent.BeginReviewer));
+        AssertTransitionDenied(GateCStateTransitions.Apply(
+            progress, GateCRunEvent.Complete));
+        progress = Advance(progress, GateCRunEvent.StartSkeptic);
+        progress = Advance(progress, GateCRunEvent.AcceptSkeptic);
+        progress = Advance(progress, GateCRunEvent.BeginReviewer);
+        AssertTransitionDenied(GateCStateTransitions.Apply(
+            progress, GateCRunEvent.Complete));
+        progress = Advance(progress, GateCRunEvent.AcceptReviewer);
+        progress = Advance(progress, GateCRunEvent.Complete);
+        if (progress.Status != GateCRunStatus.Completed)
+            throw new InvalidOperationException("Host completion gate failed.");
+        AssertTransitionDenied(GateCStateTransitions.Apply(
+            progress, GateCRunEvent.BeginReviewer));
+
+        var failed = GateCRunProgress.New(Guid.NewGuid());
+        failed = Advance(failed, GateCRunEvent.EvidenceVerified);
+        failed = Advance(failed, GateCRunEvent.BeginIndependentAssessments);
+        failed = Advance(failed, GateCRunEvent.StartSkeptic);
+        failed = Advance(failed, GateCRunEvent.RejectSkeptic);
+        if (failed.Status != GateCRunStatus.Incomplete)
+            throw new InvalidOperationException("Rejected role must be incomplete.");
+        AssertTransitionDenied(GateCStateTransitions.Apply(
+            failed, GateCRunEvent.BeginReviewer));
+
+        static GateCRunProgress Advance(GateCRunProgress current, GateCRunEvent evt)
+        {
+            var result = GateCStateTransitions.Apply(current, evt);
+            ExpectValid(result.Check);
+            return result.Progress;
+        }
+        static void AssertTransitionDenied(GateCTransition result)
+        {
+            ExpectInvalid(result.Check, "illegal-run-transition");
+        }
+
         Console.WriteLine(
             "GREEN: Gate C1 independent assessments, host evidence scope, " +
             "material challenge coverage and no-fact-promotion contracts.");
