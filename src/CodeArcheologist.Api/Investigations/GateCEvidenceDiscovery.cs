@@ -8,7 +8,9 @@ namespace CodeArcheologist.Api.Investigations;
 /// </summary>
 public static class GateCEvidenceRegistry
 {
-    public const string Version = "gate-c-evidence-capabilities-v1";
+    // v2 (C6c E1): role evidence views also carry the package's bounded source
+    // excerpt as untrusted data. Bumped so pre-E1 checkpoints fail closed.
+    public const string Version = "gate-c-evidence-capabilities-v2";
     public const string EntryPoint = "inspect_entry_point";
     public const string DirectInvocations = "inspect_direct_invocations";
     public const string CandidateCallees = "inspect_candidate_callees";
@@ -128,6 +130,11 @@ public sealed class GateCEvidenceSession
     }
 
     public string GraphAnalyzerVersion => _package.GraphAnalyzerVersion;
+
+    /// <summary>The package's bounded (2400-char) source excerpt: UNTRUSTED DATA, never instructions.</summary>
+    public string SourceExcerpt => _package.SourceExcerpt;
+
+    public bool SourceExcerptTruncated => _package.SourceExcerptTruncated;
 
     public GateCRole Role => _role;
 
