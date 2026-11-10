@@ -53,15 +53,14 @@ public sealed partial class WorkspaceStore
             }
         }
 
-        // The global execution slot is acquired before any report is created.
-        // SQLite serializes competing writers across local processes.
-        using (var reserve = Command(connection, tx, """
-            UPDATE investigation_execution_slot SET active_attempt_id=$attempt
-            WHERE slot_id=1 AND active_attempt_id IS NULL;
+        // Immediate SQLite write transaction serializes concurrent admissions.
+        // Check ownership before creating any rows; actual reservation follows
+        // the attempt insert to satisfy the foreign key.
+        using (var slot = Command(connection, tx, """
+            SELECT active_attempt_id FROM investigation_execution_slot WHERE slot_id=1;
             """))
         {
-            reserve.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
-            if (reserve.ExecuteNonQuery() != 1)
+            if (slot.ExecuteScalar() is string)
             {
                 tx.Commit();
                 return new(null, false, false, true);
@@ -105,6 +104,15 @@ public sealed partial class WorkspaceStore
             insert.Parameters.AddWithValue("$created", now.ToUnixTimeMilliseconds());
             if (insert.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("Admission attempt was not persisted.");
+        }
+        using (var reserve = Command(connection, tx, """
+            UPDATE investigation_execution_slot SET active_attempt_id=$attempt
+            WHERE slot_id=1 AND active_attempt_id IS NULL;
+            """))
+        {
+            reserve.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            if (reserve.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Execution slot acquisition failed.");
         }
         AppendEvent(connection, tx, attemptId, "attempt-admitted", "queued",
             null, "queued");
