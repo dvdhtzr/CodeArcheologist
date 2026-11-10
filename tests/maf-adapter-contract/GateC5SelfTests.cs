@@ -21,8 +21,8 @@ internal static class GateC5SelfTests
                 connection.Open();
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = "PRAGMA user_version;";
-                if (Convert.ToInt32(cmd.ExecuteScalar()) != 4)
-                    throw new InvalidOperationException("C5 schema was not migrated.");
+                if (Convert.ToInt32(cmd.ExecuteScalar()) != 5)
+                    throw new InvalidOperationException("C6 schema was not migrated.");
             }
 
             var workspace = store.Create("C5 test", Guid.NewGuid()).Workspace;
@@ -123,6 +123,7 @@ internal static class GateC5SelfTests
             if (report.EvidenceLinks.Count != 2 ||
                 report.EvidenceLinks[0].CanonicalId == report.EvidenceLinks[1].CanonicalId)
                 throw new InvalidOperationException("Role-local evidence identities were conflated.");
+            store.StartAttempt(effectiveRun);
             store.FinishInvestigation(effectiveRun, report);
             var loaded = store.GetInvestigation(workspace.Id, repositoryId,
                 snapshotId, effectiveRun);
