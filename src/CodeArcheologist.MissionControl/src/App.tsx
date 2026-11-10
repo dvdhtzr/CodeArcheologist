@@ -263,7 +263,7 @@ export function App() {
               <div className="stat-row" aria-label="Demo status">
                 <div className="stat-card"><span className="stat-label">CREW MEMBERS</span><strong>03 <small>agents</small></strong><span className="stat-foot">Distinct, evidence-bounded roles</span></div>
                 <div className="stat-card"><span className="stat-label">ACCEPTED STAGES</span><strong>{String(acceptedCount).padStart(2, '0')} <small>/ 03</small></strong><span className="stat-foot">Demonstration state only</span></div>
-                <div className="stat-card"><span className="stat-label">LIVE API EVENTS</span><strong>00 <small>connected</small></strong><span className="stat-foot">Integration is scheduled for MC3</span></div>
+                <div className="stat-card"><span className="stat-label">LIVE API EVENTS</span><strong>00 <small>events</small></strong><span className="stat-foot">Integration is scheduled for MC3</span></div>
               </div>
 
               <div className="mission-grid">
