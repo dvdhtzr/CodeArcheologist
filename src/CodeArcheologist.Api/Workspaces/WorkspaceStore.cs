@@ -30,7 +30,7 @@ public sealed record CreateWorkspaceResult(
 /// </summary>
 public sealed partial class WorkspaceStore
 {
-    private const int CurrentSchemaVersion = 3;
+    private const int CurrentSchemaVersion = 4;
     private readonly string _connectionString;
 
     public WorkspaceStore()
@@ -156,6 +156,51 @@ public sealed partial class WorkspaceStore
                 PRAGMA user_version = 3;
                 """;
             migration.ExecuteNonQuery();
+        }
+
+        if (current < 4)
+        {
+            using var migration = connection.CreateCommand();
+            migration.Transaction = transaction;
+            migration.CommandText = """
+                CREATE TABLE investigation_reports (
+                    run_id TEXT NOT NULL PRIMARY KEY,
+                    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+                    repository_id TEXT NOT NULL REFERENCES repository_sources(id),
+                    snapshot_id TEXT NOT NULL REFERENCES repository_snapshots(id),
+                    fingerprint_sha256 TEXT NOT NULL,
+                    entry_point_id TEXT NOT NULL,
+                    evidence_contract_version TEXT NOT NULL,
+                    report_contract_version TEXT NOT NULL,
+                    started_at_unix_ms INTEGER NOT NULL,
+                    finished_at_unix_ms INTEGER,
+                    status TEXT NOT NULL CHECK(status IN ('running','completed','incomplete','cancelled','rejected')),
+                    diagnostic TEXT NOT NULL,
+                    report_json TEXT,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    request_digest TEXT NOT NULL
+                );
+                CREATE INDEX ix_investigations_by_snapshot
+                    ON investigation_reports(snapshot_id, started_at_unix_ms DESC, run_id DESC);
+                PRAGMA user_version = 4;
+                """;
+            migration.ExecuteNonQuery();
+        }
+
+        // A process restart never resumes a previous in-process MAF workflow.
+        // Preserve the record and explicitly mark its incomplete state.
+        using (var interrupted = connection.CreateCommand())
+        {
+            interrupted.Transaction = transaction;
+            interrupted.CommandText = """
+                UPDATE investigation_reports SET status='incomplete',
+                    diagnostic='host-restarted-before-completion',
+                    finished_at_unix_ms=$now
+                WHERE status='running';
+                """;
+            interrupted.Parameters.AddWithValue("$now",
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            interrupted.ExecuteNonQuery();
         }
 
         transaction.Commit();

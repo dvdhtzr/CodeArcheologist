@@ -26,6 +26,10 @@ builder.Services.AddSingleton<CSharpProjectLinkContextInspector>();
 builder.Services.AddSingleton<CSharpEvidenceGraphBuilder>();
 builder.Services.AddSingleton<SnapshotEvidenceTools>();
 builder.Services.AddSingleton<GateBInvestigator>();
+builder.Services.AddSingleton<GateCEvidenceDiscovery>();
+builder.Services.AddSingleton<GateC3IndependentRunner>();
+builder.Services.AddSingleton<GateC4ReconciliationRunner>();
+builder.Services.AddSingleton<GateC5InvestigationCoordinator>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -118,6 +122,73 @@ app.MapPost("/api/v1/auth/logout", async (HttpContext context,
     access.RevokeSession(context.User.FindFirst("local_session")?.Value);
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.NoContent();
+}).RequireAuthorization();
+
+
+ // C5a: report infrastructure only. Every request is scoped to registered
+ // repository and saved snapshot identities; there is no imported-code execution.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, WorkspaceStore store) =>
+{
+    if (store.GetSnapshot(workspaceId, repositoryId, snapshotId) is null)
+        return Results.NotFound();
+    return Results.Ok(store.ListInvestigations(workspaceId, repositoryId, snapshotId));
+}).RequireAuthorization();
+
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     WorkspaceStore store) =>
+{
+    if (store.GetSnapshot(workspaceId, repositoryId, snapshotId) is null)
+        return Results.NotFound();
+    var detail = store.GetInvestigation(workspaceId, repositoryId, snapshotId, runId);
+    return detail is null ? Results.NotFound() : Results.Ok(detail);
+}).RequireAuthorization();
+
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     GateC5CreateRequest request, HttpContext context, WorkspaceStore store,
+     SnapshotEvidenceTools tools, GateC5InvestigationCoordinator coordinator) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var idempotencyKey) || idempotencyKey == Guid.Empty)
+        return Results.BadRequest(new { error = "A nonempty UUID Idempotency-Key is required." });
+    if (string.IsNullOrWhiteSpace(request.EntryPointId) ||
+        request.EntryPointId.Length > 1024 ||
+        request.EntryPointId.Any(char.IsControl))
+        return Results.BadRequest(new { error = "A bounded entry-point ID is required." });
+    // Authoritative scope comes from the store, never from model or browser.
+    try
+    {
+        tools.ReadEntryPoint(snapshot, request.EntryPointId, context.RequestAborted);
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = "Entry-point evidence unavailable or invalid." },
+            statusCode: error.StatusCode);
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(408);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved snapshot evidence is unavailable." });
+    }
+
+    var scope = new GateCScope(workspaceId, repositoryId, snapshotId,
+        snapshot.FingerprintSha256, request.EntryPointId, SnapshotEvidenceTools.Version);
+    if (!coordinator.TryStart(scope, idempotencyKey, out var created))
+        return Results.Conflict(new { error = "A local investigation is already running." });
+    if (created is null) return Results.StatusCode(500);
+    if (created.Conflict)
+        return Results.Conflict(new { error = "Idempotency-Key already belongs to another request." });
+    var location = $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{created.Record!.RunId:D}";
+    return created.Created
+        ? Results.Accepted(location, created.Record)
+        : Results.Ok(created.Record);
 }).RequireAuthorization();
 
 // Workspace metadata only. No file paths, repository content or model output
@@ -521,4 +592,5 @@ app.Run();
 
 public sealed record LoginRequest(string? Code);
 public sealed record GateBInvestigationRequest(string? EntryPointId);
+public sealed record GateC5CreateRequest(string? EntryPointId);
 public partial class Program { }

@@ -14,6 +14,7 @@ else
   exit 1
 fi
 dotnet build "$ROOT/src/CodeArcheologist.Api/CodeArcheologist.Api.csproj" --configuration Release
+dotnet run --project "$ROOT/tests/maf-adapter-contract/MafAdapterContractProbe.csproj" --configuration Release -- --gate-c5-self-test
 npm ci --prefix "$ROOT/src/CodeArcheologist.Client" --no-audit --no-fund
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run typecheck
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run build

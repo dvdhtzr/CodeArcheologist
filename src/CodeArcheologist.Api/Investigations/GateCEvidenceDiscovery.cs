@@ -119,7 +119,30 @@ public sealed class GateCEvidenceSession
             assessment, _runId, _scope, catalog);
     }
 
+    public string GraphAnalyzerVersion => _package.GraphAnalyzerVersion;
+
     public int ToolCallsUsed => _calls;
+
+    /// <summary>Host-only links for persisted, role-scoped references.
+    /// These are never sent to a model. Only issued handles are included.</summary>
+    public IReadOnlyList<GateC5EvidenceLink> ReportLinks()
+    {
+        var references = _package.References.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        var relations = _package.Relations.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        return _handles.Values.OrderBy(x => x.Handle, StringComparer.Ordinal)
+            .Select(handle =>
+            {
+                if (references.TryGetValue(handle.CanonicalId, out var node))
+                    return new GateC5EvidenceLink(_role, handle.Handle, handle.CanonicalId,
+                        handle.Kind, node.Kind, node.EvidenceStatus, node.FilePath,
+                        node.FileSha256, node.Line, node.Column);
+                if (relations.TryGetValue(handle.CanonicalId, out var edge))
+                    return new GateC5EvidenceLink(_role, handle.Handle, handle.CanonicalId,
+                        handle.Kind, edge.Kind, edge.EvidenceStatus, edge.EvidencePath,
+                        edge.EvidenceSha256, edge.Line, edge.Column);
+                throw new InvalidOperationException("Issued handle lacks canonical evidence.");
+            }).ToArray();
+    }
 
     /// <summary>
     /// Host-only catalog for C1 validation; never send CanonicalId to agents.
