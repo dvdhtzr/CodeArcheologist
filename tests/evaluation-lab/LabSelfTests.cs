@@ -197,6 +197,46 @@ internal static class LabSelfTests
             finally { Directory.Delete(temp, recursive: true); }
         });
 
+        Check("owner checklist: asks only differing problems, blinded, capped, resumable, never counts skips as ties", () =>
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-checklist-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Copy(evalRoot, Path.Combine(temp, "eval"));
+                var copy = Path.Combine(temp, "eval");
+                foreach (var f in Directory.GetFiles(Path.Combine(copy, "cases"), "labels.json", SearchOption.AllDirectories))
+                    File.WriteAllText(f, File.ReadAllText(f).Replace("\"status\": \"draft\"", "\"status\": \"owner-approved\"")
+                        .Replace("\"authoredBy\": \"assistant-draft\"", "\"authoredBy\": \"assistant-draft-owner-reviewed\""));
+                var withIssues = CorpusValidator.Validate(copy).Cases.Where(c => c.Labels.MaterialIssues.Count > 0)
+                    .OrderBy(c => c.Case.Id, StringComparer.Ordinal).Take(2).ToArray();
+                var runs = Path.Combine(temp, "runs");
+                Directory.CreateDirectory(runs);
+                void Write(string caseId, string comparator, string text) => File.WriteAllText(
+                    Path.Combine(runs, $"{caseId}.{comparator}.t1.report.json"), JsonSerializer.Serialize(new LabReport(LabSchema.Report,
+                        caseId, comparator, 1, "completed", "d", Guid.NewGuid(), new string('a', 64), "e",
+                        [new("observation", "x", text, [])], null, 1), LabSchema.Json));
+                // Case 1: only gate-c repeats the problem's words (eligible). Case 2: identical reports (not eligible).
+                Write(withIssues[0].Case.Id, Comparator.GateB, "nothing relevant");
+                Write(withIssues[0].Case.Id, Comparator.GateC, string.Join(" ", withIssues[0].Labels.MaterialIssues.Select(i => i.Description)));
+                Write(withIssues[1].Case.Id, Comparator.GateB, "same text");
+                Write(withIssues[1].Case.Id, Comparator.GateC, "same text");
+                var path = Path.Combine(temp, "checks.json");
+                var output = new StringWriter();
+                LabOwnerTools.Checklist(copy, runs, Comparator.GateB, Comparator.GateC, path, new StringReader("y\nn\n"), output, maxPairs: 1, seed: 3);
+                var text = output.ToString();
+                var reveal = text.IndexOf("=== CHECKLIST REVEAL", StringComparison.Ordinal);
+                Expect(reveal > 0 && !text[..reveal].Contains("gate-"), "comparator names shown before reveal");
+                Expect(!text.Contains(withIssues[1].Case.Id), "identical reports must not be asked about");
+                var file = JsonSerializer.Deserialize<LabOwnerTools.IssueCheckFile>(File.ReadAllText(path), LabSchema.Json)!;
+                Expect(file.Checks.Count == 1 && file.Checks[0].FirstMentions && !file.Checks[0].SecondMentions, "answers not recorded");
+                Expect(text.Contains("Problems judged: 1") && text.Contains("Not judged:") && !text.Contains("tie"), "reveal incomplete or counts ties");
+                var again = new StringWriter();
+                LabOwnerTools.Checklist(copy, runs, Comparator.GateB, Comparator.GateC, path, new StringReader(""), again, maxPairs: 1, seed: 3);
+                Expect(!again.ToString().Contains("Question ") && again.ToString().Contains("Problems judged: 1"), "checklist is not resumable or exceeds the cap");
+            }
+            finally { Directory.Delete(temp, recursive: true); }
+        });
+
         Check("repository corpus unmodified by lab runs", () =>
             Expect(TreeDigest(evalRoot) == before, "eval/ tree changed during self-test"));
         Console.WriteLine(_failed == 0
