@@ -182,3 +182,15 @@ There were 13 eligible problems. 5 were judged. 4 were not asked because the wor
 - **Selection bias.** The word-match screen picks problems where the reports' word overlap differs. Gate C reports are longer, so the screen is likely to pick problems Gate C repeats. These counts describe differences found, not detection rates. The material-issue detection threshold (85%) is not measurable from this sample.
 - n = 5 with one judge, provisional thresholds, partial blinding.
 - An unbiased estimate needs a random sample of problems, not one chosen by difference.
+
+### Owner checklist, every problem (`--checklist --every-problem`)
+
+Every labelled material issue in run 6 was judged: 13 of 13 problems, no selection. That includes the 5 judged earlier.
+
+| | Gate B | Gate C |
+|---|---|---|
+| Problems mentioned | 1/13 (8%) | **7/13 (54%)** |
+
+- **Reading:** across every labelled problem on the real repositories, Gate C mentioned the real problem about seven times as often as Gate B, a 46-point gap.
+- **Against the draft target:** Gate C's 54% is well **below** the provisional 85% material-issue detection threshold. It found about half of the problems.
+- **Caveats:** one judge; n = 13; one random trial shown for repeated cases; partial blinding; thresholds still provisional.

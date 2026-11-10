@@ -233,6 +233,14 @@ internal static class LabSelfTests
                 var again = new StringWriter();
                 LabOwnerTools.Checklist(copy, runs, Comparator.GateB, Comparator.GateC, path, new StringReader(""), again, maxPairs: 1, seed: 3);
                 Expect(!again.ToString().Contains("Question ") && again.ToString().Contains("Problems judged: 1"), "checklist is not resumable or exceeds the cap");
+                // Every-problem mode continues the same file and also asks the identical-report case.
+                var all = new StringWriter();
+                var everyAnswers = string.Concat(Enumerable.Repeat("n\nn\n", 10));
+                LabOwnerTools.Checklist(copy, runs, Comparator.GateB, Comparator.GateC, path, new StringReader(everyAnswers), all, seed: 3, everyProblem: true);
+                var allText = all.ToString();
+                var expected = withIssues.Sum(c => c.Labels.MaterialIssues.Count);
+                Expect(allText.Contains(withIssues[1].Case.Id) && allText.Contains($"Problems judged: {expected}") && allText.Contains("complete: every problem"),
+                    "every-problem mode must judge all problems, including identical reports");
             }
             finally { Directory.Delete(temp, recursive: true); }
         });
