@@ -101,3 +101,7 @@ Reviewer, challenge-to-hypothesis mapping, host final disposition,
 source-backed semantic truth tests, further evidence capabilities such
 as DI/project context, HTTP endpoints, UI, run persistence, autonomous
 delegation, rich tool loops and the full 60-case quality evaluation.
+
+## November 9 RED diagnosis and correction
+
+Owner verification showed 3/3 initial `invalid-host-evidence-scope`, corrected by distinguishing 8-character agent-facing handles from canonical source relationship IDs (maximum 1024). Subsequent local checks were GREEN and genuine MAF produced 1/3 accepted independent runs, with two `invalid-assessment-schema` Investigator failures. The current PR removes a redundant `selectedHandles` model field, derives the selection from cited claims, and adds bounded safe parse-rejection reason codes. No rejected output is accepted, no retries are added, no model text is logged, and the PR remains RED until fresh owner verification.
