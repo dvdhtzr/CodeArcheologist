@@ -9,6 +9,7 @@ internal static class GateC5SelfTests
         var original = Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR");
         var dir = Path.Combine(Path.GetTempPath(), "CodeArcheologist-C5-" +
             Guid.NewGuid().ToString("N"));
+        var testFailed = false;
         try
         {
             Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", dir);
@@ -169,10 +170,24 @@ internal static class GateC5SelfTests
 
             Console.WriteLine("GREEN: C5a SQLite migration, report provenance, scoped lookup, independent handles, persistence, and interrupted-run recovery.");
         }
+        catch
+        {
+            testFailed = true;
+            throw;
+        }
         finally
         {
             Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", original);
-            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            try
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+            catch (IOException) when (testFailed)
+            {
+                // Preserve the original test failure instead of masking it
+                // with a Windows filesystem cleanup exception.
+                Console.Error.WriteLine("C5 test cleanup could not remove its temporary database.");
+            }
         }
     }
 
