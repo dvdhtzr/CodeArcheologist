@@ -1,7 +1,7 @@
 # ADR 0021 — White-label API with SignalR push (W1)
 
 - **Date:** 2026-11-10
-- **Status:** Decisions approved by the owner. W1 is in implementation; owner verification is pending.
+- **Status:** Decisions approved by the owner. W1: owner reported `check.ps1` GREEN on Windows; Linux passed in the authoring container.
 - **Context:** The owner is building a separate front end in parallel. Code Archeologist becomes a white-label API, and the work here focuses on the system's capabilities.
 
 ## Decisions (approved by the owner)
