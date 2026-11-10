@@ -163,8 +163,8 @@ public static class GateCContractValidator
 
     private static bool ValidCatalog(IReadOnlyList<GateCEvidenceHandle>? catalog) =>
         catalog is not null && catalog.Count <= 64 &&
-        DistinctIds(catalog.Select(x => x?.Handle)) &&
-        DistinctIds(catalog.Select(x => x?.CanonicalId)) &&
+        DistinctIds(catalog.Select(x => x?.Handle), 8) &&
+        DistinctIds(catalog.Select(x => x?.CanonicalId), 1024) &&
         catalog.All(x => x is not null && Enum.IsDefined(x.Kind));
 
     private static bool ValidHandles(IReadOnlyList<string> handles,
@@ -173,10 +173,10 @@ public static class GateCContractValidator
         DistinctIds(handles) &&
         handles.All(id => allowed.Any(x => x.Handle == id));
 
-    private static bool DistinctIds(IEnumerable<string?> values)
+    private static bool DistinctIds(IEnumerable<string?> values, int maxLength = 128)
     {
         var items = values.ToArray();
-        return items.All(x => x is { Length: > 0 and <= 128 } &&
+        return items.All(x => x is { Length: > 0 } && x.Length <= maxLength &&
             !string.IsNullOrWhiteSpace(x) && !x.Any(char.IsControl)) &&
             items.Distinct(StringComparer.Ordinal).Count() == items.Length;
     }
