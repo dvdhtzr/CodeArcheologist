@@ -145,6 +145,16 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     return detail is null ? Results.NotFound() : Results.Ok(detail);
 }).RequireAuthorization();
 
+// C6a: read-only, ordered host event history scoped to the requested snapshot.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/events",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     WorkspaceStore store) =>
+{
+    if (store.GetInvestigation(workspaceId, repositoryId, snapshotId, runId) is null)
+        return Results.NotFound();
+    return Results.Ok(store.ListEvents(workspaceId, repositoryId, snapshotId, runId));
+}).RequireAuthorization();
+
 app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations",
     (Guid workspaceId, Guid repositoryId, Guid snapshotId,
      GateC5CreateRequest request, HttpContext context, WorkspaceStore store,
