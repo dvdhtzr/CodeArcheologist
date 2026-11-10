@@ -90,11 +90,9 @@ internal static class GateCDiscoverySelfTests
             run, scope, GateCRole.Investigator, ["E1"],
             [new GateCHypothesis("H1", "Written annotation is a candidate.",
                 ["E1"], "Runtime route remains unknown.")], [], []);
-        if (!GateCContractValidator.ValidateIndependent(
-            chosen, run, scope, first.HostCatalog()).Accepted)
+        if (!first.ValidateAssessment(chosen).Accepted)
             throw new InvalidOperationException("C2 handles incompatible with C1 validator.");
-        if (GateCContractValidator.ValidateIndependent(
-            chosen, run, scope, second.HostCatalog()).Accepted)
+        if (second.ValidateAssessment(chosen).Accepted)
             throw new InvalidOperationException(
                 "Cross-role handle should not authenticate another role's evidence.");
 
