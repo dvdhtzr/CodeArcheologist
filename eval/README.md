@@ -11,6 +11,15 @@ Versioned inputs for the hybrid evaluation laboratory (ADR 0020). The lab is `te
   - material issues.
 - `cases/<id>/source/` holds **written-syntax fixture inputs only**. They are never compiled or executed. The lab copies them into a temporary directory before capture.
 
+## Line endings
+
+Fixture bytes are pinned exactly. `.gitattributes` marks `eval/**` as `-text`, so Git never converts line endings. If a checkout made before that rule existed shows CRLF hash errors, restore the files from the repository (PowerShell):
+
+```powershell
+Remove-Item -Recurse -Force .\eval\cases
+git checkout -- eval
+```
+
 ## Owner label sign-off
 
 Labels start as `"status": "draft", "authoredBy": "assistant-draft"`. For each case:

@@ -1,0 +1,4 @@
+# C6c evaluation corpus: fixture bytes are pinned by SHA-256 in case.json.
+# Never convert line endings (core.autocrlf would rewrite LF to CRLF on Windows
+# and silently change the evidence the lab scores against).
+eval/** -text

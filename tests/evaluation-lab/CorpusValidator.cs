@@ -112,7 +112,16 @@ public static partial class CorpusValidator
             errors.Add(p + "fixture file list differs from the pinned manifest");
         foreach (var (file, hash) in c.Source.FileSha256)
             if (actual.TryGetValue(file, out var real) && real != hash)
-                errors.Add(p + $"fixture file {file} does not match its pinned SHA-256");
+            {
+                // Diagnose (never accept) the common Windows checkout conversion.
+                var bytes = File.ReadAllBytes(Path.Combine(sourceDir, file));
+                var lf = System.Text.Encoding.UTF8.GetBytes(
+                    System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n"));
+                errors.Add(p + $"fixture file {file} does not match its pinned SHA-256" +
+                    (LabSchema.Sha256(lf) == hash
+                        ? " (line endings were converted to CRLF on checkout; see .gitattributes and eval/README.md)"
+                        : ""));
+            }
         if (!c.Source.FileSha256.ContainsKey(c.EntryPoint.FilePath))
             errors.Add(p + "entry point file is not a pinned fixture file");
 

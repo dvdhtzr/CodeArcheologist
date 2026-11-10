@@ -150,6 +150,11 @@ internal static class LabSelfTests
         }
         Mutate("tampered fixture bytes", t => File.AppendAllText(Path.Combine(t, first, "source/Controller.cs"), "// x"),
             "does not match its pinned SHA-256");
+        Mutate("CRLF-converted fixture (diagnosed, not accepted)", t =>
+            {
+                var f = Path.Combine(t, first, "source/Controller.cs");
+                File.WriteAllText(f, File.ReadAllText(f).Replace("\n", "\r\n"));
+            }, "line endings were converted to CRLF");
         Mutate("unpinned extra fixture file", t => File.WriteAllText(Path.Combine(t, first, "source/Extra.cs"), "class X {}"),
             "differs from the pinned manifest");
         Mutate("budget that differs from the host", t => Json(t, "lab-config.json", n => n["budgets"]!["roleTimeoutSeconds"] = 120),
