@@ -138,6 +138,47 @@ internal static class LabSelfTests
 
         await CuratedMachineryAsync(evalRoot);
 
+        await CheckAsync("owner tools: label review writes approval only on 'a', and blinded judging reveals counts", async () =>
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-owner-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Copy(evalRoot, Path.Combine(temp, "eval"));
+                var copy = Path.Combine(temp, "eval");
+                var output = new StringWriter();
+                Expect(LabOwnerTools.ReviewLabels(copy, null, new StringReader("x\na\ns\nq\n"), output) == 0, "review failed: " + output);
+                var after = CorpusValidator.Validate(copy);
+                Expect(after.Valid && after.ApprovedLabels == 1 && after.DraftLabels == after.Cases.Count - 1,
+                    "review must approve exactly the one case answered 'a'");
+                var first = after.Cases.OrderBy(c => c.Case.Id, StringComparer.Ordinal)
+                    .First(c => c.Labels.Status == LabelStatus.OwnerApproved);
+                Expect(first.Labels.AuthoredBy == "assistant-draft-owner-reviewed", "approval provenance missing");
+
+                var runs = Path.Combine(temp, "runs");
+                Directory.CreateDirectory(runs);
+                LabReport Report(string caseId, string comparator, string text) => new(LabSchema.Report, caseId, comparator, 1,
+                    "completed", "d", Guid.NewGuid(), new string('a', 64), "e", [new("observation", "x", text, [])], null, 1);
+                foreach (var (c, cmp, text) in new[] { ("K1", Comparator.GateB, "source-observation: plain"),
+                    ("K1", Comparator.GateC, "H1 ContestedOrInsufficient: richer"), ("K2", Comparator.GateB, "b2"), ("K2", Comparator.GateC, "c2") })
+                    File.WriteAllText(Path.Combine(runs, $"{c}.{cmp}.t1.report.json"), JsonSerializer.Serialize(Report(c, cmp, text), LabSchema.Json));
+                var judged = new StringWriter();
+                var path = Path.Combine(temp, "judgments.json");
+                LabOwnerTools.Judge(runs, Comparator.GateB, Comparator.GateC, path, new StringReader("l\ny\nn\nt\nn\nn\n"), judged, seed: 7);
+                var shown = judged.ToString();
+                Expect(!shown.Contains("source-observation:") && !shown.Contains("ContestedOrInsufficient:"),
+                    "comparator-revealing prefixes were shown");
+                Expect(!shown[..shown.IndexOf("=== REVEAL", StringComparison.Ordinal)].Contains("gate-"), "comparator names shown before reveal");
+                var file = JsonSerializer.Deserialize<LabOwnerTools.JudgmentFile>(File.ReadAllText(path), LabSchema.Json)!;
+                Expect(file.Judgments.Count == 2 && file.Judgments.Count(j => j.Preferred == "tie") == 1, "judgments not recorded");
+                Expect(shown.Contains("Pairs judged: 2") && shown.Contains("blinding is partial"), "reveal incomplete");
+                // Resumable: a second session skips already judged cases.
+                var again = new StringWriter();
+                LabOwnerTools.Judge(runs, Comparator.GateB, Comparator.GateC, path, new StringReader(""), again, seed: 7);
+                Expect(again.ToString().Contains("Pairs judged: 2") && !again.ToString().Contains("Case 3"), "judging is not resumable");
+            }
+            finally { Directory.Delete(temp, recursive: true); }
+        });
+
         Check("repository corpus unmodified by lab runs", () =>
             Expect(TreeDigest(evalRoot) == before, "eval/ tree changed during self-test"));
         Console.WriteLine(_failed == 0

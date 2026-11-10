@@ -23,6 +23,17 @@ try
             return await SurveyAsync(Path.GetFullPath(args[1]), Path.GetFullPath(args[3]));
         case "--self-test":
             return await LabSelfTests.RunAsync(evalRoot);
+        case "--review-labels":
+            return LabOwnerTools.ReviewLabels(evalRoot,
+                args.Length == 3 && args[1] == "--curated-root" ? Path.GetFullPath(args[2]) : null,
+                Console.In, Console.Out);
+        case "--judge" when args.Length >= 3 && args[1] == "--runs":
+        {
+            string Opt(string name, string fallback) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
+            var runs = Path.GetFullPath(args[2]);
+            return LabOwnerTools.Judge(runs, Opt("--a", Comparator.GateB), Opt("--b", Comparator.GateC),
+                Path.GetFullPath(Opt("--out", Path.Combine(runs, "blinded-judgments.json"))), Console.In, Console.Out);
+        }
         case "--run":
             return await RunAsync(evalRoot, args[1..]);
         default:
@@ -33,6 +44,8 @@ try
                   --survey <dir>                       read-only capture survey: fingerprint, size, HTTP candidates
                   --describe <case-dir> [--curated-root <dir>]   citable evidence locations for labeling
                   --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
+                  --review-labels [--curated-root <dir>]          owner label sign-off (interactive, resumable)
+                  --judge --runs <dir> [--a gate-b] [--b gate-c] [--out <file>]   blinded pairwise comparison (interactive, resumable)
                 """);
             return 2;
     }

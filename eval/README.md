@@ -45,5 +45,9 @@ Rules:
 
 The following arrive in C6c-2 and C6c-3:
 - held-out cases (owner-authored; SHA-256 seal only);
-- blinded usefulness judging;
 - the remaining 8 diagnostic repeat cases.
+
+## Owner tools
+
+- `--review-labels [--curated-root <dir>]`: guided sign-off of draft labels (approve / skip / quit; resumable).
+- `--judge --runs <run-dir> [--out <file>]`: blinded pairwise usefulness judging of a completed run. See `docs/architecture/gate-c6c-evaluation-laboratory.md`.
