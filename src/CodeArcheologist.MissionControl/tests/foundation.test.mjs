@@ -62,10 +62,10 @@ test('MC1 is isolated from backend and never claims a live connection', () => {
   assert.ok(source.includes('API not connected'));
   assert.ok(source.includes('DEMO MODE'));
   assert.ok(source.includes('This playback is an explicitly synthetic design preview'));
-  assert.ok(!/\\bfetch\\s*\\(/.test(source));
-  assert.ok(!/new\\s+WebSocket|HubConnectionBuilder|EventSource/.test(source));
-  assert.ok(!/CodeArcheologist\\.Api|CodeArcheologist\\.Client/.test(source));
-  assert.ok(!/proxy\\s*:/.test(vite));
+  assert.ok(!/\bfetch\s*\(/.test(source));
+  assert.ok(!/new\s+WebSocket|HubConnectionBuilder|EventSource/.test(source));
+  assert.ok(!/CodeArcheologist\.Api|CodeArcheologist\.Client/.test(source));
+  assert.ok(!/proxy\s*:/.test(vite));
   assert.ok(vite.includes('5175'));
   assert.ok(markup.includes('Mission Control'));
 });
