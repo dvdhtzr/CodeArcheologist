@@ -25,7 +25,8 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
 {
     private const int MaxModelText = 8192;
     private const int MaxInputText = 16000;
-    private const string Model = "qwen3.5:9b";
+    public const string ModelId = "qwen3.5:9b";
+    private const string Model = ModelId;
     private static readonly Uri Endpoint = new("http://127.0.0.1:11434/");
     private const string ReviewerSchema = """
         {
