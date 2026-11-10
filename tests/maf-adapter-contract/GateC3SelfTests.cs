@@ -166,6 +166,11 @@ internal static class GateC3SelfTests
                     question.Contains(hint, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("E3 question leaks corpus-specific hints.");
         }
+        // E3b: excerpt-only points may not drop citations; empty handles are for gaps only.
+        foreach (var question in new[] { GateC3IndependentRunner.InvestigatorQuestion, GateC3IndependentRunner.SkepticQuestion })
+            if (!question.Contains("must cite the allowed evidence handle") ||
+                !question.Contains("empty handle only for a genuine evidence gap"))
+                throw new InvalidOperationException("E3b question must require citations.");
         if (!GateC3IndependentRunner.InvestigatorQuestion.Contains("UNVERIFIED"))
             throw new InvalidOperationException("E3 Investigator question must keep hypotheses unverified.");
         if (!GateC3IndependentRunner.SkepticQuestion.Contains("must not refer to any Investigator assessment"))

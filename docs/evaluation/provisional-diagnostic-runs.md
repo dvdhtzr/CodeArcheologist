@@ -58,4 +58,25 @@ Unchanged: schemas, validation, independence, checkpoints, and the limit of two 
 
 ## Run 3 — after E3
 
+Owner run on Windows, contract v3.
+
+| Comparator | Completed | Integrity breaches | Anchor recall | Objection coverage | Review flags |
+|---|---|---|---|---|---|
+| deterministic-baseline | 12/12 | 0 | 94% | — | 0 |
+| gate-b | 12/12 | 0 | 35% | — | 0 |
+| gate-c | 35/36 | 0 | **31%** | 100% | 15 |
+
+- **Qualitative:** the reports became code-specific. All three C07 trials describe the lambda/delegate (`render = () => Format(id)`), which no earlier run did.
+- **Verdict: E3 fails its acceptance criteria.** Recall fell from 35% to 31%, one Gate C run did not complete, and review flags rose from 5 to 15.
+- **Cause (an assistant error in the question):** it allowed an empty handle for points taken only from the excerpt. The roles then described the code without citing evidence, trading traceability for readability.
+- The scoring was not changed.
+
+## E3b — the questions require citations (contract `gate-c-evidence-capabilities-v4`)
+
+**Change:** every hypothesis or concern must cite the allowed handle of the evidence item it is about. The excerpt is used only to understand that item, and empty handles are reserved for genuine evidence gaps.
+
+**Acceptance:** the same criteria, against run 1. If E3b does not beat run 1, E1 and E3 are reverted.
+
+## Run 4 — after E3b
+
 Pending the owner's run.

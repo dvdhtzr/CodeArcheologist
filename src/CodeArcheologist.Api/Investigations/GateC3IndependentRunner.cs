@@ -32,19 +32,19 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
     public const string InvestigatorQuestion =
         "Question: using the sourceExcerpt and the evidence items, what does this entry point's method " +
         "do? State which calls it makes and on what, in at most two UNVERIFIED hypotheses about this " +
-        "specific code. Cite the evidence handle that supports each hypothesis, or an empty handle when " +
-        "the point comes only from the excerpt. Put what the evidence cannot show (runtime behavior, " +
-        "registration, implementations) in uncertainty and unknown, not in the hypothesis itself. " +
-        "If no evidence items exist, return empty arrays and a concrete unknown.";
+        "specific code. Every hypothesis must cite the allowed evidence handle of the item it is about; " +
+        "use the excerpt only to understand that item. Use an empty handle only for a genuine evidence " +
+        "gap where no allowed item relates to the point. Put what the evidence cannot show (runtime " +
+        "behavior, registration, implementations) in uncertainty and unknown, not in the hypothesis " +
+        "itself. If no evidence items exist, return empty arrays and a concrete unknown.";
 
     public const string SkepticQuestion =
         "Question: independently, which statements someone might make about this specific method's " +
         "behavior would NOT be supported by the sourceExcerpt and evidence items, and what alternative " +
-        "reading of this code exists? Give at most two concerns about this specific code, each " +
-        "with an existing handle or an empty handle for missing evidence. You have not seen and must " +
-        "not refer to any Investigator assessment. If there are no items, return empty arrays and a " +
-        "concrete unknown.";
-    /// <summary>Per-role model deadline (declared in the C6c lab budget config).</summary>
+        "reading of this code exists? Give at most two concerns about this specific code. Every concern " +
+        "must cite the allowed evidence handle of the item it is about; use an empty handle only for a " +
+        "genuine evidence gap where no allowed item relates. You have not seen and must not refer to " +
+        "any Investigator assessment. If there are no items, return empty arrays and a concrete unknown.";    /// <summary>Per-role model deadline (declared in the C6c lab budget config).</summary>
     public const int RoleTimeoutSeconds = 90;
     /// <summary>At most one host-rejected output may be followed by one corrected attempt.</summary>
     public const int AssessmentAttempts = 2;
