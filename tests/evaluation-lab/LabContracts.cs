@@ -33,7 +33,16 @@ public enum LabelStatus { Draft, OwnerApproved }
 /// hash, subtree and snapshot fingerprint).
 /// </summary>
 public sealed record CaseSource(string Kind, string Directory, IReadOnlyDictionary<string, string> FileSha256,
-    string? Repository = null);
+    string? Repository = null, IReadOnlyDictionary<string, string>? BeforeFileSha256 = null);
+
+/// <summary>
+/// C6c-2b deliberate change: an in-repo before/after fixture pair with one
+/// known edit. Impact is judged on the entry's normalized evidence (relation
+/// kinds and targets, ignoring hashes/lines/IDs); ImpactTarget optionally names
+/// the edited method in the BEFORE version for the ADR 0015 one-hop caller check.
+/// </summary>
+public sealed record ChangeSpec(string Edit, string Impact, EntryPointSelector BeforeEntryPoint,
+    LabelAnchor? ImpactTarget = null);
 
 /// <summary>
 /// Entry point selected by written-syntax location, resolved at run time to
@@ -53,7 +62,7 @@ public static class CaseExpectation
 
 public sealed record LabCase(string SchemaVersion, string Id, CaseCategory Category, string Title,
     string Purpose, CaseSource Source, EntryPointSelector? EntryPoint, bool DiagnosticRepeat,
-    string Expectation = CaseExpectation.Investigate);
+    string Expectation = CaseExpectation.Investigate, ChangeSpec? Change = null);
 
 /// <summary>One owner-acquired real repository, pinned exactly.</summary>
 public sealed record CuratedRepository(string Id, string Repository, string Url, string CommitSha,

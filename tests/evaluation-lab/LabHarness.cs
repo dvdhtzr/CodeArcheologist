@@ -70,7 +70,7 @@ public static class LabHarness
             Directory.CreateDirectory(source);
             foreach (var (file, hash) in loaded.Case.Source.FileSha256)
             {
-                var bytes = await File.ReadAllBytesAsync(Path.Combine(loaded.Directory, "source", file), ct);
+                var bytes = await File.ReadAllBytesAsync(Path.Combine(loaded.Directory, loaded.Case.Source.Directory, file), ct);
                 if (LabSchema.Sha256(bytes) != hash)
                     throw new InvalidOperationException("Fixture bytes changed since validation: " + file);
                 var target = Path.Combine(source, file);
@@ -176,6 +176,79 @@ public static class LabHarness
             var candidates = graph.Nodes.Count(n => n.Kind is "http-endpoint-attribute" or "http-minimal-mapping");
             return new(loaded.Case.Id, loaded.Case.Expectation, candidates == 0,
                 candidates == 0 ? "zero supported HTTP candidates; nothing invented" : $"{candidates} unexpected candidates");
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>
+    /// Normalized entry evidence for change experiments: entry kind plus every
+    /// reference and relation by kind, status, label, detail and file. Hashes,
+    /// lines and IDs are excluded because they shift for unrelated reasons.
+    /// </summary>
+    public static string EvidenceSignature(AgentEvidencePackage package)
+    {
+        var refs = package.References.ToDictionary(r => r.Id, StringComparer.Ordinal);
+        string Ref(string id) => refs.TryGetValue(id, out var r) ? $"{r.Kind}|{r.EvidenceStatus}|{r.Label}|{r.Detail}|{r.FilePath}" : "absent";
+        return string.Join("\n", new[] { "entry|" + package.EntryPointKind }
+            .Concat(package.References.Select(r => "ref|" + Ref(r.Id)))
+            .Concat(package.Relations.Select(r => $"rel|{r.Kind}|{r.EvidenceStatus}|{Ref(r.FromId)}|{Ref(r.ToId)}"))
+            .OrderBy(x => x, StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// C6c-2b deterministic checks (no model): (1) the entry's normalized
+    /// evidence differs between before and after exactly when the edit is
+    /// declared affected; (2) if an impact target is named, the ADR 0015
+    /// one-hop rule (reverse provisional candidate-callee edges, attribute
+    /// each invocation to its containing method) lists the entry method as a
+    /// caller of that method in the BEFORE version exactly when affected.
+    /// </summary>
+    public static async Task<ExpectationResult> CheckChangeAsync(CapturedCase after, CancellationToken ct)
+    {
+        var loaded = after.Loaded;
+        var spec = loaded.Case.Change ?? throw new LabCaseException(loaded.Case.Id, "not a change experiment");
+        var root = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(root, "source");
+        try
+        {
+            foreach (var (file, hash) in loaded.Case.Source.BeforeFileSha256!)
+            {
+                var bytes = await File.ReadAllBytesAsync(Path.Combine(loaded.Directory, "before", file), ct);
+                if (LabSchema.Sha256(bytes) != hash) throw new LabCaseException(loaded.Case.Id, "before bytes changed: " + file);
+                var target = Path.Combine(source, file);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                await File.WriteAllBytesAsync(target, bytes, ct);
+            }
+            var (services, _, _, _, snapshot, graph) =
+                await CaptureSourceAsync(source, Path.Combine(root, "data"), "Lab before " + loaded.Case.Id, ct);
+            await using var _s = services;
+            var sel = spec.BeforeEntryPoint;
+            var entry = graph.Nodes.Where(n => n.Kind == sel.Kind && n.FilePath == sel.FilePath && n.Line == sel.Line).ToArray();
+            if (entry.Length != 1) throw new LabCaseException(loaded.Case.Id, "before entry selector matched " + entry.Length);
+            var before = services.GetRequiredService<SnapshotEvidenceTools>().ReadEntryPoint(snapshot, entry[0].Id, ct);
+            var affected = EvidenceSignature(before) != EvidenceSignature(after.Package);
+            var expected = spec.Impact == "affected";
+            var details = new List<string> { $"evidence {(affected ? "changed" : "unchanged")}" };
+            var ok = affected == expected;
+            if (spec.ImpactTarget is { } t)
+            {
+                var targets = graph.Nodes.Where(n => n.Kind == "syntax-declaration" && n.FilePath == t.FilePath && n.Line == t.Line).ToArray();
+                var entryMethod = graph.Edges.SingleOrDefault(e => e.FromId == entry[0].Id && e.Kind == "annotates-method")?.ToId;
+                if (targets.Length != 1 || entryMethod is null)
+                    throw new LabCaseException(loaded.Case.Id, "impact target or entry method not uniquely resolvable");
+                var callers = graph.Edges
+                    .Where(e => e.Kind == "candidate-callee" && e.Status == "provisional-local" && e.ToId == targets[0].Id)
+                    .SelectMany(callee => graph.Edges.Where(c => c.Kind == "contains-invocation" && c.ToId == callee.FromId))
+                    .Select(c => c.FromId).ToHashSet(StringComparer.Ordinal);
+                var isCaller = callers.Contains(entryMethod);
+                details.Add($"one-hop: entry method {(isCaller ? "is" : "is not")} a candidate caller of the edited method");
+                ok &= isCaller == expected;
+            }
+            return new(loaded.Case.Id, "change-" + spec.Impact, ok, string.Join("; ", details));
         }
         finally
         {

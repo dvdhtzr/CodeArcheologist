@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C01-add-helper-call",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get now invokes Audit (new call).",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Audit is a provisional-local callee, not runtime-verified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Omits or denies the new Audit call.",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Get now also calls a new private Audit helper."
+    }
+  ]
+}

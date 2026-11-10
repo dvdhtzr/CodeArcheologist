@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C02-remove-only-call",
+  "category": "change-experiment",
+  "title": "Remove the endpoint's only call",
+  "purpose": "Deliberate change experiment (affected): Get no longer calls Format; Format still exists.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "7c027430578ff1192f2727da5a9802b676dc99987160fa22b4ebfa916fce8b74"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "6e56d0a6c2b718fa7e24f4ea51bbaaa01ece5d8291075ef05e711cac1c4d40e5"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Get no longer calls Format; Format still exists.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C05-move-helper-file",
+  "category": "change-experiment",
+  "title": "Move the helper to another file",
+  "purpose": "Deliberate change experiment (affected): Format moves to a second partial-class file.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "166b11efe7be88e5282c7e89c71f8c2d4a6251d1db3864d7c07f722a0a9f2223",
+      "Controller.Helpers.cs": "e7a2033cca5cb57e43dc0dbf3499674167bebd29e5d480ee8f546f76c9a5c5c5"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "d0d9faa50f7f29a48233117966844826136ed613a6379d87bb573b237b7899cf"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Format moves to a second partial-class file.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": {
+      "filePath": "Controller.cs",
+      "line": 12
+    }
+  }
+}

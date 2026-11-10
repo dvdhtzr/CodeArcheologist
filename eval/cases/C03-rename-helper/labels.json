@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C03-rename-helper",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes Render.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Render is a provisional-local callee."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Refers to a current call to Format (stale name).",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Format renamed to Render at declaration and call site."
+    }
+  ]
+}

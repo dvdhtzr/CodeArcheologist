@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C04-overload-switch",
+  "category": "change-experiment",
+  "title": "Change an argument so another overload binds",
+  "purpose": "Deliberate change experiment (affected): Render(id) becomes Render(id.ToString()), selecting the string overload.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "991319c8d765b64a3e89692860cd67432650867668ebc303c3ca618ee2743f8d"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "bb48bf6a1be8d95dc75145d6a005231a98e574d7400fa8fdd73383da084ad058"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Render(id) becomes Render(id.ToString()), selecting the string overload.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": {
+      "filePath": "Controller.cs",
+      "line": 12
+    }
+  }
+}

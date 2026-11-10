@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C14-add-unrelated-controller",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes Format.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The new controller is a separate candidate and not part of this entry's evidence."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Attributes StatusController to this entry point.",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "A separate StatusController file is added."
+    }
+  ]
+}

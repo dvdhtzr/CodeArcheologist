@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C07-wrap-in-lambda",
+  "category": "change-experiment",
+  "title": "Wrap the call in a lambda",
+  "purpose": "Deliberate change experiment (affected): The Format call moves inside a lambda that Get then invokes.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "75b7c4b7a411640a10b127c1c94d9e94a472775c16044fd03f2ebd093382f43b"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "1fe81446fc146010e6bcd01b682eb9493608f4ac7c64dddfb38fc00922e91c66"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate",
+  "change": {
+    "edit": "The Format call moves inside a lambda that Get then invokes.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

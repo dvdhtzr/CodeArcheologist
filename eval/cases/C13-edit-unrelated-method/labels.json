@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C13-edit-unrelated-method",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes Format.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Unrelated() has no candidate caller in Get."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the Unrelated edit impacts Get.",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Unrelated() body changes; Get untouched."
+    }
+  ]
+}

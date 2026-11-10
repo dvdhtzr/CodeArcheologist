@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C03-rename-helper",
+  "category": "change-experiment",
+  "title": "Rename the called helper",
+  "purpose": "Deliberate change experiment (affected): Format renamed to Render at declaration and call site.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "7bcaa7b958c7454aa293df5d31e1e9a8757d0c5c524233bbdb56240b369c48ca"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "d447480eeca56cb25909883ec6b0a2cb6347b6c3d0f60b7d8e5f5e462396b0ea"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Format renamed to Render at declaration and call site.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": {
+      "filePath": "Controller.cs",
+      "line": 12
+    }
+  }
+}

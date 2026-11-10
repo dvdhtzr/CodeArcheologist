@@ -151,6 +151,17 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
         try { captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot); }
         catch (LabCaseException error) { failures.Add(error.Message); Console.WriteLine(error.Message); continue; }
         await using var _captured = captured;
+        if (loaded.Case.Change is not null)
+        {
+            try
+            {
+                var change = await LabHarness.CheckChangeAsync(captured, CancellationToken.None);
+                expectations.Add(change);
+                if (!change.Confirmed) failures.Add($"{loaded.Case.Id}: change expectation violated: {change.Detail}");
+                Console.WriteLine($"{loaded.Case.Id} {change.Expectation}: {(change.Confirmed ? "confirmed" : "VIOLATED")} ({change.Detail})");
+            }
+            catch (LabCaseException error) { failures.Add(error.Message); Console.WriteLine(error.Message); }
+        }
         var unsatisfiable = LabHarness.UnsatisfiableAnchors(captured);
         if (unsatisfiable.Count > 0)
         {

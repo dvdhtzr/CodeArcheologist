@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C05-move-helper-file",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes Format.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The cross-file binding is provisional-local, not project-verified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims behavior changed because the file moved.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Format moves to a second partial-class file."
+    }
+  ]
+}

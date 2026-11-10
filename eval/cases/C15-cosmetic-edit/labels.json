@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C15-cosmetic-edit",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes Format.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 11
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Cosmetic edits are not impact."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the cosmetic edit changed behavior.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "A comment and blank line are added in Get."
+    }
+  ]
+}

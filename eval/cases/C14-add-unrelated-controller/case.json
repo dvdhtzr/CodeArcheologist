@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C14-add-unrelated-controller",
+  "category": "change-experiment",
+  "title": "Add a new unrelated controller file",
+  "purpose": "Deliberate change experiment (unaffected): A separate StatusController file is added.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "2203a1af20be3d4172af73570bcbf60c3b7969f27b07b3cd933f98eb0cdc8c13",
+      "StatusController.cs": "66fb390b02473f64d58add3dcf5505725d1fa9fb7edce4a9c90618ae2583cdf5"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "2203a1af20be3d4172af73570bcbf60c3b7969f27b07b3cd933f98eb0cdc8c13"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "A separate StatusController file is added.",
+    "impact": "unaffected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

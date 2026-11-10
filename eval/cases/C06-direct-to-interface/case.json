@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C06-direct-to-interface",
+  "category": "change-experiment",
+  "title": "Replace a direct call with an injected interface call",
+  "purpose": "Deliberate change experiment (affected): Get calls _formatter.Format via an injected IFormatter.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "350a27b4b304d5cb06a98e9ddd88dfc3d7b732a67f6b25d76410476819b3583b"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "c581d7b38b403dfb2f0dadc295d099fc3503a63433fd9d729049b31ec4387feb"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 11
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Get calls _formatter.Format via an injected IFormatter.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C11-add-di-registration",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes _clock.Now.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 18
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The new AddScoped registration is a syntax candidate; it does not resolve IClock for this entry."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the endpoint now uses SystemClock at runtime.",
+      "category": "di-resolution"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "A Composition class registering IClock -> SystemClock is added."
+    }
+  ]
+}

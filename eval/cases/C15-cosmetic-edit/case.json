@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C15-cosmetic-edit",
+  "category": "change-experiment",
+  "title": "Comment/whitespace-only edit in the entry method",
+  "purpose": "Deliberate change experiment (unaffected): A comment and blank line are added in Get.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "2213c15cded0f777ad391a8f660d9032e061ede2169dfe2b31f3514d910931b3"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "65f1255c94e50e48dba3ff28d3472e0363de83b3adcc65304bc8c9b7da4cb4c7"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "A comment and blank line are added in Get.",
+    "impact": "unaffected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

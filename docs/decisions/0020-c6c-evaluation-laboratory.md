@@ -63,3 +63,15 @@ The decisions below settle how this is done without the lab measuring itself.
   - R04 is re-scoped to `src/Equinox.Services.Api`: same commit and entry point. The Register callee is now honestly unresolved, because the service interface lies outside the subtree.
 - **Diagnostics:** per-file manifests (`eval/curated/manifests/<id>.tsv`) are pinned and must reproduce the fingerprint. A mismatch names the changed, missing or extra entries and is never accepted.
 
+## Addendum — C6c-2b change experiments (approved 2026-11-10)
+
+- **Shape:** 15 `change-experiment` cases. Each is a pinned in-repo `before/` and `after/` fixture pair with exactly one edit and a declared impact (`affected` or `unaffected`).
+- **Deterministic checks (no model):**
+  - The entry's normalized evidence must differ between before and after exactly when `affected`. The signature covers the entry kind and every reference and relation by kind, status, label, detail and file, ignoring hashes, lines and IDs.
+  - Where an edited method is named, the ADR 0015 one-hop rule must list the entry method as a candidate caller exactly when `affected`. The rule reverses provisional `candidate-callee` edges and attributes each invocation to its containing method; the lab applies it to the same graph and adds no product change.
+- **Comparators** run on the after version only (approved). The before version feeds only the deterministic checks.
+- **Diagnostic repeats:** C01, C03, C06, C07, C11 and C12 complete the 12 (with F01, F05, F09, F10, R02, R06).
+- **Two deviations from the proposal, both found by running the checks:**
+  - The signature includes each reference's file path. Without it, moving a callee to another file (C05) looked unchanged.
+  - C11 (adding a DI registration elsewhere) is `unaffected`: DI registrations are not part of an entry's one-hop evidence. Its label forbids claiming the registration resolves the dependency.
+

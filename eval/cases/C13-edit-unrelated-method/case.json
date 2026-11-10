@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C13-edit-unrelated-method",
+  "category": "change-experiment",
+  "title": "Edit an unrelated method in the same file",
+  "purpose": "Deliberate change experiment (unaffected): Unrelated() body changes; Get untouched.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "0434f84481ae33d12fb571eaeb45cb15ddddecf48c9eb1f0bf2fc3da45cd7c8c"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "04cd273d67f1f9a3b4c395527e1739d58025d372172450d65f28e6b25b99e261"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Unrelated() body changes; Get untouched.",
+    "impact": "unaffected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": {
+      "filePath": "Controller.cs",
+      "line": 14
+    }
+  }
+}

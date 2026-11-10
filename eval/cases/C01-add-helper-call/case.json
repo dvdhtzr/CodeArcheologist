@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C01-add-helper-call",
+  "category": "change-experiment",
+  "title": "Add a call to a new helper",
+  "purpose": "Deliberate change experiment (affected): Get now also calls a new private Audit helper.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "de27f2056d2f81d4b2092d58fe5ede122f931111611672aef7b03cd6581b661f"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "94331f72d982a9339724a8587a1fdd340a0f99ae6acdaf88b10b95d59b6c7961"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate",
+  "change": {
+    "edit": "Get now also calls a new private Audit helper.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C07-wrap-in-lambda",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes render() (a delegate).",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 10
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Format() now sits in a lambda scope and is not a direct invocation of Get."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims Get directly calls Format.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "The Format call moves inside a lambda that Get then invokes."
+    }
+  ]
+}

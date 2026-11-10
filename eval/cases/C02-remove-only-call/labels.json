@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C02-remove-only-call",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "The [HttpGet] candidate on Get remains.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Get has no invocation sites after the edit; Format being declared does not make it called."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims Get still calls Format (stale evidence).",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Get no longer calls Format; Format still exists."
+    }
+  ]
+}

@@ -38,6 +38,26 @@ internal static class LabSelfTests
             });
         }
 
+        foreach (var loaded in corpus.Cases.Where(c => c.Case.Category == CaseCategory.ChangeExperiment))
+        {
+            await CheckAsync($"{loaded.Case.Id}: before/after delta and one-hop impact match the declared impact", async () =>
+            {
+                await using var captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None);
+                Expect(LabHarness.UnsatisfiableAnchors(captured).Count == 0, "after-version anchors unsatisfiable");
+                var change = await LabHarness.CheckChangeAsync(captured, CancellationToken.None);
+                Expect(change.Confirmed, change.Detail);
+                Expect(LabScoring.Score(LabHarness.Baseline(captured, 1), captured).IntegrityBreaches.Count == 0, "baseline breach");
+                if (loaded.Case.Id == "C03-rename-helper")
+                {
+                    // Negative: a flipped impact declaration must be detected, not absorbed.
+                    var flipped = loaded with { Case = loaded.Case with { Change = loaded.Case.Change! with { Impact = "unaffected" } } };
+                    await using var again = await LabHarness.CaptureAsync(flipped, CancellationToken.None);
+                    Expect(!(await LabHarness.CheckChangeAsync(again, CancellationToken.None)).Confirmed,
+                        "flipped impact declaration was accepted");
+                }
+            });
+        }
+
         await CheckAsync("scoring detects every integrity breach class", async () =>
         {
             await using var captured = await LabHarness.CaptureAsync(corpus.Cases[0], CancellationToken.None);
@@ -121,7 +141,7 @@ internal static class LabSelfTests
         Check("repository corpus unmodified by lab runs", () =>
             Expect(TreeDigest(evalRoot) == before, "eval/ tree changed during self-test"));
         Console.WriteLine(_failed == 0
-            ? $"GREEN: C6c lab self-test ({_passed} checks): corpus validation, isolated capture of {corpus.Cases.Count(c => c.Case.Category == CaseCategory.Fixture)} fixtures, curated pinning/tamper/expectation machinery, satisfiable anchors, baseline, production Gate C path (model-free roles), integrity-breach detection, fixed denominators, non-modification."
+            ? $"GREEN: C6c lab self-test ({_passed} checks): corpus validation, isolated capture of {corpus.Cases.Count(c => c.Case.Category == CaseCategory.Fixture)} fixtures and {corpus.Cases.Count(c => c.Case.Category == CaseCategory.ChangeExperiment)} change experiments, curated pinning/tamper/expectation machinery, satisfiable anchors, baseline, production Gate C path (model-free roles), integrity-breach detection, fixed denominators, non-modification."
             : $"RED: {_failed} lab self-test check(s) failed.");
         return _failed == 0 ? 0 : 1;
     }
@@ -377,7 +397,7 @@ internal static class LabSelfTests
             n => n["forbiddenClaims"]![0]!["category"] = "vibes"), "unknown forbidden-claim category");
         Mutate("unknown JSON member", t => Json(t, first + "/case.json", n => n["extra"] = true), "unreadable or invalid");
         Mutate("unsupported case category", t => Json(t, first + "/case.json", n => n["category"] = "held-out"),
-            "only fixture and curated cases are supported");
+            "only fixture, curated and change-experiment cases are supported");
         Mutate("case id that differs from its directory", t => Json(t, first + "/case.json", n => n["id"] = "F99-other-case"),
             "case id must equal directory name");
     }
