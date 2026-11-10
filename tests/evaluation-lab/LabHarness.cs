@@ -92,10 +92,10 @@ public static class LabHarness
         }
         if (loaded.Curated is { } pinned && snapshot.FingerprintSha256 != pinned.SnapshotFingerprint)
         {
+            var detail = DescribeDifference(loaded, services, snapshot);
             await services.DisposeAsync();
             TryDelete(root);
-            throw new LabCaseException(loaded.Case.Id,
-                "snapshot fingerprint differs from the pinned manifest (checkout is not the pinned commit, or line endings were converted)");
+            throw new LabCaseException(loaded.Case.Id, "snapshot fingerprint differs from the pinned manifest: " + detail);
         }
         var selector = loaded.Case.EntryPoint
             ?? throw new LabCaseException(loaded.Case.Id, "case has no entry point (non-investigate expectation)");
@@ -171,7 +171,8 @@ public static class LabHarness
             var (services, _, _, _, snapshot, graph) = await CaptureSourceAsync(source, data, "Lab " + loaded.Case.Id, ct);
             await using var _s = services;
             if (snapshot.FingerprintSha256 != repo.SnapshotFingerprint)
-                return new(loaded.Case.Id, loaded.Case.Expectation, false, "fingerprint differs from the pinned manifest");
+                return new(loaded.Case.Id, loaded.Case.Expectation, false,
+                    "fingerprint differs from the pinned manifest: " + DescribeDifference(loaded, services, snapshot));
             var candidates = graph.Nodes.Count(n => n.Kind is "http-endpoint-attribute" or "http-minimal-mapping");
             return new(loaded.Case.Id, loaded.Case.Expectation, candidates == 0,
                 candidates == 0 ? "zero supported HTTP candidates; nothing invented" : $"{candidates} unexpected candidates");
@@ -181,6 +182,36 @@ public static class LabHarness
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             TryDelete(root);
         }
+    }
+
+    /// <summary>Pinned per-file manifest lines: file\tpath\tsize\tsha256 / excluded\tpath\treason.</summary>
+    public static IReadOnlyList<string> ManifestLines(SnapshotManifest manifest) =>
+        manifest.Files.Select(f => $"file\t{f.Path}\t{f.SizeBytes}\t{f.Sha256}")
+            .Concat(manifest.Exclusions.Select(e => $"excluded\t{e.Path}\t{e.Reason}")).ToArray();
+
+    /// <summary>
+    /// Names exactly which captured entries differ from the pinned manifest so a
+    /// mismatch is diagnosable (never accepted): missing, extra or changed files.
+    /// </summary>
+    private static string DescribeDifference(LoadedCase loaded, ServiceProvider services, SnapshotRecord snapshot)
+    {
+        var pinnedPath = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(loaded.Directory)!)!,
+            "curated", "manifests", loaded.Curated!.Id + ".tsv");
+        if (!File.Exists(pinnedPath)) return "no pinned per-file manifest to compare";
+        var expected = File.ReadAllLines(pinnedPath).Where(l => l.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var actual = ManifestLines(services.GetRequiredService<SnapshotCaptureService>().ReadManifest(snapshot))
+            .ToHashSet(StringComparer.Ordinal);
+        string Key(string line) => string.Join('\t', line.Split('\t').Take(2));
+        var missing = expected.Except(actual).ToArray();
+        var extra = actual.Except(expected).ToArray();
+        var changed = missing.Select(Key).Intersect(extra.Select(Key)).ToHashSet(StringComparer.Ordinal);
+        var parts = changed.Select(k => "changed " + k)
+            .Concat(missing.Where(m => !changed.Contains(Key(m))).Select(m => "missing " + Key(m)))
+            .Concat(extra.Where(x => !changed.Contains(Key(x))).Select(x => "extra " + Key(x)))
+            .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        return parts.Length == 0 ? "per-file manifest identical (policy version differs?)"
+            : $"{parts.Length} difference(s): " + string.Join("; ", parts.Take(12)).Replace('\t', ' ') +
+              (parts.Length > 12 ? "; ..." : "");
     }
 
     private static void TryDelete(string root)

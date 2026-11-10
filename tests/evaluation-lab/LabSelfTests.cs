@@ -147,10 +147,14 @@ internal static class LabSelfTests
             File.WriteAllText(Path.Combine(checkout, "LICENSE"), "MIT License (synthetic test)");
             File.Delete(Path.Combine(checkout, "app2", "Controller.cs"));
             File.WriteAllText(Path.Combine(checkout, "app2", "Plain.cs"), "namespace P; public class Plain { public int X() => 1; }");
+            var pinnedLines = new Dictionary<string, IReadOnlyList<string>>();
             async Task<(string Fingerprint, int Files)> Pin(string sub)
             {
                 var (services, _, _, _, snap, _) = await LabHarness.CaptureSourceAsync(Path.Combine(checkout, sub),
                     Path.Combine(temp, "pin-" + Guid.NewGuid().ToString("N")), "pin", CancellationToken.None);
+                pinnedLines[sub] = LabHarness.ManifestLines(Microsoft.Extensions.DependencyInjection
+                    .ServiceProviderServiceExtensions.GetRequiredService<CodeArcheologist.Api.Workspaces.SnapshotCaptureService>(services)
+                    .ReadManifest(snap));
                 await services.DisposeAsync();
                 return (snap.FingerprintSha256, snap.FileCount);
             }
@@ -162,6 +166,7 @@ internal static class LabSelfTests
                 licenceSha, sub, pin.Fingerprint, pin.Files, group, "synthetic self-test repository");
             var manifest = new CuratedManifest(LabSchema.Curated, [Repo("R99", "app", "attribute-controllers", app)]);
             var manifestPath = Path.Combine(corpusCopy, "curated", "repositories.json");
+            File.WriteAllLines(Path.Combine(corpusCopy, "curated", "manifests", "R99.tsv"), pinnedLines["app"]);
             var real = JsonSerializer.Deserialize<CuratedManifest>(File.ReadAllText(manifestPath), LabSchema.Json)!;
             File.WriteAllText(manifestPath, JsonSerializer.Serialize(real with
                 { Repositories = [.. real.Repositories, .. manifest.Repositories] }, LabSchema.Json));
@@ -198,7 +203,8 @@ internal static class LabSelfTests
                 var source = Path.Combine(checkout, "app", "Controller.cs");
                 var bytes = File.ReadAllText(source);
                 File.WriteAllText(source, bytes.Replace("\n", "\r\n"));
-                await ExpectLabFailure(() => LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot), "fingerprint");
+                await ExpectLabFailure(() => LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot),
+                    "changed file Controller.cs");
                 File.WriteAllText(source, bytes);
             });
             await CheckAsync("curated: no-supported-candidate expectation confirms and detects violations", async () =>
@@ -255,6 +261,18 @@ internal static class LabSelfTests
             Mutated("a mismatched URL", m => Edit(m, r => r with { Url = "https://example.com/x" }), "url must be");
             Mutated("a group/expectation mismatch", m => Edit(m, r => r with { Group = "unsupported-convention" }),
                 "expectation must be no-supported-candidate");
+            Check("curated validator rejects a per-file manifest that does not reproduce the fingerprint", () =>
+            {
+                var tsv = Path.Combine(corpusCopy, "curated", "manifests", "R99.tsv");
+                var saved = File.ReadAllText(tsv);
+                try
+                {
+                    File.AppendAllText(tsv, "file\tExtra.cs\t1\t" + new string('0', 64) + "\n");
+                    Expect(CorpusValidator.Validate(corpusCopy).Errors.Any(e => e.Contains("does not reproduce")),
+                        "tampered per-file manifest accepted");
+                }
+                finally { File.WriteAllText(tsv, saved); }
+            });
             Mutated("a repository without a case", m => m with { Repositories = [.. m.Repositories,
                 m.Repositories.Single(r => r.Id == "R99") with { Id = "R97" }] }, "R97 has no case");
         }

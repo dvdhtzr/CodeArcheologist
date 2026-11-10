@@ -39,7 +39,11 @@ public static partial class CorpusValidator
         var manifestPath = Path.Combine(evalRoot, "curated", "repositories.json");
         var manifest = File.Exists(manifestPath) ? Read<CuratedManifest>(manifestPath, errors) : null;
         var curated = new Dictionary<string, CuratedRepository>(StringComparer.Ordinal);
-        if (manifest is not null) ValidateManifest(manifest, curated, errors);
+        if (manifest is not null)
+        {
+            ValidateManifest(manifest, curated, errors);
+            ValidatePerFileManifests(Path.Combine(evalRoot, "curated", "manifests"), curated.Values, errors);
+        }
 
         var casesRoot = Path.Combine(evalRoot, "cases");
         if (!Directory.Exists(casesRoot)) errors.Add("cases directory missing");
@@ -128,6 +132,30 @@ public static partial class CorpusValidator
             if (r.Group is not ("attribute-controllers" or "minimal-api" or "unsupported-convention" or "capture-limit"))
                 errors.Add(p + "unknown group");
             if (string.IsNullOrWhiteSpace(r.Purpose)) errors.Add(p + "purpose required");
+        }
+    }
+
+    /// <summary>
+    /// Offline consistency: each pinned per-file manifest must reproduce the
+    /// pinned snapshot fingerprint under the current snapshot policy.
+    /// </summary>
+    private static void ValidatePerFileManifests(string dir, IEnumerable<CuratedRepository> repos, List<string> errors)
+    {
+        foreach (var r in repos.Where(r => r.Group != "capture-limit"))
+        {
+            var path = Path.Combine(dir, r.Id + ".tsv");
+            if (!File.Exists(path)) { errors.Add($"curated {r.Id}: per-file manifest missing"); continue; }
+            var files = new List<SnapshotFile>();
+            var exclusions = new List<SnapshotExclusion>();
+            foreach (var line in File.ReadAllLines(path).Where(l => l.Length > 0))
+            {
+                var f = line.Split('\t');
+                if (f is ["file", var p, var size, var sha] && long.TryParse(size, out var n)) files.Add(new(p, n, sha));
+                else if (f is ["excluded", var ep, var reason]) exclusions.Add(new(ep, reason));
+                else { errors.Add($"curated {r.Id}: malformed per-file manifest line"); break; }
+            }
+            if (SnapshotPolicy.Fingerprint(files, exclusions) != r.SnapshotFingerprint || files.Count != r.SnapshotFileCount)
+                errors.Add($"curated {r.Id}: per-file manifest does not reproduce the pinned fingerprint");
         }
     }
 

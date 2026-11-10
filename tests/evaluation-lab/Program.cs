@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.EvaluationLab;
@@ -17,7 +18,9 @@ try
             return await DescribeAsync(evalRoot, Path.GetFileName(Path.GetFullPath(args[1]).TrimEnd('/', '\\')),
                 args.Length == 4 && args[2] == "--curated-root" ? Path.GetFullPath(args[3]) : null);
         case "--survey" when args.Length == 2:
-            return await SurveyAsync(Path.GetFullPath(args[1]));
+            return await SurveyAsync(Path.GetFullPath(args[1]), null);
+        case "--survey" when args.Length == 4 && args[2] == "--write-manifest":
+            return await SurveyAsync(Path.GetFullPath(args[1]), Path.GetFullPath(args[3]));
         case "--self-test":
             return await LabSelfTests.RunAsync(evalRoot);
         case "--run":
@@ -72,7 +75,7 @@ static async Task<int> DescribeAsync(string evalRoot, string caseId, string? cur
 
 // Read-only survey of a local checkout (curated-case preparation): snapshot
 // fingerprint, size, and every supported HTTP candidate, or the fail-closed reason.
-static async Task<int> SurveyAsync(string source)
+static async Task<int> SurveyAsync(string source, string? manifestOut)
 {
     var root = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-survey-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(root);
@@ -82,6 +85,9 @@ static async Task<int> SurveyAsync(string source)
             Path.Combine(root, "data"), "Lab survey", CancellationToken.None);
         await using var _s = services;
         Console.WriteLine($"fingerprint {snapshot.FingerprintSha256} files={snapshot.FileCount} bytes={snapshot.TotalBytes} analyzer={graph.AnalyzerVersion}");
+        if (manifestOut is not null)
+            await File.WriteAllLinesAsync(manifestOut, LabHarness.ManifestLines(
+                services.GetRequiredService<CodeArcheologist.Api.Workspaces.SnapshotCaptureService>().ReadManifest(snapshot)));
         foreach (var n in graph.Nodes.Where(n => n.Kind is "http-endpoint-attribute" or "http-minimal-mapping")
                      .OrderBy(n => n.FilePath, StringComparer.Ordinal).ThenBy(n => n.Line))
             Console.WriteLine($"  {n.Kind} {n.FilePath}:{n.Line} {n.Label}");
