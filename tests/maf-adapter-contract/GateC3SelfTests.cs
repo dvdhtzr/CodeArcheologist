@@ -54,7 +54,16 @@ internal static class GateC3SelfTests
                 GateCRole.Investigator) is not null)
             throw new InvalidOperationException("Role schema crossover was accepted.");
 
-        Reject(Replace(investigator, "E1", "foreign"));
+        // Syntax-only parser cannot know the host session's handle catalog;
+        // this negative case is enforced by the C1 validator.
+        var foreign = GateC3IndependentRunner.ParseAssessment(
+            Replace(investigator, "E1", "foreign"), run, scope,
+            GateCRole.Investigator);
+        if (foreign is null || GateCContractValidator.ValidateIndependent(
+                foreign, run, scope,
+                [new GateCEvidenceHandle("E1", "original",
+                    GateCEvidenceKind.Candidate)]).Accepted)
+            throw new InvalidOperationException("Foreign handle bypassed host validator.");
         Reject(Replace(investigator, "\"selectedHandles\":[\"E1\"]",
             "\"selectedHandles\":[]"));
         Reject(investigator.Replace("\"uncertainty\"", "\"confidence\"",
