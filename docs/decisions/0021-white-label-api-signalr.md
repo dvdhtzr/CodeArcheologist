@@ -29,7 +29,7 @@
 
 The cookie + CSRF path, loopback binding, Host validation, execution ownership, fencing, idempotency, and every evidence rule (AGENTS 1–57).
 
-## Addendum — W2 capability resources (approved 2026-11-10)
+## Addendum — W2 capability resources (approved 2026-11-10; owner reported `check.ps1` GREEN on Windows)
 
 - **New read-only resources** (`code-archeologist-capabilities-v1`): `entry-points`, `methods`, and `impact?methodId=`.
   - They are server-side projections of the existing evidence graph.
