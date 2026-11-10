@@ -85,6 +85,37 @@ internal static class GateC3SelfTests
             empty.SelectedEvidenceHandles.Count != 0)
             throw new InvalidOperationException("Honest inconclusive assessment rejected.");
 
+        // Host status must preserve the actual failure kind and must never
+        // permit Reviewer admission following an invalid independent role.
+        foreach (var sample in new[]
+        {
+            (GateCRunEvent.FailInvestigator, GateCRoleStatus.Failed,
+                GateCRunStatus.Incomplete),
+            (GateCRunEvent.TimeoutInvestigator, GateCRoleStatus.TimedOut,
+                GateCRunStatus.Incomplete),
+            (GateCRunEvent.CancelInvestigator, GateCRoleStatus.Cancelled,
+                GateCRunStatus.Cancelled)
+        })
+        {
+            var state = GateCRunProgress.New(Guid.NewGuid());
+            state = Apply(state, GateCRunEvent.EvidenceVerified);
+            state = Apply(state, GateCRunEvent.BeginIndependentAssessments);
+            state = Apply(state, GateCRunEvent.StartInvestigator);
+            state = Apply(state, sample.Item1);
+            if (state.InvestigatorStatus != sample.Item2 ||
+                state.Status != sample.Item3 ||
+                GateCStateTransitions.Apply(
+                    state, GateCRunEvent.BeginReviewer).Check.Accepted)
+                throw new InvalidOperationException("Failed role was misreported.");
+        }
+        static GateCRunProgress Apply(GateCRunProgress state, GateCRunEvent evt)
+        {
+            var result = GateCStateTransitions.Apply(state, evt);
+            if (!result.Check.Accepted)
+                throw new InvalidOperationException("Valid host transition rejected.");
+            return result.Progress;
+        }
+
         Console.WriteLine("GREEN: Gate C3 role-specific output parsing and model-free negative contracts.");
 
         void Reject(string text)
