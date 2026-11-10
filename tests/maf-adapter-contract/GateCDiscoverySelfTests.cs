@@ -121,6 +121,42 @@ internal static class GateCDiscoverySelfTests
         }
         catch (ArgumentException) { }
 
+        // Real canonical graph relationship IDs may be much longer than
+        // model-visible E1 handles. C1 previously applied its 128-character
+        // model ID cap to canonical IDs, rejecting valid real saved evidence.
+        var longCanonicalId = "candidate-http-mapping:" + new string('x', 190);
+        var longEvidence = evidence with
+        {
+            Relations = evidence.Relations.Select(r =>
+                r.Id == "annotation"
+                    ? r with { Id = longCanonicalId }
+                    : r).ToArray()
+        };
+        var realStyleSession = new GateCEvidenceSession(longEvidence, scope,
+            Guid.NewGuid(), GateCRole.Investigator);
+        var realView = Accept(realStyleSession.Request(
+            GateCEvidenceRegistry.EntryPoint, CancellationToken.None));
+        if (realView.Items.Count != 1 || realView.Items[0].Handle != "E1" ||
+            !GateCContractValidator.ValidateHostCatalog(longEvidence, scope,
+                realStyleSession.HostCatalog()).Accepted)
+            throw new InvalidOperationException(
+                "Long canonical graph ID was incorrectly rejected.");
+        var tooLongEvidence = longEvidence with
+        {
+            Relations = longEvidence.Relations.Select(r =>
+                r.Id == longCanonicalId
+                    ? r with { Id = new string('x', 1025) }
+                    : r).ToArray()
+        };
+        var invalidLengthSession = new GateCEvidenceSession(tooLongEvidence,
+            scope, Guid.NewGuid(), GateCRole.Skeptic);
+        Accept(invalidLengthSession.Request(
+            GateCEvidenceRegistry.EntryPoint, CancellationToken.None));
+        if (GateCContractValidator.ValidateHostCatalog(tooLongEvidence, scope,
+                invalidLengthSession.HostCatalog()).Accepted)
+            throw new InvalidOperationException(
+                "Unbounded canonical graph ID was accepted.");
+
         Console.WriteLine(
             "GREEN: Gate C2 capability discovery, role independence, scope, status, " +
             "handle identity, request budgets and unauthorized-call rejection.");
