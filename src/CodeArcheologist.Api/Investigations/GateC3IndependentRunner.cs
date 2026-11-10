@@ -202,8 +202,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 : "Independently identify at most two specific source-evidence " +
                   "limitations or competing hypotheses. Do not refer to any " +
                   "Investigator assessment. Use only existing evidence handles, or " +
-                  "an empty handle for missing evidence. selectedHandles must list " +
-                  "each cited nonempty handle exactly once. If there are no items, " +
+                  "an empty handle for missing evidence. If there are no items, " +
                   "return empty arrays and a concrete unknown.";
             var text = await AskAsync(agent,
                 assessmentPrompt + "\n<untrusted-evidence-json>\n" + view +
@@ -212,7 +211,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 "GateCIndependentAssessment", limit.Token);
             var parsed = ParseAssessment(text, runId, scope, role);
             if (parsed is null)
-                return Failure("invalid-assessment-schema");
+                return Failure(DiagnoseAssessmentShape(text, role));
             var check = session.ValidateAssessment(parsed);
             if (!check.Accepted)
                 return Failure(check.Diagnostic);
@@ -352,6 +351,64 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 handles, hypotheses, concerns, [unknown]);
         }
         catch (JsonException) { return null; }
+    }
+
+    /// <summary>
+    /// Safe diagnostics expose only a bounded reason code, never model
+    /// output, source text, provider responses, or exception messages.
+    /// This is diagnostic-only: it never repairs or accepts invalid JSON.
+    /// </summary>
+    public static string DiagnoseAssessmentShape(string? modelText, GateCRole role)
+    {
+        if (string.IsNullOrWhiteSpace(modelText))
+            return "assessment-empty-response";
+        if (modelText.Length > MaxModelText)
+            return "assessment-output-too-large";
+        try
+        {
+            using var json = JsonDocument.Parse(modelText);
+            var root = json.RootElement;
+            if (!HasExactProperties(root,
+                    role == GateCRole.Investigator ? "hypotheses" : "concerns",
+                    "unknown"))
+                return "assessment-root-shape-invalid";
+            if (ReadText(root.GetProperty("unknown"), 600) is null)
+                return "assessment-unknown-invalid";
+            var rows = root.GetProperty(role == GateCRole.Investigator
+                ? "hypotheses" : "concerns");
+            if (rows.ValueKind != JsonValueKind.Array ||
+                rows.GetArrayLength() > 2)
+                return "assessment-items-shape-invalid";
+            foreach (var row in rows.EnumerateArray())
+            {
+                if (role == GateCRole.Investigator)
+                {
+                    if (!HasExactProperties(row, "text", "handle", "uncertainty"))
+                        return "assessment-hypothesis-fields-invalid";
+                    if (ReadText(row.GetProperty("text"), 600) is null ||
+                        ReadText(row.GetProperty("uncertainty"), 600) is null ||
+                        ReadText(row.GetProperty("handle"), 8, true) is null)
+                        return "assessment-hypothesis-value-invalid";
+                }
+                else
+                {
+                    if (!HasExactProperties(row, "kind", "explanation", "handle"))
+                        return "assessment-concern-fields-invalid";
+                    var kind = ReadText(row.GetProperty("kind"), 40);
+                    if (kind is not ("insufficient-evidence" or
+                        "unsupported-inference" or "competing-hypothesis" or
+                        "coverage-limitation") ||
+                        ReadText(row.GetProperty("explanation"), 600) is null ||
+                        ReadText(row.GetProperty("handle"), 8, true) is null)
+                        return "assessment-concern-value-invalid";
+                }
+            }
+            return "assessment-shape-invalid";
+        }
+        catch (JsonException)
+        {
+            return "assessment-invalid-json";
+        }
     }
 
     private static bool HasExactProperties(JsonElement root, params string[] names)
