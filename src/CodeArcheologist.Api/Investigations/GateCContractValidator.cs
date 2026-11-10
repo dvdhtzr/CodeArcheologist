@@ -94,6 +94,11 @@ public static class GateCContractValidator
         if (review.Decisions.Any(d =>
                 d.Recommendation == GateCRecommendation.StructurallySupported))
             return Fail("model-hypothesis-cannot-be-verified-fact");
+        // Rejection is reserved for a separately host-proven contract violation.
+        // The C4 Reviewer has no such proof and must not veto hypotheses.
+        if (review.Decisions.Any(d =>
+                d.Recommendation == GateCRecommendation.Rejected))
+            return Fail("rejection-requires-host-proven-violation");
 
         var allAddressed = review.Decisions
             .SelectMany(d => d.AddressedConcernIds)
