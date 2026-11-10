@@ -39,7 +39,7 @@ public sealed partial class WorkspaceStore
 
         // An identical replay wins even when another investigation owns the slot.
         using (var lookup = Command(connection, tx, SummaryColumns +
-            "\\n WHERE idempotency_key=$key;"))
+            "\n WHERE idempotency_key=$key;"))
         {
             lookup.Parameters.AddWithValue("$key", idempotencyKey.ToString("D"));
             using var reader = lookup.ExecuteReader();
