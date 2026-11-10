@@ -156,6 +156,15 @@ public static partial class CorpusValidator
             }
             if (SnapshotPolicy.Fingerprint(files, exclusions) != r.SnapshotFingerprint || files.Count != r.SnapshotFileCount)
                 errors.Add($"curated {r.Id}: per-file manifest does not reproduce the pinned fingerprint");
+            // Portability: a pinned subtree must capture identically on case-insensitive
+            // filesystems (Windows, default macOS). Any file or directory path that
+            // differs only by case would be merged there and yield a different snapshot.
+            var prefixes = files.Select(f => f.Path).Concat(exclusions.Select(e => e.Path))
+                .SelectMany(path => path.Split('/').Select((_, i) => string.Join('/', path.Split('/').Take(i + 1))))
+                .Distinct(StringComparer.Ordinal).ToArray();
+            var collision = prefixes.GroupBy(x => x, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+            if (collision is not null)
+                errors.Add($"curated {r.Id}: case-insensitive path collision ({string.Join(" vs ", collision)}); choose a subtree without it");
         }
     }
 

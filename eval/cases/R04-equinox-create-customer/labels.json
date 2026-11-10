@@ -8,7 +8,7 @@
       "id": "O1",
       "description": "[HttpPost(\"customer\")] candidate on CustomerController.Post.",
       "anchor": {
-        "filePath": "src/Equinox.Services.Api/Controllers/CustomerController.cs",
+        "filePath": "Controllers/CustomerController.cs",
         "line": 35
       }
     },
@@ -16,7 +16,7 @@
       "id": "O2",
       "description": "Post invokes _customerAppService.Register.",
       "anchor": {
-        "filePath": "src/Equinox.Services.Api/Controllers/CustomerController.cs",
+        "filePath": "Controllers/CustomerController.cs",
         "line": 38
       }
     }
@@ -24,7 +24,7 @@
   "requiredUncertainties": [
     {
       "id": "U1",
-      "description": "The Register callee is provisional-local and targets the ICustomerAppService interface, not an implementation."
+      "description": "ICustomerAppService and its implementation are outside the scoped subtree, so the Register callee is unresolved."
     },
     {
       "id": "U2",

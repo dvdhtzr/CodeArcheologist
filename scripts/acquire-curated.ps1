@@ -38,6 +38,20 @@ foreach ($r in $manifest.repositories) {
   if ((& git -C $dir rev-parse HEAD).Trim() -ne $r.commitSha) { throw "$($r.id): commit mismatch" }
   $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dir $r.licensePath)).Hash.ToLowerInvariant()
   if ($hash -ne $r.licenseSha256) { throw "$($r.id): licence file differs from the pinned SHA-256" }
+  # Portability: the git index lists every path even after a case-insensitive
+  # filesystem merged colliding directories; refuse such a pinned subtree.
+  $subtree = if ($r.subtree) { $r.subtree } else { '.' }
+  $seen = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::OrdinalIgnoreCase)
+  foreach ($path in (& git -C $dir ls-files -- $subtree)) {
+    $parts = $path -split '/'
+    for ($i = 1; $i -le $parts.Length; $i++) {
+      $prefix = ($parts[0..($i - 1)] -join '/')
+      if ($seen.ContainsKey($prefix) -and $seen[$prefix] -cne $prefix) {
+        throw "$($r.id): case-insensitive path collision ($($seen[$prefix]) vs $prefix) in subtree '$subtree'"
+      }
+      $seen[$prefix] = $prefix
+    }
+  }
   Write-Host "$($r.id): $($r.commitSha) verified"
 }
 Write-Host "Acquired curated repositories in $targetFull. Nothing was built or executed."

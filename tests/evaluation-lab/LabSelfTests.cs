@@ -273,6 +273,19 @@ internal static class LabSelfTests
                 }
                 finally { File.WriteAllText(tsv, saved); }
             });
+            Check("curated validator rejects a case-insensitive path collision", () =>
+            {
+                var tsv = Path.Combine(corpusCopy, "curated", "manifests", "R99.tsv");
+                var saved = File.ReadAllText(tsv);
+                try
+                {
+                    File.AppendAllText(tsv, "file\tDocs/a.cs\t1\t" + new string('0', 64) + "\n" +
+                        "file\tdocs/b.cs\t1\t" + new string('0', 64) + "\n");
+                    Expect(CorpusValidator.Validate(corpusCopy).Errors.Any(e => e.Contains("case-insensitive path collision")),
+                        "case collision accepted");
+                }
+                finally { File.WriteAllText(tsv, saved); }
+            });
             Mutated("a repository without a case", m => m with { Repositories = [.. m.Repositories,
                 m.Repositories.Single(r => r.Id == "R99") with { Id = "R97" }] }, "R97 has no case");
         }

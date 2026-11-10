@@ -3,7 +3,7 @@
   "id": "R04-equinox-create-customer",
   "category": "curated",
   "title": "Equinox: create customer via application service",
-  "purpose": "Classic controllers over application services and DI registrations.",
+  "purpose": "Classic controllers over application services. Scoped to src/Equinox.Services.Api: the full repository contains a directory-name case collision (Migrations/EventStoreSQL vs EventStoreSql) that yields different snapshots on case-insensitive filesystems.",
   "source": {
     "kind": "curated-checkout",
     "directory": "",
@@ -12,7 +12,7 @@
   },
   "entryPoint": {
     "kind": "http-endpoint-attribute",
-    "filePath": "src/Equinox.Services.Api/Controllers/CustomerController.cs",
+    "filePath": "Controllers/CustomerController.cs",
     "line": 35
   },
   "diagnosticRepeat": false,

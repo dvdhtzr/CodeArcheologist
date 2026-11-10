@@ -51,11 +51,11 @@
       "license": "MIT",
       "licensePath": "LICENSE",
       "licenseSha256": "ae8ddda07009aa12e3f5e64ea52a996b2ebbee23229dbbbb86c97226c9bfd59f",
-      "subtree": "",
-      "snapshotFingerprint": "b706b2f316638d437a40e523e9b55994fc7492727c5c966747da724a1bc4e64c",
-      "snapshotFileCount": 174,
+      "subtree": "src/Equinox.Services.Api",
+      "snapshotFingerprint": "df28e7592ad367edfcdcbd2646127d8a3a89eb068427de8798a73a5d2374bc8e",
+      "snapshotFileCount": 15,
       "group": "attribute-controllers",
-      "purpose": "Classic controllers over application services and DI registrations."
+      "purpose": "Classic controllers over application services. Scoped to src/Equinox.Services.Api: the full repository contains a directory-name case collision (Migrations/EventStoreSQL vs EventStoreSql) that yields different snapshots on case-insensitive filesystems."
     },
     {
       "id": "R05",

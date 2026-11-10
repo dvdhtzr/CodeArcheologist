@@ -58,3 +58,8 @@ The decisions below settle how this is done without the lab measuring itself.
 - **Reclassification:** R11 (aspnetrun, Carter) was proposed as an unsupported convention. Its modules still call `app.MapX`, so the survey found 17 supported candidates, and it is now a Minimal API case.
 - **Ocelot:** scoped to the gateway-only `samples/Basic`, because the full `samples/` tree contains downstream services with ordinary endpoints.
 - **Slicing:** C6c-2 is delivered as two PRs. C6c-2a covers the curated repositories; C6c-2b covers the 15 deliberate change experiments.
+- **Portability (found by the owner's Windows run):** R04 Equinox contains both `Migrations/EventStoreSQL/` and `Migrations/EventStoreSql/`. A case-insensitive filesystem merges them, so the Windows snapshot differed.
+  - Pinned curated subtrees must now be free of case-insensitive path collisions. The validator enforces this on the per-file manifests, and both acquisition scripts refuse such a subtree.
+  - R04 is re-scoped to `src/Equinox.Services.Api`: same commit and entry point. The Register callee is now honestly unresolved, because the service interface lies outside the subtree.
+- **Diagnostics:** per-file manifests (`eval/curated/manifests/<id>.tsv`) are pinned and must reproduce the fingerprint. A mismatch names the changed, missing or extra entries and is never accepted.
+
