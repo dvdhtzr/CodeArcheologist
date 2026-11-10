@@ -331,6 +331,8 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
                 onClick={() => {
                   setError('');
                   setInvestigationSnapshotId(snapshot.id);
+                  // Never leave a previous snapshot's graph beside this report.
+                  setGraphSnapshotId(null);
                   setGraphFocusNodeId(null);
                 }}
               >
