@@ -27,4 +27,5 @@ node --test "$ROOT/tests/repositories/registration.test.mjs"
 node --test "$ROOT/tests/snapshots/capture.test.mjs"
 node --test "$ROOT/tests/investigations/execution-control.test.mjs"
 node --test "$ROOT/tests/api/white-label.test.mjs"
+node --test "$ROOT/tests/api/capabilities.test.mjs"
 echo 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'

@@ -12,6 +12,7 @@ public static class RealtimeContract
     public const string HubPath = "/hubs/v1/investigations";
     public const string EventAppended = "eventAppended";
     public const string ExecutionUpdated = "executionUpdated";
+    public const string SnapshotCaptured = "snapshotCaptured";
     public const int MaxSubscriptionsPerConnection = 16;
 }
 
@@ -27,6 +28,15 @@ public sealed record RunSubscriptionAccepted(string ContractVersion, Guid RunId,
 /// </summary>
 public sealed record EventAppendedMessage(string ContractVersion, Guid WorkspaceId, Guid RepositoryId,
     Guid SnapshotId, InvestigationEvent Event);
+
+/// <summary>Follow one repository's committed snapshots (W2).</summary>
+public sealed record RepositorySubscriptionRequest(Guid WorkspaceId, Guid RepositoryId);
+
+public sealed record RepositorySubscriptionAccepted(string ContractVersion, Guid RepositoryId, int ExistingSnapshotCount);
+
+/// <summary>A snapshot record that has been committed. No progress percentages are ever sent.</summary>
+public sealed record SnapshotCapturedMessage(string ContractVersion, Guid WorkspaceId, Guid RepositoryId,
+    SnapshotRecord Snapshot);
 
 public sealed record ExecutionUpdatedMessage(string ContractVersion, Guid WorkspaceId, Guid RepositoryId,
     Guid SnapshotId, ExecutionProjection Execution);
@@ -57,6 +67,29 @@ public sealed class InvestigationEventsHub(WorkspaceStore store, RealtimeSubscri
         return new(RealtimeContract.Version, request.RunId, backlog.Count);
     }
 
+    public async Task<RepositorySubscriptionAccepted> SubscribeRepository(RepositorySubscriptionRequest request)
+    {
+        if (request is null || store.GetRepository(request.WorkspaceId, request.RepositoryId) is null)
+            throw new HubException("repository-not-found-in-scope");
+        // Join, then take the baseline: anything committed later is pushed.
+        await Groups.AddToGroupAsync(Context.ConnectionId, RepositoryGroup(request.RepositoryId));
+        var existing = store.ListSnapshots(request.WorkspaceId, request.RepositoryId).Items;
+        if (!subscriptions.TryAddRepository(Context.ConnectionId, request, existing.Select(s => s.Id)))
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, RepositoryGroup(request.RepositoryId));
+            throw new HubException("subscription-limit-exceeded");
+        }
+        return new(RealtimeContract.Version, request.RepositoryId, existing.Count);
+    }
+
+    public async Task UnsubscribeRepository(Guid repositoryId)
+    {
+        subscriptions.RemoveRepository(Context.ConnectionId, repositoryId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, RepositoryGroup(repositoryId));
+    }
+
+    public static string RepositoryGroup(Guid repositoryId) => "repository:" + repositoryId.ToString("D");
+
     public async Task Unsubscribe(Guid runId)
     {
         subscriptions.Remove(Context.ConnectionId, runId);
@@ -76,6 +109,32 @@ public sealed class InvestigationEventsHub(WorkspaceStore store, RealtimeSubscri
 public sealed class RealtimeSubscriptions
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, RunSubscriptionRequest>> _byConnection = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, RepositorySubscriptionRequest>> _repositories = new();
+
+    private readonly ConcurrentDictionary<Guid, IReadOnlySet<Guid>> _baselines = new();
+
+    /// <summary>Snapshot IDs known at the FIRST subscription to a repository (publisher baseline).</summary>
+    public IReadOnlySet<Guid>? Baseline(Guid repositoryId) => _baselines.GetValueOrDefault(repositoryId);
+
+    public void ForgetBaseline(Guid repositoryId) => _baselines.TryRemove(repositoryId, out _);
+
+    public bool TryAddRepository(string connectionId, RepositorySubscriptionRequest request, IEnumerable<Guid> baseline)
+    {
+        _baselines.TryAdd(request.RepositoryId, baseline.ToHashSet());
+        var repos = _repositories.GetOrAdd(connectionId, _ => new());
+        if (!repos.ContainsKey(request.RepositoryId) && repos.Count >= RealtimeContract.MaxSubscriptionsPerConnection)
+            return false;
+        repos[request.RepositoryId] = request;
+        return true;
+    }
+
+    public void RemoveRepository(string connectionId, Guid repositoryId)
+    {
+        if (_repositories.TryGetValue(connectionId, out var repos)) repos.TryRemove(repositoryId, out _);
+    }
+
+    public IReadOnlyList<RepositorySubscriptionRequest> Repositories() =>
+        _repositories.Values.SelectMany(r => r.Values).GroupBy(r => r.RepositoryId).Select(g => g.First()).ToArray();
 
     public bool TryAdd(string connectionId, RunSubscriptionRequest request)
     {
@@ -91,7 +150,11 @@ public sealed class RealtimeSubscriptions
         if (_byConnection.TryGetValue(connectionId, out var runs)) runs.TryRemove(runId, out _);
     }
 
-    public void RemoveConnection(string connectionId) => _byConnection.TryRemove(connectionId, out _);
+    public void RemoveConnection(string connectionId)
+    {
+        _byConnection.TryRemove(connectionId, out _);
+        _repositories.TryRemove(connectionId, out _);
+    }
 
     /// <summary>Distinct subscribed runs with their verified scope.</summary>
     public IReadOnlyList<RunSubscriptionRequest> Runs() =>
@@ -109,6 +172,7 @@ public sealed class RealtimePublisher(WorkspaceStore store, RealtimeSubscription
     ILogger<RealtimePublisher> logger) : BackgroundService
 {
     private readonly Dictionary<Guid, HashSet<Guid>> _sent = new();
+    private readonly Dictionary<Guid, HashSet<Guid>> _snapshotsSeen = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -125,6 +189,39 @@ public sealed class RealtimePublisher(WorkspaceStore store, RealtimeSubscription
                     logger.LogWarning("Realtime publish failed for a run ({Type}).", error.GetType().Name);
                 }
             }
+            var repositories = subscriptions.Repositories();
+            foreach (var stale in _snapshotsSeen.Keys.Except(repositories.Select(r => r.RepositoryId)).ToArray())
+            {
+                _snapshotsSeen.Remove(stale);
+                subscriptions.ForgetBaseline(stale);
+            }
+            foreach (var repository in repositories)
+            {
+                try { await PublishSnapshotsAsync(repository, stoppingToken); }
+                catch (Exception error) when (error is not OperationCanceledException and not OutOfMemoryException)
+                {
+                    logger.LogWarning("Realtime publish failed for a repository ({Type}).", error.GetType().Name);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Snapshots already committed when a repository is first seen are baseline
+    /// (clients list them over REST); only snapshots committed afterwards are pushed.
+    /// </summary>
+    private async Task PublishSnapshotsAsync(RepositorySubscriptionRequest repository, CancellationToken ct)
+    {
+        var snapshots = store.ListSnapshots(repository.WorkspaceId, repository.RepositoryId).Items;
+        if (!_snapshotsSeen.TryGetValue(repository.RepositoryId, out var seen))
+            _snapshotsSeen[repository.RepositoryId] = seen =
+                (subscriptions.Baseline(repository.RepositoryId) ?? snapshots.Select(s => s.Id).ToHashSet()).ToHashSet();
+        foreach (var snapshot in snapshots.Where(s => !seen.Contains(s.Id)).OrderBy(s => s.CapturedAtUtc))
+        {
+            await hub.Clients.Group(InvestigationEventsHub.RepositoryGroup(repository.RepositoryId)).SendAsync(
+                RealtimeContract.SnapshotCaptured, new SnapshotCapturedMessage(RealtimeContract.Version,
+                    repository.WorkspaceId, repository.RepositoryId, snapshot), ct);
+            seen.Add(snapshot.Id);
         }
     }
 
