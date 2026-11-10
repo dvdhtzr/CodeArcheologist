@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R10-ardalis-fastendpoints",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "No supported HTTP candidate exists: FastEndpoints endpoint classes are an unsupported convention."
+    },
+    {
+      "id": "U2",
+      "description": "Absence of candidates is not absence of endpoints."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Invents an HTTP entry point from FastEndpoints class names.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Unsupported routing convention must be reported as unknown."
+    }
+  ]
+}

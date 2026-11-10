@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R06-cleanarch-create-todo-item",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "groupBuilder.MapPost(CreateTodoItem) is a candidate whose route is nonliteral or unsupported.",
+      "anchor": {
+        "filePath": "src/Web/Endpoints/TodoItems.cs",
+        "line": 15
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside IEndpointGroup.Map (registration-site context).",
+      "anchor": {
+        "filePath": "src/Web/Endpoints/TodoItems.cs",
+        "line": 11
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "MapPost(CreateTodoItem) passes a method group as the first argument: it is likely a project-defined extension, not the ASP.NET MapPost; unverified."
+    },
+    {
+      "id": "U2",
+      "description": "The handler CreateTodoItem and its sender.Send target are not established by binding."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Treats groupBuilder.MapPost as the verified ASP.NET extension method.",
+      "category": "compiled-binding"
+    },
+    {
+      "id": "X2",
+      "description": "States a concrete route for CreateTodoItem.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Custom same-named extension: the written MapPost may not be the framework method."
+    }
+  ]
+}

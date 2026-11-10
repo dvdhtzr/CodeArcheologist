@@ -11,6 +11,7 @@ public static class LabSchema
     public const string Config = "c6c-lab-config-v1";
     public const string Report = "c6c-lab-report-v1";
     public const string Score = "c6c-lab-score-v1";
+    public const string Curated = "c6c-curated-v1";
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -26,8 +27,13 @@ public static class LabSchema
 public enum CaseCategory { Fixture, ChangeExperiment, Curated, HeldOut }
 public enum LabelStatus { Draft, OwnerApproved }
 
-/// <summary>Where the case's source comes from. C6c-1 supports in-repo fixtures only.</summary>
-public sealed record CaseSource(string Kind, string Directory, IReadOnlyDictionary<string, string> FileSha256);
+/// <summary>
+/// Where the case's source comes from: an in-repo fixture (bytes pinned here)
+/// or a curated checkout (pinned by the curated manifest: commit, licence
+/// hash, subtree and snapshot fingerprint).
+/// </summary>
+public sealed record CaseSource(string Kind, string Directory, IReadOnlyDictionary<string, string> FileSha256,
+    string? Repository = null);
 
 /// <summary>
 /// Entry point selected by written-syntax location, resolved at run time to
@@ -35,8 +41,26 @@ public sealed record CaseSource(string Kind, string Directory, IReadOnlyDictiona
 /// </summary>
 public sealed record EntryPointSelector(string Kind, string FilePath, int Line);
 
+public static class CaseExpectation
+{
+    public const string Investigate = "investigate";
+    /// <summary>The analyzer must report zero supported HTTP candidates; nothing is invented.</summary>
+    public const string NoSupportedCandidate = "no-supported-candidate";
+    /// <summary>Capture must fail closed on a snapshot/analysis limit and leave no trusted record.</summary>
+    public const string CaptureLimitFailClosed = "capture-limit-fail-closed";
+    public static readonly string[] All = [Investigate, NoSupportedCandidate, CaptureLimitFailClosed];
+}
+
 public sealed record LabCase(string SchemaVersion, string Id, CaseCategory Category, string Title,
-    string Purpose, CaseSource Source, EntryPointSelector EntryPoint, bool DiagnosticRepeat);
+    string Purpose, CaseSource Source, EntryPointSelector? EntryPoint, bool DiagnosticRepeat,
+    string Expectation = CaseExpectation.Investigate);
+
+/// <summary>One owner-acquired real repository, pinned exactly.</summary>
+public sealed record CuratedRepository(string Id, string Repository, string Url, string CommitSha,
+    string License, string LicensePath, string LicenseSha256, string Subtree, string SnapshotFingerprint,
+    int SnapshotFileCount, string Group, string Purpose);
+
+public sealed record CuratedManifest(string SchemaVersion, IReadOnlyList<CuratedRepository> Repositories);
 
 /// <summary>Labeler-chosen source location; checked to be citable, never derived from output.</summary>
 public sealed record LabelAnchor(string FilePath, int Line);
@@ -67,7 +91,8 @@ public sealed record LabConfig(string SchemaVersion, LabBudgets Budgets, int Pri
     int DiagnosticExtraTrials, IReadOnlyList<string> Comparators, LabThresholds ProvisionalThresholds,
     string ThresholdStatus);
 
-public sealed record LoadedCase(LabCase Case, LabLabels Labels, string Directory);
+public sealed record LoadedCase(LabCase Case, LabLabels Labels, string Directory,
+    CuratedRepository? Curated = null);
 
 public static class Comparator
 {

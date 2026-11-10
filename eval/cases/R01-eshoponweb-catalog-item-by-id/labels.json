@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R01-eshoponweb-catalog-item-by-id",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "app.MapGet(\"api/catalog-items/{catalogItemId}\", ...) is a written Minimal API candidate.",
+      "anchor": {
+        "filePath": "CatalogItemEndpoints/CatalogItemGetByIdEndpoint.cs",
+        "line": 25
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping sits in AddRoute, which is registration-site context, not a bound handler.",
+      "anchor": {
+        "filePath": "CatalogItemEndpoints/CatalogItemGetByIdEndpoint.cs",
+        "line": 23
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Whether AddRoute is ever invoked (endpoint-class discovery) is not evidenced in the snapshot."
+    },
+    {
+      "id": "U2",
+      "description": "The lambda's call to HandleAsync and the repository behind IRepository<CatalogItem> are not established as runtime behavior."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the route is registered and reachable at runtime.",
+      "category": "registered-route"
+    },
+    {
+      "id": "X2",
+      "description": "Names a concrete repository implementation as resolved.",
+      "category": "di-resolution"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Endpoint-class convention: registration depends on unseen discovery code."
+    },
+    {
+      "id": "M2",
+      "description": "The handler body lives in a lambda delegating to HandleAsync."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R04-equinox-create-customer",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpPost(\"customer\")] candidate on CustomerController.Post.",
+      "anchor": {
+        "filePath": "Controllers/CustomerController.cs",
+        "line": 35
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Post invokes _customerAppService.Register.",
+      "anchor": {
+        "filePath": "Controllers/CustomerController.cs",
+        "line": 38
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "ICustomerAppService and its implementation are outside the scoped subtree, so the Register callee is unresolved."
+    },
+    {
+      "id": "U2",
+      "description": "[CustomAuthorize] is a custom attribute; effective authorization is unverified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Asserts CustomerAppService is the runtime implementation.",
+      "category": "di-resolution"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Interface dispatch through an application service."
+    },
+    {
+      "id": "M2",
+      "description": "ModelState validation branch: Register runs only on valid input (conditional call)."
+    }
+  ]
+}

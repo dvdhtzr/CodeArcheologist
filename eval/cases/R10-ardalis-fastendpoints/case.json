@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R10-ardalis-fastendpoints",
+  "category": "curated",
+  "title": "ardalis CleanArchitecture: FastEndpoints (unsupported)",
+  "purpose": "FastEndpoints endpoint classes: no supported HTTP syntax; the expected answer is an honest unknown.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R10"
+  },
+  "entryPoint": null,
+  "diagnosticRepeat": false,
+  "expectation": "no-supported-candidate"
+}

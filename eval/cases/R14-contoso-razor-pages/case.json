@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R14-contoso-razor-pages",
+  "category": "curated",
+  "title": "Contoso University: Razor Pages handlers (unsupported)",
+  "purpose": "Razor Pages handler conventions (OnGet/OnPost): no supported HTTP syntax.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R14"
+  },
+  "entryPoint": null,
+  "diagnosticRepeat": false,
+  "expectation": "no-supported-candidate"
+}

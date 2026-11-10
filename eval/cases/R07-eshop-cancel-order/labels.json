@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R07-eshop-cancel-order",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "api.MapPut(\"/cancel\", CancelOrderAsync) is a written Minimal API candidate with a method-group handler.",
+      "anchor": {
+        "filePath": "Apis/OrdersApi.cs",
+        "line": 11
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside MapOrdersApiV1 (registration-site context).",
+      "anchor": {
+        "filePath": "Apis/OrdersApi.cs",
+        "line": 7
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "CancelOrderAsync as the handler is not inferred from the method-group name by the analyzer."
+    },
+    {
+      "id": "U2",
+      "description": "The group prefix api/orders and API versioning are not composed into an effective URL."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States /api/orders/cancel as a registered route.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Method-group handler binding is unverified."
+    }
+  ]
+}

@@ -7,7 +7,8 @@ Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in th
 | Slice | Scope | State |
 |---|---|---|
 | C6c-1 | Case and label schema, corpus validator, budget declaration, isolated harness, 3 comparators, deterministic metrics, 20 fixtures | owner GREEN (Windows `check.ps1`); Linux passed; label sign-off pending |
-| C6c-2 | 15 deliberate change experiments; 15 curated real repositories (owner-run acquisition, pinned SHA and fingerprint) | not started |
+| C6c-2a | 15 curated real repositories: manifest, owner-run acquisition scripts, subtree scoping, expectation kinds, BOM analyzer fix, per-file manifests, case-collision rule | owner GREEN on Windows (`check.ps1`, `acquire-curated.ps1`, provisional baseline over all 35 cases); Linux passed; label sign-off pending |
+| C6c-2b | 15 deliberate change experiments | not started |
 | C6c-3 | Blinded owner A/B usefulness judging; 10 held-out cases (owner-authored, sealed); repeatability trials | not started |
 | C7 | Scored acceptance run, integrity audit, documented limitations, owner release decision | not started |
 
@@ -62,7 +63,28 @@ Other measures:
 - Label anchors are checked to be **citable**: each one has evidence at that file and line in the captured package. Labels are not derived from analyzer output.
 - No LLM judge is used for any metric of record.
 
-## Self-test coverage (36 checks)
+## Curated repositories (C6c-2a)
+
+`eval/curated/repositories.json` (schema `c6c-curated-v1`) pins, for each repository: the GitHub URL, the **full commit SHA**, the licence (MIT, Apache-2.0 or BSD-3-Clause only), the licence file and its SHA-256, the **subtree**, the expected **snapshot fingerprint** with its file count, the group, and the purpose.
+
+| Group | Cases | Expectation |
+|---|---|---|
+| attribute-controllers | R02 RealWorld, R03 modular-monolith (`src/API`), R04 Equinox | investigate |
+| minimal-api | R01 eShopOnWeb (`src/PublicApi`), R05 TodoApi, R06 jasontaylordev, R07 eShop (`src/Ordering.API`), R08 dotnet-podcasts, R09 aspire-samples, R11 aspnetrun (Carter), R13 HealthChecks.UI | investigate |
+| unsupported-convention | R10 ardalis (`src`, FastEndpoints), R12 Ocelot (`samples/Basic`, `ocelot.json` routing), R14 Contoso (Razor Pages) | no-supported-candidate |
+| capture-limit | R15 OrchardCore | capture-limit-fail-closed |
+
+- **Acquisition is owner-run and outside the app:** `scripts/acquire-curated.ps1 -Target <dir>` (or `.sh`).
+  - Each repository is fetched at its exact pinned SHA, with `core.autocrlf=false`, `core.eol=lf`, and LFS smudge skipped, then the licence hash is verified.
+  - The script refuses a target inside the repository, and it never builds or executes anything.
+  - The application and the lab never invoke Git.
+- **The lab captures the checkout in place, read-only.** Any of the following fails closed before any comparator runs: a missing checkout ("not acquired"), a licence mismatch, a subtree mismatch, or a fingerprint mismatch.
+- **Cases are never silently dropped.** Curated cases without `--curated-root` are listed as `notAcquired` in the summary.
+- **Survey and pin results** (Linux container, reproduced from the script's own fetch-by-SHA checkouts): all 11 investigate cases resolve their entry points with zero baseline integrity breaches. R10, R12 and R14 report zero candidates, and R15 fails closed (413) with no snapshot record.
+
+## Self-test coverage (49 checks)
+- **Curated machinery (12 checks, no network):** a synthetic checkout is pinned in a temp corpus copy, captured, then rejected when its licence is tampered or its bytes are CRLF-converted. Also covered: a missing root, both expectation kinds (confirmed and violated), and 7 manifest mutations (abbreviated SHA, non-permissive licence, traversal subtree, unpinned fingerprint, URL mismatch, group/expectation mismatch, a repository without a case).
+- **BOM regression (1 check).
 - The real corpus validates.
 - 11 corpus mutations are rejected: tampered bytes, an unpinned file, a budget different from the host, nonzero tolerance, a foreign label, approval without owner review, an anchor outside the pinned files, an unknown forbidden category, an unknown JSON member, a non-fixture category in C6c-1, and an ID/directory mismatch.
 - For each of the 20 fixtures: isolated capture, a unique entry-point match, satisfiable anchors, a clean baseline, and temp cleanup.
@@ -79,6 +101,13 @@ git switch --detach origin/claude/loving-franklin-vq8fco
 ```
 
 `check.ps1` now also runs the lab's `--validate-corpus` and `--self-test`.
+
+Curated acquisition and provisional curated run (network required only for acquisition):
+
+```powershell
+.\scripts\acquire-curated.ps1 -Target $env:USERPROFILE\CodeArcheologistCurated
+dotnet run --project .\tests\evaluation-lab\EvaluationLab.csproj --configuration Release -- --run --out $env:TEMP\ca-lab-curated --curated-root $env:USERPROFILE\CodeArcheologistCurated --comparators deterministic-baseline --provisional
+```
 
 Optional provisional real-model run (results go outside the repository; with 20 cases × 3 comparators this can take hours on a local GPU, so start with a few cases):
 

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R13-healthchecks-ui-resources",
+  "category": "curated",
+  "title": "HealthChecks.UI: nonliteral resource MapGet",
+  "purpose": "Nonliteral MapGet resource routes; MapHealthChecks-style registrations are not candidates.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R13"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Core/UIEndpointsResourceMapper.cs",
+    "line": 27
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

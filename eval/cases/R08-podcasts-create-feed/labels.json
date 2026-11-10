@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R08-podcasts-create-feed",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "group.MapPost(\"/\", CreateFeed) is a written Minimal API candidate.",
+      "anchor": {
+        "filePath": "src/Services/Podcasts/Podcast.API/Routes/FeedsApi.cs",
+        "line": 7
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside MapFeedsApi (registration-site context).",
+      "anchor": {
+        "filePath": "src/Services/Podcasts/Podcast.API/Routes/FeedsApi.cs",
+        "line": 5
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The CreateFeed handler is not bound by name; the route prefix comes from the caller of MapFeedsApi."
+    },
+    {
+      "id": "U2",
+      "description": "Unlike Update/Delete, this mapping shows no RequireAuthorization call; effective authorization is still unknown."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Concludes the endpoint is publicly accessible without authorization.",
+      "category": "authorization-inferred"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Authorization differs between sibling mappings in written syntax; runtime policy is unverified."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R05-todoapi-create-todo",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "group.MapPost(\"/\", ...) is a written Minimal API candidate on a route group.",
+      "anchor": {
+        "filePath": "Todo.Api/Todos/TodoApi.cs",
+        "line": 38
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside the containing method at line 8 (registration-site context).",
+      "anchor": {
+        "filePath": "Todo.Api/Todos/TodoApi.cs",
+        "line": 8
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The effective URL depends on the route group's prefix, which is not composed from source text."
+    },
+    {
+      "id": "U2",
+      "description": "The lambda handler's database calls are not attributed as direct invocations of the containing method."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States a full effective URL such as /todos as registered.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Route group prefixes must not be composed into a full route."
+    }
+  ]
+}

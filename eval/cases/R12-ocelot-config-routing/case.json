@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R12-ocelot-config-routing",
+  "category": "curated",
+  "title": "Ocelot: routes only in ocelot.json (unsupported)",
+  "purpose": "API gateway whose routes exist only in ocelot.json; no source endpoint may be invented.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R12"
+  },
+  "entryPoint": null,
+  "diagnosticRepeat": false,
+  "expectation": "no-supported-candidate"
+}

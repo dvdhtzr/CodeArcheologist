@@ -52,22 +52,184 @@ public sealed class CapturedCase(LoadedCase loaded, ServiceProvider services, Wo
 /// </summary>
 public static class LabHarness
 {
-    public static async Task<CapturedCase> CaptureAsync(LoadedCase loaded, CancellationToken ct)
+    public static async Task<CapturedCase> CaptureAsync(LoadedCase loaded, CancellationToken ct,
+        string? curatedRoot = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-" + Guid.NewGuid().ToString("N"));
-        var source = Path.Combine(root, "source");
         var data = Path.Combine(root, "data");
-        Directory.CreateDirectory(source);
         Directory.CreateDirectory(data);
-        foreach (var (file, hash) in loaded.Case.Source.FileSha256)
+        string source;
+        if (loaded.Curated is { } repo)
         {
-            var bytes = await File.ReadAllBytesAsync(Path.Combine(loaded.Directory, "source", file), ct);
-            if (LabSchema.Sha256(bytes) != hash)
-                throw new InvalidOperationException("Fixture bytes changed since validation: " + file);
-            var target = Path.Combine(source, file);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            await File.WriteAllBytesAsync(target, bytes, ct);
+            // Curated checkouts are captured in place, read-only; never copied, built or executed.
+            source = CuratedSource(loaded, repo, curatedRoot);
         }
+        else
+        {
+            source = Path.Combine(root, "source");
+            Directory.CreateDirectory(source);
+            foreach (var (file, hash) in loaded.Case.Source.FileSha256)
+            {
+                var bytes = await File.ReadAllBytesAsync(Path.Combine(loaded.Directory, "source", file), ct);
+                if (LabSchema.Sha256(bytes) != hash)
+                    throw new InvalidOperationException("Fixture bytes changed since validation: " + file);
+                var target = Path.Combine(source, file);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                await File.WriteAllBytesAsync(target, bytes, ct);
+            }
+        }
+        ServiceProvider services; WorkspaceStore store; WorkspaceRecord workspace;
+        RepositorySourceRecord repository; SnapshotRecord snapshot; CSharpEvidenceGraphReport graph;
+        try
+        {
+            (services, store, workspace, repository, snapshot, graph) =
+                await CaptureSourceAsync(source, data, "Lab " + loaded.Case.Id, ct);
+        }
+        catch
+        {
+            TryDelete(root);
+            throw;
+        }
+        if (loaded.Curated is { } pinned && snapshot.FingerprintSha256 != pinned.SnapshotFingerprint)
+        {
+            var detail = DescribeDifference(loaded, services, snapshot);
+            await services.DisposeAsync();
+            TryDelete(root);
+            throw new LabCaseException(loaded.Case.Id, "snapshot fingerprint differs from the pinned manifest: " + detail);
+        }
+        var selector = loaded.Case.EntryPoint
+            ?? throw new LabCaseException(loaded.Case.Id, "case has no entry point (non-investigate expectation)");
+        var matches = graph.Nodes.Where(n => n.Kind == selector.Kind && n.FilePath == selector.FilePath &&
+            n.Line == selector.Line).ToArray();
+        if (matches.Length != 1)
+            throw new LabCaseException(loaded.Case.Id, $"entry-point selector matched {matches.Length} candidates; " +
+                "available: " + string.Join(", ", graph.Nodes.Where(n => n.Kind.StartsWith("http-", StringComparison.Ordinal))
+                    .Select(n => $"{n.Kind}@{n.FilePath}:{n.Line}")));
+        var package = services.GetRequiredService<SnapshotEvidenceTools>().ReadEntryPoint(snapshot, matches[0].Id, ct);
+        var scope = new GateCScope(workspace.Id, repository.Id, snapshot.Id, snapshot.FingerprintSha256,
+            matches[0].Id, SnapshotEvidenceTools.Version);
+        return new(loaded, services, store, snapshot, scope, package, root);
+    }
+
+    /// <summary>
+    /// Resolves and verifies an owner-acquired checkout: it must exist under
+    /// the curated root, and its licence file must match the pinned SHA-256.
+    /// The lab never invokes Git; the acquisition script handles fetching.
+    /// </summary>
+    public static string CuratedSource(LoadedCase loaded, CuratedRepository repo, string? curatedRoot)
+    {
+        if (curatedRoot is null)
+            throw new LabCaseException(loaded.Case.Id, "curated root not supplied (--curated-root); case not acquired");
+        var checkout = Path.GetFullPath(Path.Combine(curatedRoot, repo.Id));
+        var licence = Path.Combine(checkout, repo.LicensePath);
+        if (!File.Exists(licence))
+            throw new LabCaseException(loaded.Case.Id, "checkout missing; run the curated acquisition script");
+        if (LabSchema.Sha256(File.ReadAllBytes(licence)) != repo.LicenseSha256)
+            throw new LabCaseException(loaded.Case.Id, "licence file differs from the pinned SHA-256");
+        var source = Path.GetFullPath(Path.Combine(checkout, repo.Subtree));
+        if (!source.StartsWith(checkout, StringComparison.Ordinal) || !Directory.Exists(source))
+            throw new LabCaseException(loaded.Case.Id, "pinned subtree missing from checkout");
+        return source;
+    }
+
+    public sealed record ExpectationResult(string CaseId, string Expectation, bool Confirmed, string Detail);
+
+    /// <summary>
+    /// Non-investigate curated cases. no-supported-candidate: capture must match
+    /// the pinned fingerprint and report zero HTTP candidates (nothing invented).
+    /// capture-limit-fail-closed: capture must fail with a snapshot limit and
+    /// leave no snapshot record behind.
+    /// </summary>
+    public static async Task<ExpectationResult> CheckExpectationAsync(LoadedCase loaded, string? curatedRoot,
+        CancellationToken ct)
+    {
+        var repo = loaded.Curated ?? throw new LabCaseException(loaded.Case.Id, "not a curated case");
+        var source = CuratedSource(loaded, repo, curatedRoot);
+        var root = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-" + Guid.NewGuid().ToString("N"));
+        var data = Path.Combine(root, "data");
+        Directory.CreateDirectory(data);
+        try
+        {
+            if (loaded.Case.Expectation == CaseExpectation.CaptureLimitFailClosed)
+            {
+                try
+                {
+                    var (s, _, _, _, _, _) = await CaptureSourceAsync(source, data, "Lab " + loaded.Case.Id, ct);
+                    await s.DisposeAsync();
+                    return new(loaded.Case.Id, loaded.Case.Expectation, false, "capture unexpectedly succeeded");
+                }
+                catch (SnapshotCaptureException error) when (error.StatusCode == 413)
+                {
+                    Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", data);
+                    var check = new WorkspaceStore();
+                    var snapshots = check.List(100).Items.Sum(w => check.ListRepositories(w.Id).Items
+                        .Sum(r => check.ListSnapshots(w.Id, r.Id).Items.Count));
+                    return new(loaded.Case.Id, loaded.Case.Expectation, snapshots == 0,
+                        snapshots == 0 ? "failed closed (413) with no snapshot record" : "a partial snapshot record remained");
+                }
+            }
+            var (services, _, _, _, snapshot, graph) = await CaptureSourceAsync(source, data, "Lab " + loaded.Case.Id, ct);
+            await using var _s = services;
+            if (snapshot.FingerprintSha256 != repo.SnapshotFingerprint)
+                return new(loaded.Case.Id, loaded.Case.Expectation, false,
+                    "fingerprint differs from the pinned manifest: " + DescribeDifference(loaded, services, snapshot));
+            var candidates = graph.Nodes.Count(n => n.Kind is "http-endpoint-attribute" or "http-minimal-mapping");
+            return new(loaded.Case.Id, loaded.Case.Expectation, candidates == 0,
+                candidates == 0 ? "zero supported HTTP candidates; nothing invented" : $"{candidates} unexpected candidates");
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>Pinned per-file manifest lines: file\tpath\tsize\tsha256 / excluded\tpath\treason.</summary>
+    public static IReadOnlyList<string> ManifestLines(SnapshotManifest manifest) =>
+        manifest.Files.Select(f => $"file\t{f.Path}\t{f.SizeBytes}\t{f.Sha256}")
+            .Concat(manifest.Exclusions.Select(e => $"excluded\t{e.Path}\t{e.Reason}")).ToArray();
+
+    /// <summary>
+    /// Names exactly which captured entries differ from the pinned manifest so a
+    /// mismatch is diagnosable (never accepted): missing, extra or changed files.
+    /// </summary>
+    private static string DescribeDifference(LoadedCase loaded, ServiceProvider services, SnapshotRecord snapshot)
+    {
+        var pinnedPath = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(loaded.Directory)!)!,
+            "curated", "manifests", loaded.Curated!.Id + ".tsv");
+        if (!File.Exists(pinnedPath)) return "no pinned per-file manifest to compare";
+        var expected = File.ReadAllLines(pinnedPath).Where(l => l.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var actual = ManifestLines(services.GetRequiredService<SnapshotCaptureService>().ReadManifest(snapshot))
+            .ToHashSet(StringComparer.Ordinal);
+        string Key(string line) => string.Join('\t', line.Split('\t').Take(2));
+        var missing = expected.Except(actual).ToArray();
+        var extra = actual.Except(expected).ToArray();
+        var changed = missing.Select(Key).Intersect(extra.Select(Key)).ToHashSet(StringComparer.Ordinal);
+        var parts = changed.Select(k => "changed " + k)
+            .Concat(missing.Where(m => !changed.Contains(Key(m))).Select(m => "missing " + Key(m)))
+            .Concat(extra.Where(x => !changed.Contains(Key(x))).Select(x => "extra " + Key(x)))
+            .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        return parts.Length == 0 ? "per-file manifest identical (policy version differs?)"
+            : $"{parts.Length} difference(s): " + string.Join("; ", parts.Take(12)).Replace('\t', ' ') +
+              (parts.Length > 12 ? "; ..." : "");
+    }
+
+    private static void TryDelete(string root)
+    {
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+        catch (IOException) { Console.Error.WriteLine("WARNING: lab temp cleanup failed: " + root); }
+        catch (UnauthorizedAccessException) { Console.Error.WriteLine("WARNING: lab temp cleanup denied: " + root); }
+    }
+
+    /// <summary>
+    /// Read-only capture of a local source directory through the production
+    /// services into the given disposable data directory. The source is only
+    /// read; .git and build outputs are excluded by the snapshot policy.
+    /// </summary>
+    internal static async Task<(ServiceProvider, WorkspaceStore, WorkspaceRecord, RepositorySourceRecord,
+        SnapshotRecord, CSharpEvidenceGraphReport)> CaptureSourceAsync(string source, string data, string name,
+        CancellationToken ct)
+    {
         // Process-local override for this disposable lab run only.
         Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", data);
         var services = new ServiceCollection()
@@ -80,27 +242,25 @@ public static class LabHarness
             .AddSingleton<SnapshotEvidenceTools>().AddSingleton<GateCEvidenceDiscovery>()
             .AddSingleton<GateBInvestigator>()
             .BuildServiceProvider();
-        var store = services.GetRequiredService<WorkspaceStore>();
-        store.Initialize();
-        var workspace = store.Create("Lab " + loaded.Case.Id, Guid.NewGuid()).Workspace;
-        var location = RepositoryPathPolicy.Validate(source, store.DatabasePath).Location
-            ?? throw new InvalidOperationException("Lab fixture registration rejected.");
-        var repository = store.RegisterRepository(workspace.Id, location, Guid.NewGuid()).Repository
-            ?? throw new InvalidOperationException("Lab fixture registration failed.");
-        var snapshot = (await services.GetRequiredService<SnapshotCaptureService>()
-            .CaptureAsync(workspace.Id, repository.Id, Guid.NewGuid(), ct)).Snapshot;
-        var graph = services.GetRequiredService<CSharpEvidenceGraphBuilder>().Build(snapshot, ct);
-        var selector = loaded.Case.EntryPoint;
-        var matches = graph.Nodes.Where(n => n.Kind == selector.Kind && n.FilePath == selector.FilePath &&
-            n.Line == selector.Line).ToArray();
-        if (matches.Length != 1)
-            throw new LabCaseException(loaded.Case.Id, $"entry-point selector matched {matches.Length} candidates; " +
-                "available: " + string.Join(", ", graph.Nodes.Where(n => n.Kind.StartsWith("http-", StringComparison.Ordinal))
-                    .Select(n => $"{n.Kind}@{n.FilePath}:{n.Line}")));
-        var package = services.GetRequiredService<SnapshotEvidenceTools>().ReadEntryPoint(snapshot, matches[0].Id, ct);
-        var scope = new GateCScope(workspace.Id, repository.Id, snapshot.Id, snapshot.FingerprintSha256,
-            matches[0].Id, SnapshotEvidenceTools.Version);
-        return new(loaded, services, store, snapshot, scope, package, root);
+        try
+        {
+            var store = services.GetRequiredService<WorkspaceStore>();
+            store.Initialize();
+            var workspace = store.Create(name, Guid.NewGuid()).Workspace;
+            var location = RepositoryPathPolicy.Validate(source, store.DatabasePath).Location
+                ?? throw new InvalidOperationException("Lab source registration rejected.");
+            var repository = store.RegisterRepository(workspace.Id, location, Guid.NewGuid()).Repository
+                ?? throw new InvalidOperationException("Lab source registration failed.");
+            var snapshot = (await services.GetRequiredService<SnapshotCaptureService>()
+                .CaptureAsync(workspace.Id, repository.Id, Guid.NewGuid(), ct)).Snapshot;
+            var graph = services.GetRequiredService<CSharpEvidenceGraphBuilder>().Build(snapshot, ct);
+            return (services, store, workspace, repository, snapshot, graph);
+        }
+        catch
+        {
+            await services.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>

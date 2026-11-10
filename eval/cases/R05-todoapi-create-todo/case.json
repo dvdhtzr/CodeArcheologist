@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R05-todoapi-create-todo",
+  "category": "curated",
+  "title": "TodoApi: create todo in a route group",
+  "purpose": "Idiomatic Minimal API with route groups (group prefixes are not composed).",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R05"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Todo.Api/Todos/TodoApi.cs",
+    "line": 38
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}
