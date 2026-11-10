@@ -64,6 +64,25 @@ if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose" or "--ga
     return;
 }
 
+if (args.Length > 0 && args[0] == "--gate-c6b-run")
+{
+    Environment.ExitCode = await GateC6bLocalRun.RunAsync(args);
+    return;
+}
+
+if (args.Length == 1 && args[0] == "--gate-c6b-self-test")
+{
+    await GateC6bSelfTests.RunAsync();
+    return;
+}
+
+// Internal child-process helper for cross-process ownership tests only.
+if (args.Length == 4 && args[0] == "--c6b-lock-holder")
+{
+    Environment.ExitCode = GateC6bSelfTests.RunLockHolder(args[1], args[2], args[3]);
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--gate-c5-self-test")
 {
     GateC5SelfTests.Run();

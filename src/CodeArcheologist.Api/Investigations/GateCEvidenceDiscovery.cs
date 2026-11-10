@@ -51,7 +51,15 @@ public sealed record GateCDiscoveryResult(GateCContractCheck Check,
 /// snapshot package. Session state is never shared between Investigator and
 /// Skeptic. Production entry uses OpenVerified, not the internal test seam.
 /// </summary>
+/// <summary>Opens independently verified role sessions (seam for model-free tests).</summary>
+public interface IGateCEvidenceSessionFactory
+{
+    GateCEvidenceSession OpenVerified(SnapshotRecord snapshot, GateCScope scope,
+        Guid runId, GateCRole role, CancellationToken ct);
+}
+
 public sealed class GateCEvidenceDiscovery(SnapshotEvidenceTools evidenceTools)
+    : IGateCEvidenceSessionFactory
 {
     public GateCEvidenceSession OpenVerified(SnapshotRecord snapshot,
         GateCScope scope, Guid runId, GateCRole role, CancellationToken ct)
@@ -120,6 +128,49 @@ public sealed class GateCEvidenceSession
     }
 
     public string GraphAnalyzerVersion => _package.GraphAnalyzerVersion;
+
+    public GateCRole Role => _role;
+
+    /// <summary>
+    /// C6b checkpoint reuse: rebuild this FRESH session's role-local
+    /// handle -> canonical evidence map from a checkpoint's stored links, against
+    /// the freshly re-verified package. Handle text is never trusted alone: each
+    /// link must name exactly one canonical item of the same status in this
+    /// package, belong to this role, follow the session's own E1..En minting
+    /// order, and reproduce byte-identical report links. No silent remapping:
+    /// any mismatch clears the session and fails closed.
+    /// </summary>
+    public GateCContractCheck RestoreHandles(IReadOnlyList<GateC5EvidenceLink>? links)
+    {
+        if (_calls != 0 || _handles.Count != 0)
+            return GateCContractCheck.Fail("evidence-session-not-fresh");
+        if (links is null || links.Count > MaxTotalItems)
+            return GateCContractCheck.Fail("evidence-mapping-invalid");
+        var refs = _package.References.ToLookup(x => x.Id, StringComparer.Ordinal);
+        var rels = _package.Relations.ToLookup(x => x.Id, StringComparer.Ordinal);
+        for (var i = 0; i < links.Count; i++)
+        {
+            var link = links[i];
+            var expectedHandle = "E" + (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (link is null || link.Role != _role || link.Handle != expectedHandle ||
+                string.IsNullOrEmpty(link.CanonicalId) ||
+                _handles.Values.Any(h => h.CanonicalId == link.CanonicalId) ||
+                refs[link.CanonicalId].Count() + rels[link.CanonicalId].Count() != 1)
+            {
+                _handles.Clear();
+                return GateCContractCheck.Fail("foreign-or-altered-evidence-mapping");
+            }
+            _handles.Add(link.Handle, new GateCEvidenceHandle(link.Handle, link.CanonicalId, link.Kind));
+        }
+        var catalogCheck = GateCContractValidator.ValidateHostCatalog(_package, _scope, HostCatalog());
+        if (!catalogCheck.Accepted || !ReportLinks().SequenceEqual(links))
+        {
+            _handles.Clear();
+            return GateCContractCheck.Fail("foreign-or-altered-evidence-mapping");
+        }
+        _itemsIssued = _handles.Count;
+        return GateCContractCheck.Pass();
+    }
 
     public int ToolCallsUsed => _calls;
 

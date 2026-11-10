@@ -22,6 +22,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Gate B model-free structural contract checks f
 if ($LASTEXITCODE -ne 0) { throw 'Gate C1 model-free investigation contract checks failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --gate-c5-self-test
 if ($LASTEXITCODE -ne 0) { throw 'Gate C5a model-free report and persistence checks failed.' }
+& dotnet run --project $adapterProject --configuration Release -- --gate-c6b-self-test
+if ($LASTEXITCODE -ne 0) { throw 'Gate C6b model-free ownership, fencing and worker checks failed.' }
 & npm ci --prefix $client --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation (npm ci) failed.' }
 & npm --prefix $client run typecheck
@@ -36,4 +38,6 @@ if ($LASTEXITCODE -ne 0) { throw 'SQLite workspace integration tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Local repository registration integration tests failed.' }
 & node --test (Join-Path $root 'tests/snapshots/capture.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Read-only snapshot integration tests failed.' }
-Write-Host 'GREEN: Local build, model-free Ollama, Gate B and Gate C1 contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'
+& node --test (Join-Path $root 'tests/investigations/execution-control.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'C6b execution control HTTP integration tests failed.' }
+Write-Host 'GREEN: Local build, model-free Ollama, Gate B, C1, C5a and C6b (ownership/fencing/worker) contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'

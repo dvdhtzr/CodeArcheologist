@@ -162,7 +162,11 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
     private static GateC3RoleOutcome Missing(GateCRole role) =>
         new(role, GateCRoleStatus.NotStarted, "not-started", null, null, 0);
 
-    private static async Task<GateC3RoleOutcome> RunRoleAsync(
+    /// <summary>
+    /// One genuine MAF independent role over ONLY its own role-local session.
+    /// The signature carries no other role's output: independence by construction.
+    /// </summary>
+    public static async Task<GateC3RoleOutcome> RunRoleAsync(
         GateCEvidenceSession session, Guid runId, GateCScope scope,
         GateCRole role, CancellationToken callerCancellation)
     {

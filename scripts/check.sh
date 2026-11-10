@@ -15,6 +15,7 @@ else
 fi
 dotnet build "$ROOT/src/CodeArcheologist.Api/CodeArcheologist.Api.csproj" --configuration Release
 dotnet run --project "$ROOT/tests/maf-adapter-contract/MafAdapterContractProbe.csproj" --configuration Release -- --gate-c5-self-test
+dotnet run --project "$ROOT/tests/maf-adapter-contract/MafAdapterContractProbe.csproj" --configuration Release -- --gate-c6b-self-test
 npm ci --prefix "$ROOT/src/CodeArcheologist.Client" --no-audit --no-fund
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run typecheck
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run build
@@ -22,4 +23,5 @@ node --test "$ROOT/tests/security/local-access.test.mjs"
 node --test "$ROOT/tests/workspaces/workspaces.test.mjs"
 node --test "$ROOT/tests/repositories/registration.test.mjs"
 node --test "$ROOT/tests/snapshots/capture.test.mjs"
+node --test "$ROOT/tests/investigations/execution-control.test.mjs"
 echo 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'

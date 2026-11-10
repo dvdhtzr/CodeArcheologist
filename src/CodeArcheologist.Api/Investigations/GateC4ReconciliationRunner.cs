@@ -97,7 +97,8 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
         return transition.Progress;
     }
 
-    private static async Task<GateC4ReviewerOutcome> ReviewAsync(
+    /// <summary>Genuine MAF Reviewer over two host-validated assessments.</summary>
+    public static async Task<GateC4ReviewerOutcome> ReviewAsync(
         GateCIndependentAssessment investigator,
         GateCIndependentAssessment skeptic,
         Guid runId, GateCScope scope,
