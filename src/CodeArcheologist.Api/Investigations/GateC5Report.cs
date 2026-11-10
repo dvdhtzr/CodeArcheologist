@@ -14,6 +14,8 @@ public sealed record GateC5EvidenceLink(
 
 public sealed record GateC5Report(
     string Version, Guid RunId, GateCScope Scope,
+    string InvestigatorModelId, string SkepticModelId, string ReviewerModelId,
+    IReadOnlyList<string> GraphAnalyzerVersions,
     GateCRunProgress Progress, DateTimeOffset StartedAtUtc,
     DateTimeOffset FinishedAtUtc,
     GateC3RoleOutcome Investigator, GateC3RoleOutcome Skeptic,
@@ -64,6 +66,8 @@ public static class GateC5ReportFactory
                 .Where(x => x.Length > 0).Distinct(StringComparer.Ordinal);
             if (cited.Any(x => !catalog.ContainsKey(x)))
                 throw new InvalidOperationException("Assessment cites missing evidence.");
+            if (string.IsNullOrWhiteSpace(role.GraphAnalyzerVersion))
+                throw new InvalidOperationException("Validated role lacks analyzer provenance.");
             links.AddRange(role.EvidenceLinks);
         }
 
@@ -88,7 +92,12 @@ public static class GateC5ReportFactory
             throw new InvalidOperationException("A persisted report must be terminal.");
 
         return new(GateC5ReportContract.Version, independent.RunId,
-            independent.Scope, outcome.Progress, started, finished,
+            independent.Scope, GateC3IndependentRunner.ModelId,
+            GateC3IndependentRunner.ModelId, GateC4ReconciliationRunner.ModelId,
+            new[] { investigator.GraphAnalyzerVersion, skeptic.GraphAnalyzerVersion }
+                .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!)
+                .Distinct(StringComparer.Ordinal).ToArray(),
+            outcome.Progress, started, finished,
             investigator, skeptic, outcome.Reviewer, links,
             outcome.Progress.Status == GateCRunStatus.Completed
                 ? "orchestration-completed-not-semantic-proof"
