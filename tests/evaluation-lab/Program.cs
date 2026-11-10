@@ -199,6 +199,8 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
         provisional,
         draftLabels = corpus.DraftLabels,
         thresholdStatus = corpus.Config.ThresholdStatus,
+        // Attributes the run to the exact agent evidence contract (e.g. E1 = v2).
+        capabilityContractVersion = CodeArcheologist.Api.Investigations.GateCEvidenceRegistry.Version,
         configSha256 = LabSchema.Sha256(File.ReadAllBytes(Path.Combine(evalRoot, "lab-config.json"))),
         comparators = LabScoring.Summarize(scores),
         expectations,
@@ -214,6 +216,7 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
     if (notAcquired.Count > 0)
         Console.WriteLine($"NOT ACQUIRED ({notAcquired.Count}): {string.Join(", ", notAcquired)}. Pass --curated-root after running the acquisition script.");
     var totalBreaches = scores.Sum(s => s.IntegrityBreaches.Count);
+    Console.WriteLine($"agent evidence contract: {CodeArcheologist.Api.Investigations.GateCEvidenceRegistry.Version}");
     Console.WriteLine(totalBreaches == 0 && failures.Count == 0
         ? $"{(provisional ? "PROVISIONAL" : "SCORED")} run finished: zero integrity breaches. Usefulness and issue detection pending blinded judgment."
         : $"RED: {totalBreaches} integrity breach(es), {failures.Count} case failure(s). See {outDir}.");
