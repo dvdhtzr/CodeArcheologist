@@ -226,7 +226,8 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             "Strict bounded local source-evidence assessment.");
         var options = new ChatClientAgentRunOptions(new ChatOptions
         {
-            Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None }
+            Reasoning = new ReasoningOptions { Effort = ReasoningEffort.None },
+            MaxOutputTokens = 1536
         })
         {
             ResponseFormat = format
