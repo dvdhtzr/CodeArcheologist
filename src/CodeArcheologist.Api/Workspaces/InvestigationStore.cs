@@ -61,7 +61,7 @@ public sealed partial class WorkspaceStore
             var created = insert.ExecuteNonQuery() == 1;
 
             using var lookup = connection.CreateCommand();
-            lookup.CommandText = SummaryColumns + """
+            lookup.CommandText = SummaryColumns + "\n" + """
                 WHERE idempotency_key=$key;
                 """;
             lookup.Parameters.AddWithValue("$key", idempotencyKey.ToString("D"));
@@ -134,7 +134,7 @@ public sealed partial class WorkspaceStore
     {
         using var connection = Open();
         using var query = connection.CreateCommand();
-        query.CommandText = SummaryColumns + """
+        query.CommandText = SummaryColumns + "\n" + """
             WHERE workspace_id=$workspace AND repository_id=$repo
                 AND snapshot_id=$snapshot AND run_id=$run;
             """;
@@ -164,7 +164,7 @@ public sealed partial class WorkspaceStore
     {
         using var connection = Open();
         using var query = connection.CreateCommand();
-        query.CommandText = SummaryColumns + """
+        query.CommandText = SummaryColumns + "\n" + """
             WHERE workspace_id=$workspace AND repository_id=$repo
                 AND snapshot_id=$snapshot
             ORDER BY started_at_unix_ms DESC, run_id DESC LIMIT $limit;
