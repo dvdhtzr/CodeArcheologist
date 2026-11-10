@@ -194,3 +194,23 @@ Every labelled material issue in run 6 was judged: 13 of 13 problems, no selecti
 - **Reading:** across every labelled problem on the real repositories, Gate C mentioned the real problem about seven times as often as Gate B, a 46-point gap.
 - **Against the draft target:** Gate C's 54% is well **below** the provisional 85% material-issue detection threshold. It found about half of the problems.
 - **Caveats:** one judge; n = 13; one random trial shown for repeated cases; partial blinding; thresholds still provisional.
+
+## E4 (pre-registered): show Gate C the registration site of Minimal API mappings
+
+**Why:** four of Gate C's six misses in the every-problem checklist (R01 M1, R05 M1, R08 M1, R11 M1) concern how a Minimal API endpoint is *registered*. Examples are endpoint-class or Carter module discovery, route-group prefixes and sibling authorization. For a Minimal API mapping, the agents' excerpt was only the `MapX(...)` call, so that context was never visible to them.
+
+**Change (contract `gate-c-evidence-capabilities-v6`, evidence tools `snapshot-agent-evidence-tools-v2`):**
+- Minimal API entry points get a separate, bounded `registrationContext`: the containing type's declaration header plus the nearest containing method, constructor or local function, or the surrounding text for top-level statements.
+- It is extracted by a syntax-only parse of the hash-verified bytes, with no compilation, binding or project evaluation, and capped at 2,400 characters. When the region is larger, the tool keeps the member's opening lines and a window around the mapping, and reports the truncation.
+- It is labelled as untrusted source text and as registration-site context, not a bound handler or verified route (rules 43, 44, 49).
+- Gate B does not receive it. Attribute entry points are unchanged. The investigative questions are unchanged, so no hint words are added.
+
+**Acceptance, measured on the 15 curated repositories against run 6:**
+- zero integrity breaches;
+- Gate C completed at least 14/15;
+- Gate C anchor recall of at least 67%;
+- owner checklist (`--checklist --single gate-c`, every problem): Gate C mentions **at least 9 of 13** problems (run 6: 7/13).
+
+Otherwise E4 is reverted, and the result is recorded either way.
+
+Unlike run 6's checklist, the single-system checklist is **not blinded**, because the owner knows it shows Gate C. Gate B is unchanged, so it is not re-judged.

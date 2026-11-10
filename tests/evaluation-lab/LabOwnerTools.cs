@@ -231,6 +231,65 @@ public static class LabOwnerTools
         return 0;
     }
 
+    // ------------------------------------------------- single-system checklist
+
+    public const string SingleChecklistSchema = "c6c-issue-checklist-single-v1";
+
+    public sealed record SingleCheck(string CaseId, string IssueId, string Comparator, int Trial, bool Mentions);
+
+    public sealed record SingleCheckFile(string SchemaVersion, string RunsDirectory, string Comparator,
+        DateTimeOffset StartedAtUtc, IReadOnlyList<SingleCheck> Checks);
+
+    /// <summary>
+    /// Shorter checklist when only one system changed: every approved material issue of every
+    /// case with a completed report of <paramref name="comparator"/>, in random order, one report
+    /// each. NOT blinded (the owner knows which system it is); the summary says so. Resumable.
+    /// </summary>
+    public static int SingleChecklist(string evalRoot, string runsDirectory, string comparator, string checksPath,
+        TextReader input, TextWriter output, int? seed = null)
+    {
+        var random = seed is { } s ? new Random(s) : new Random(RandomNumberGenerator.GetInt32(int.MaxValue));
+        var corpus = CorpusValidator.Validate(evalRoot);
+        if (!corpus.Valid) { output.WriteLine("Corpus is invalid; run --validate-corpus."); return 1; }
+        var labels = corpus.Cases.Where(c => c.Labels.Status == LabelStatus.OwnerApproved)
+            .ToDictionary(c => c.Case.Id, c => c.Labels, StringComparer.Ordinal);
+        var reports = Directory.GetFiles(runsDirectory, "*.report.json")
+            .Select(f => JsonSerializer.Deserialize<LabReport>(File.ReadAllText(f), LabSchema.Json)!)
+            .Where(r => r.Outcome == "completed").ToArray();
+        var done = File.Exists(checksPath)
+            ? JsonSerializer.Deserialize<SingleCheckFile>(File.ReadAllText(checksPath), LabSchema.Json)!.Checks.ToList()
+            : [];
+        var problems = new List<(string CaseId, MaterialIssue Issue, LabReport Report)>();
+        foreach (var caseId in reports.Select(r => r.CaseId).Distinct().Order(StringComparer.Ordinal))
+            if (labels.TryGetValue(caseId, out var set) && Pick(reports, caseId, comparator, random) is { } report)
+                problems.AddRange(set.MaterialIssues.Select(issue => (caseId, issue, report)));
+        var queue = problems.Where(p => done.All(d => d.CaseId != p.CaseId || d.IssueId != p.Issue.Id))
+            .OrderBy(_ => random.Next()).ToList();
+
+        output.WriteLine("Issue checklist (one report per problem). Answer whether the report mentions the problem.");
+        var total = done.Count + queue.Count;
+        foreach (var item in queue)
+        {
+            output.WriteLine();
+            output.WriteLine(new string('=', 78));
+            output.WriteLine($"Question {done.Count + 1} of {total}: {item.CaseId}");
+            output.WriteLine($"PROBLEM: {item.Issue.Description}");
+            Show("REPORT", item.Report, output);
+            var answer = Ask(input, output, "Does the REPORT mention this problem? [y/n/q] ", "y", "n", "q");
+            if (answer is null or "q") break;
+            done.Add(new(item.CaseId, item.Issue.Id, comparator, item.Report.Trial, answer == "y"));
+            File.WriteAllText(checksPath, JsonSerializer.Serialize(new SingleCheckFile(SingleChecklistSchema,
+                Path.GetFullPath(runsDirectory), comparator, DateTimeOffset.UtcNow, done), LabSchema.Json));
+        }
+        var judged = done.Count(d => problems.Any(p => p.CaseId == d.CaseId && p.Issue.Id == d.IssueId));
+        output.WriteLine();
+        output.WriteLine("=== CHECKLIST SUMMARY (fixed denominator: every judged problem counts) ===");
+        output.WriteLine($"Problems judged: {judged} of {problems.Count}" + (judged < problems.Count ? " (run again to continue)" : " (complete: every problem)"));
+        output.WriteLine($"Mentioned: {comparator} {done.Count(d => d.Mentions)}/{judged}");
+        output.WriteLine("Note: not blinded (one system shown); one judge; one random trial for repeated cases.");
+        return 0;
+    }
+
     // ------------------------------------------------------- blinded judging
 
     public sealed record Judgment(string CaseId, string LeftComparator, string RightComparator,

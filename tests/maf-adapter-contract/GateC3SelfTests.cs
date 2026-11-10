@@ -154,6 +154,42 @@ internal static class GateC3SelfTests
             composed.Contains('<') || composed.Contains('>'))
             throw new InvalidOperationException("Source excerpt can break out of the untrusted-data framing.");
 
+        // E4: registration context is a separate untrusted field, only when present.
+        var withContext = GateC3IndependentRunner.ComposeEvidenceView(response, "x", false, hostile, true);
+        using (var parsed = System.Text.Json.JsonDocument.Parse(withContext))
+        {
+            if (parsed.RootElement.GetProperty("registrationContext").GetString() != hostile ||
+                !parsed.RootElement.GetProperty("registrationContextTruncated").GetBoolean() ||
+                !parsed.RootElement.GetProperty("registrationContextStatus").GetString()!.Contains("not a bound handler"))
+                throw new InvalidOperationException("E4 registration context lost or mislabelled.");
+        }
+        if (withContext.Contains('<') || withContext.Contains('>'))
+            throw new InvalidOperationException("Registration context can break out of the untrusted-data framing.");
+        if (composed.Contains("registrationContext", StringComparison.Ordinal))
+            throw new InvalidOperationException("Views without registration context must not mention it.");
+
+        // E4: registration-site extraction (syntax only).
+        var carter = "namespace N;\npublic class BasketModule : ICarterModule\n{\n    public void AddRoutes(IEndpointRouteBuilder app)\n    {\n" +
+            "        app.MapPost(\"/basket\", Checkout).RequireAuthorization();\n        app.MapGet(\"/basket\", Get);\n    }\n    void Other() { }\n}\n";
+        var at = carter.IndexOf("app.MapPost", StringComparison.Ordinal);
+        var mapLength = "app.MapPost(\"/basket\", Checkout)".Length;
+        var (ctx, cut) = SnapshotEvidenceTools.ReadRegistrationContext(carter, at, mapLength, "B.cs", CancellationToken.None);
+        if (cut || ctx is null || !ctx.StartsWith("public class BasketModule : ICarterModule", StringComparison.Ordinal) ||
+            !ctx.Contains("public void AddRoutes(IEndpointRouteBuilder app)") || !ctx.Contains(".RequireAuthorization()") ||
+            !ctx.Contains("app.MapGet(\"/basket\", Get)") || ctx.Contains("void Other"))
+            throw new InvalidOperationException("E4 context must be the type header plus the containing method only.");
+        var topLevel = "var app = builder.Build();\nvar todos = app.MapGroup(\"/todos\");\ntodos.MapPost(\"/\", Create);\napp.Run();\n";
+        var tl = topLevel.IndexOf("todos.MapPost", StringComparison.Ordinal);
+        var (top, _) = SnapshotEvidenceTools.ReadRegistrationContext(topLevel, tl, "todos.MapPost(\"/\", Create)".Length, "P.cs", CancellationToken.None);
+        if (top is null || !top.Contains("app.MapGroup(\"/todos\")"))
+            throw new InvalidOperationException("E4 top-level context must include the surrounding statements.");
+        var big = "class C\n{\n    void M()\n    {\n" + string.Concat(Enumerable.Repeat("        Noise();\n", 400)) +
+            "        app.MapGet(\"/x\", H);\n" + string.Concat(Enumerable.Repeat("        Noise();\n", 400)) + "    }\n}\n";
+        var bi = big.IndexOf("app.MapGet", StringComparison.Ordinal);
+        var (window, truncatedWindow) = SnapshotEvidenceTools.ReadRegistrationContext(big, bi, "app.MapGet(\"/x\", H)".Length, "C.cs", CancellationToken.None);
+        if (!truncatedWindow || window is null || !window.Contains("app.MapGet(\"/x\", H)") || window.Length > 2400)
+            throw new InvalidOperationException("E4 context must stay bounded, keep the mapping and report truncation.");
+
         // E2: strict multi-view selection and merge.
         static bool Select(string text) => GateC3IndependentRunner.TrySelectCapabilities(text, out _);
         if (!Select("{\"capabilities\":[\"inspect_entry_point\",\"inspect_direct_invocations\"]}") ||

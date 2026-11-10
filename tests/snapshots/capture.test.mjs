@@ -1088,7 +1088,8 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
           'entrypoint evidence: ' + (httpResponse.status === 200
             ? 'OK' : await httpResponse.clone().text()));
         const tool = await httpResponse.json();
-        assert.equal(tool.contractVersion, 'snapshot-agent-evidence-tools-v1');
+        assert.equal(tool.contractVersion, 'snapshot-agent-evidence-tools-v2');
+        assert.equal(tool.registrationContextExcerpt, null, 'attribute entry points carry no registration context');
         assert.equal(tool.snapshotId, snapshot.id);
         assert.equal(tool.workspaceId, wid);
         assert.equal(tool.repositoryId, rid);
@@ -1206,6 +1207,11 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
         const minimal = await minimalResponse.json();
         assert.equal(minimal.entryPointKind, 'http-minimal-mapping');
         assert.ok(minimal.sourceExcerpt.includes('app.MapGet("/catalog"'));
+        // E4: the registration site (type header + containing method), as separate untrusted text.
+        assert.ok(minimal.registrationContextExcerpt.startsWith('public class Routes'));
+        assert.ok(minimal.registrationContextExcerpt.includes('public void Register(string routeName)'));
+        assert.ok(minimal.registrationContextExcerpt.includes('app.MapPost(routeName, Handler)'), 'sibling mappings are visible');
+        assert.equal(minimal.registrationContextTruncated, false);
         assert.equal(minimal.totalDirectInvocationCount, 0,
           'the mapping invocation must not be misrepresented as its handler');
         assert.ok(minimal.relations.some(link =>

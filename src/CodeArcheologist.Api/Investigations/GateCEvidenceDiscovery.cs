@@ -12,8 +12,9 @@ public static class GateCEvidenceRegistry
     // excerpt as untrusted data. v3 (E3): roles answer fixed host-authored
     // questions about the code. v4 (E3b): every claim must cite an allowed handle.
     // v5 (E2): each role may request up to three distinct views.
+    // v6 (E4): Minimal API views also carry the registration-site context.
     // Bumped each time so earlier checkpoints fail closed.
-    public const string Version = "gate-c-evidence-capabilities-v5";
+    public const string Version = "gate-c-evidence-capabilities-v6";
     public const string EntryPoint = "inspect_entry_point";
     public const string DirectInvocations = "inspect_direct_invocations";
     public const string CandidateCallees = "inspect_candidate_callees";
@@ -138,6 +139,11 @@ public sealed class GateCEvidenceSession
     public string SourceExcerpt => _package.SourceExcerpt;
 
     public bool SourceExcerptTruncated => _package.SourceExcerptTruncated;
+
+    /// <summary>E4: registration-site context for Minimal API mappings (null otherwise). UNTRUSTED DATA.</summary>
+    public string? RegistrationContextExcerpt => _package.RegistrationContextExcerpt;
+
+    public bool RegistrationContextTruncated => _package.RegistrationContextTruncated;
 
     public GateCRole Role => _role;
 

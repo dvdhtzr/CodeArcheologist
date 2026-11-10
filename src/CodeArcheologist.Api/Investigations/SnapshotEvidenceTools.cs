@@ -46,7 +46,12 @@ public sealed record AgentEvidencePackage(
     IReadOnlyList<AgentEvidenceReference> References,
     IReadOnlyList<AgentEvidenceRelation> Relations,
     IReadOnlyList<string> Unknowns,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    // v2 (C6c E4): for Minimal API mappings only, the enclosing registration
+    // site (type header + containing member, or nearby top-level statements).
+    // UNTRUSTED source text; registration-site context, never a bound handler.
+    string? RegistrationContextExcerpt = null,
+    bool RegistrationContextTruncated = false);
 
 public sealed record AgentCitationClaim(
     string ClaimKind,
@@ -82,7 +87,7 @@ public sealed class SnapshotEvidenceTools(
     CSharpMinimalApiInspector minimalInspector,
     SnapshotCaptureService capture)
 {
-    public const string Version = "snapshot-agent-evidence-tools-v1";
+    public const string Version = "snapshot-agent-evidence-tools-v2";
     private const int MaxDirectInvocations = 12;
     private const int MaxExcerptChars = 2400;
     private const int MaxClaimCount = 8;
@@ -118,6 +123,7 @@ public sealed class SnapshotEvidenceTools(
         AddReference(entry, "candidate");
         var sourceSpanStart = -1;
         var sourceSpanLength = -1;
+        var registrationContext = false;
         var invocationCount = 0;
         var reportedInvocationCount = 0;
         var unknowns = new List<string>();
@@ -208,6 +214,7 @@ public sealed class SnapshotEvidenceTools(
             AddRelation(mapping);
             sourceSpanStart = candidate.SpanStart;
             sourceSpanLength = candidate.SpanLength;
+            registrationContext = true;
             // Syntactic containment of the MapGet call is not a route
             // handler or a runtime mapping resolution.
             foreach (var containment in graph.Edges.Where(edge =>
@@ -234,6 +241,10 @@ public sealed class SnapshotEvidenceTools(
 
         var excerpt = ReadSourceExcerpt(snapshot, entry.FilePath,
             entry.FileSha256, sourceSpanStart, sourceSpanLength);
+        (string? Text, bool Truncated) context = registrationContext
+            ? ReadRegistrationContext(ReadVerifiedSource(snapshot, entry.FilePath, entry.FileSha256),
+                sourceSpanStart, sourceSpanLength, entry.FilePath, ct)
+            : (null, false);
 
         return new AgentEvidencePackage(
             Version, snapshot.WorkspaceId, snapshot.RepositoryId,
@@ -251,7 +262,8 @@ public sealed class SnapshotEvidenceTools(
                 "Only direct, observed method-body invocation sites are shown (maximum 12); no transitive propagation.",
                 "No user repository path, shell, MSBuild project, generator, restore or external provider is accessed.",
                 "This is an ephemeral deterministic tool contract; not an LLM investigation or independent semantic claim verification."
-            ]);
+            ],
+            context.Text, context.Truncated);
 
         void AddReference(EvidenceGraphNode node, string status)
         {
@@ -350,30 +362,108 @@ public sealed class SnapshotEvidenceTools(
             ]);
     }
 
-    private (string Text, bool Truncated) ReadSourceExcerpt(
-        SnapshotRecord snapshot, string path, string hash, int start, int length)
+    private string ReadVerifiedSource(SnapshotRecord snapshot, string path, string hash)
     {
         var file = capture.ReadManifest(snapshot).Files.SingleOrDefault(item =>
             item.Path == path && item.Sha256 == hash);
         if (file is null)
             throw new SnapshotCaptureException(
                 "Source excerpt does not match the verified manifest.", 409);
-        string source;
         try
         {
-            source = StrictUtf8.GetString(capture.ReadVerifiedSnapshotFile(snapshot, file));
+            return StrictUtf8.GetString(capture.ReadVerifiedSnapshotFile(snapshot, file));
         }
         catch (DecoderFallbackException)
         {
             throw new SnapshotCaptureException(
                 "Saved source excerpt has invalid UTF-8.", 422);
         }
+    }
+
+    private (string Text, bool Truncated) ReadSourceExcerpt(
+        SnapshotRecord snapshot, string path, string hash, int start, int length)
+    {
+        var source = ReadVerifiedSource(snapshot, path, hash);
         if (start < 0 || length < 0 || start > source.Length ||
             length > source.Length - start)
             throw new SnapshotCaptureException(
                 "Source excerpt span does not match the verified file.", 409);
         var returnedLength = Math.Min(length, MaxExcerptChars);
         return (source.Substring(start, returnedLength), length > returnedLength);
+    }
+
+    private static readonly Microsoft.CodeAnalysis.CSharp.CSharpParseOptions ContextParseOptions =
+        Microsoft.CodeAnalysis.CSharp.CSharpParseOptions.Default
+            .WithLanguageVersion(Microsoft.CodeAnalysis.CSharp.LanguageVersion.Preview);
+
+    /// <summary>
+    /// E4: the registration site around a Minimal API mapping, from a syntax
+    /// parse of the hash-verified bytes only (no compilation, binding or project
+    /// evaluation). Returns the containing type header plus the nearest
+    /// containing method/constructor/local function; for top-level statements,
+    /// the surrounding file text. Bounded to the excerpt budget: when the region
+    /// is larger, a line-aligned window around the mapping is returned and the
+    /// truncation is reported. Never claims the region is a handler.
+    /// </summary>
+    public static (string? Text, bool Truncated) ReadRegistrationContext(
+        string source, int start, int length, string path, CancellationToken ct)
+    {
+        if (start < 0 || length < 0 || start > source.Length || length > source.Length - start)
+            throw new SnapshotCaptureException(
+                "Source excerpt span does not match the verified file.", 409);
+        var root = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
+            source, ContextParseOptions, path, cancellationToken: ct).GetRoot(ct);
+        var mapping = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(start, length));
+        var member = mapping.AncestorsAndSelf().FirstOrDefault(node =>
+            node is Microsoft.CodeAnalysis.CSharp.Syntax.BaseMethodDeclarationSyntax or
+                Microsoft.CodeAnalysis.CSharp.Syntax.LocalFunctionStatementSyntax);
+        var type = mapping.AncestorsAndSelf()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.TypeDeclarationSyntax>().FirstOrDefault();
+
+        var header = "";
+        if (type is not null)
+        {
+            var headerStart = type.Modifiers.Count > 0 ? type.Modifiers[0].SpanStart : type.Keyword.SpanStart;
+            var headerEnd = !type.OpenBraceToken.IsMissing ? type.OpenBraceToken.SpanStart : type.Span.End;
+            header = string.Join(" ", source[headerStart..headerEnd]
+                .Split((char[])['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())).Trim();
+            if (header.Length > 300) header = header[..300];
+        }
+
+        var regionStart = member?.SpanStart ?? 0;
+        var regionEnd = member?.Span.End ?? source.Length;
+        var budget = MaxExcerptChars - header.Length - (header.Length > 0 ? 6 : 0);
+        var truncated = false;
+        string body;
+        if (regionEnd - regionStart <= budget)
+            body = source[regionStart..regionEnd];
+        else
+        {
+            truncated = true;
+            // Keep the member's opening lines (signature, group/prefix setup),
+            // then a line-aligned window around the mapping itself.
+            const string gap = "\n    ...\n";
+            var headEnd = Math.Min(regionStart + 600, start);
+            if (headEnd > regionStart && source.LastIndexOf('\n', headEnd - 1) is var headLine and >= 0 && headLine > regionStart)
+                headEnd = headLine;
+            var head = source[regionStart..headEnd];
+            var windowBudget = Math.Max(length, budget - head.Length - gap.Length);
+            var before = Math.Max(0, (windowBudget - length) / 2);
+            var windowStart = Math.Max(headEnd, start - before);
+            var windowEnd = Math.Min(regionEnd, windowStart + windowBudget);
+            windowStart = Math.Max(headEnd, windowEnd - windowBudget);
+            if (windowStart > headEnd && source.IndexOf('\n', windowStart) is var next and >= 0 && next + 1 <= start)
+                windowStart = next + 1;
+            if (windowEnd < regionEnd && source.LastIndexOf('\n', windowEnd - 1) is var last and >= 0 && last >= start + length)
+                windowEnd = last;
+            body = windowStart <= headEnd
+                ? source[regionStart..windowEnd]
+                : head + gap + source[windowStart..windowEnd];
+            if (body.Length > budget) body = body[..budget];
+        }
+        var text = header.Length > 0 ? header + "\n{ ...\n" + body : body;
+        return (text, truncated);
     }
 
     private static string CandidateId(CSharpHttpAttributeCandidate item) =>
