@@ -1,6 +1,6 @@
 # Gate C6b — Managed worker and explicit recovery
 
-Status: **in progress on a draft PR.** Architecture approved by the owner (decisions D1–D5). Phases 1–3: owner reported GREEN. Phase 4: implemented, owner verification pending. The milestone is not GREEN until Phase 4 and the cross-platform checks below have passed.
+Status: **in progress on a draft PR.** Architecture approved by the owner (decisions D1–D5). Phases 1–4: owner reported GREEN on Windows (`check.ps1`, `--gate-c4-run 3`, `--gate-c6b-run 2`, manual restart/continuation walkthrough). Linux `check.sh` passed in the authoring container. **macOS verification is pending; cross-platform locking is not claimed until it passes.**
 
 ## Approved decisions (summary)
 
@@ -19,7 +19,7 @@ Status: **in progress on a draft PR.** Architecture approved by the owner (decis
 | 1 | SQLite v6, OS lock, fenced ownership, startup reconciliation, ownership tests | owner reported GREEN |
 | 2 | Managed worker replaces `Task.Run`; single terminal write; shutdown/deadline semantics | owner reported GREEN |
 | 3 | Role checkpoints, evidence-handle reconstruction, compatibility checks, `POST .../continue` | owner reported GREEN (including `--gate-c6b-run`) |
-| 4 | Cancellation intent, `GET .../execution`, `POST .../cancel`, minimal UI | implemented; Linux checks and a UI walkthrough passed in the authoring container; owner verification pending |
+| 4 | Cancellation intent, `GET .../execution`, `POST .../cancel`, minimal UI | owner reported GREEN (Windows); Linux passed in the authoring container; macOS pending |
 
 ## Responsibilities
 
