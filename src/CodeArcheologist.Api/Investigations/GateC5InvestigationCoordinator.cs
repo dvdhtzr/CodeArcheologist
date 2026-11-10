@@ -18,7 +18,10 @@ public sealed class GateC5InvestigationCoordinator(
         result = store.CreateInvestigation(scope, idempotencyKey);
         if (result.Busy) return false;
         if (result.Created && !result.Conflict)
-            _ = Task.Run(() => ExecuteAsync(result.Record!), CancellationToken.None);
+        {
+            var admittedRecord = result.Record!;
+            _ = Task.Run(() => ExecuteAsync(admittedRecord), CancellationToken.None);
+        }
         return true;
     }
 
