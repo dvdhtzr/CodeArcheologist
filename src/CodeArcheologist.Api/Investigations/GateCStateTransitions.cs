@@ -23,6 +23,9 @@ public enum GateCRunEvent
     BeginReviewer,
     AcceptReviewer,
     RejectReviewer,
+    FailReviewer,
+    TimeoutReviewer,
+    CancelReviewer,
     Complete,
     Cancel,
     Fail,
@@ -150,6 +153,19 @@ public static class GateCStateTransitions
                 return Permit(current with {
                     ReviewerStatus = GateCRoleStatus.ValidationRejected,
                     Status = GateCRunStatus.Incomplete });
+            case GateCRunEvent.FailReviewer or
+                GateCRunEvent.TimeoutReviewer or GateCRunEvent.CancelReviewer
+                when current.Status == GateCRunStatus.Reconciliation &&
+                     current.ReviewerStatus == GateCRoleStatus.Running:
+                return Permit(current with {
+                    ReviewerStatus = requested switch
+                    {
+                        GateCRunEvent.TimeoutReviewer => GateCRoleStatus.TimedOut,
+                        GateCRunEvent.CancelReviewer => GateCRoleStatus.Cancelled,
+                        _ => GateCRoleStatus.Failed
+                    },
+                    Status = requested == GateCRunEvent.CancelReviewer
+                        ? GateCRunStatus.Cancelled : GateCRunStatus.Incomplete });
             case GateCRunEvent.Complete
                 when current.Status == GateCRunStatus.Reconciliation &&
                      current.InvestigatorStatus == GateCRoleStatus.CompletedValidated &&
