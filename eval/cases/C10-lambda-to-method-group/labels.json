@@ -1,8 +1,8 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "C10-lambda-to-method-group",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
@@ -29,7 +29,7 @@
   "materialIssues": [
     {
       "id": "M1",
-      "description": "() => HealthReport.Create() becomes HealthReport.Create."
+      "description": "() =\u003E HealthReport.Create() becomes HealthReport.Create."
     }
   ]
 }

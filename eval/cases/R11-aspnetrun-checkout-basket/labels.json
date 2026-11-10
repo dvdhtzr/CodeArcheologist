@@ -1,12 +1,12 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "R11-aspnetrun-checkout-basket",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "app.MapPost(\"/basket/checkout\", ...) inside a Carter module is a written Minimal API candidate.",
+      "description": "app.MapPost(\u0022/basket/checkout\u0022, ...) inside a Carter module is a written Minimal API candidate.",
       "anchor": {
         "filePath": "src/Services/Basket/Basket.API/Basket/CheckoutBasket/CheckoutBasketEndpoints.cs",
         "line": 10

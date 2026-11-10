@@ -1,8 +1,8 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "R03-modular-monolith-add-comment",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
@@ -34,7 +34,7 @@
   "forbiddenClaims": [
     {
       "id": "X1",
-      "description": "Describes the module's command handling as verified behavior.",
+      "description": "Describes the module\u0027s command handling as verified behavior.",
       "category": "runtime-verified"
     },
     {

@@ -1,8 +1,8 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "F02-minimal-api-lambda-static",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
@@ -20,7 +20,7 @@
     },
     {
       "id": "U2",
-      "description": "The lambda handler's call to HealthReport.Create is not attributed to Map as a method-level invocation."
+      "description": "The lambda handler\u0027s call to HealthReport.Create is not attributed to Map as a method-level invocation."
     }
   ],
   "forbiddenClaims": [

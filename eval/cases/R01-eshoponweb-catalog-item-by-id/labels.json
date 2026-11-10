@@ -1,12 +1,12 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "R01-eshoponweb-catalog-item-by-id",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "app.MapGet(\"api/catalog-items/{catalogItemId}\", ...) is a written Minimal API candidate.",
+      "description": "app.MapGet(\u0022api/catalog-items/{catalogItemId}\u0022, ...) is a written Minimal API candidate.",
       "anchor": {
         "filePath": "CatalogItemEndpoints/CatalogItemGetByIdEndpoint.cs",
         "line": 25
@@ -28,7 +28,7 @@
     },
     {
       "id": "U2",
-      "description": "The lambda's call to HandleAsync and the repository behind IRepository<CatalogItem> are not established as runtime behavior."
+      "description": "The lambda\u0027s call to HandleAsync and the repository behind IRepository\u003CCatalogItem\u003E are not established as runtime behavior."
     }
   ],
   "forbiddenClaims": [

@@ -1,8 +1,8 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "F13-multiple-verbs",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
@@ -30,7 +30,7 @@
   "forbiddenClaims": [
     {
       "id": "X1",
-      "description": "Attributes List's Load call to the Create entry point.",
+      "description": "Attributes List\u0027s Load call to the Create entry point.",
       "category": "compiled-binding"
     }
   ],

@@ -1,8 +1,8 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "C08-route-to-constant",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
@@ -29,7 +29,7 @@
   "materialIssues": [
     {
       "id": "M1",
-      "description": "[HttpGet(\"{id}\")] becomes [HttpGet(Routes.ById)]."
+      "description": "[HttpGet(\u0022{id}\u0022)] becomes [HttpGet(Routes.ById)]."
     }
   ]
 }

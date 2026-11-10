@@ -1,8 +1,8 @@
 {
   "schemaVersion": "c6c-labels-v1",
   "caseId": "C14-add-unrelated-controller",
-  "status": "draft",
-  "authoredBy": "assistant-draft",
+  "status": "owner-approved",
+  "authoredBy": "assistant-draft-owner-reviewed",
   "requiredObservations": [
     {
       "id": "O1",
@@ -16,7 +16,7 @@
   "requiredUncertainties": [
     {
       "id": "U1",
-      "description": "The new controller is a separate candidate and not part of this entry's evidence."
+      "description": "The new controller is a separate candidate and not part of this entry\u0027s evidence."
     }
   ],
   "forbiddenClaims": [
