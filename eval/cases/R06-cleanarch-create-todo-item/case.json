@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R06-cleanarch-create-todo-item",
+  "category": "curated",
+  "title": "jasontaylordev CleanArchitecture: nonliteral endpoint group",
+  "purpose": "Endpoint-group convention with nonliteral routes over MediatR.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R06"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "src/Web/Endpoints/TodoItems.cs",
+    "line": 15
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate"
+}

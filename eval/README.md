@@ -33,11 +33,14 @@ Rules:
 - Labels must be fixed before any agent output for that case is scored.
 - Changing a label after seeing results requires a recorded reason and a new provisional run. Never relabel a failing result to make it GREEN.
 
+## Curated repositories
+
+`curated/repositories.json` pins 15 public, permissively licensed repositories: commit SHA, licence hash, subtree, and snapshot fingerprint. Acquire them outside the repository with `scripts/acquire-curated.ps1 -Target <dir>` (Windows) or `scripts/acquire-curated.sh <dir>`, then pass `--curated-root <dir>` to the lab. Nothing from these repositories is built or executed. Entry points and labels for these cases are assistant drafts awaiting your review, like the fixtures.
+
 ## Not in C6c-1
 
 The following arrive in C6c-2 and C6c-3:
-- change experiments;
-- curated real repositories (owner-run acquisition script, pinned SHA and fingerprint);
+- change experiments (C6c-2b);
 - held-out cases (owner-authored; SHA-256 seal only);
 - blinded usefulness judging;
 - the remaining 8 diagnostic repeat cases.

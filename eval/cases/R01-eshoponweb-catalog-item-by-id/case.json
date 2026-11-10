@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R01-eshoponweb-catalog-item-by-id",
+  "category": "curated",
+  "title": "eShopOnWeb: catalog item by id (endpoint class)",
+  "purpose": "Reference app public API: endpoint classes mapping Minimal API routes over services and repositories. Scoped to src/PublicApi to stay within the analysis limit.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R01"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "CatalogItemEndpoints/CatalogItemGetByIdEndpoint.cs",
+    "line": 25
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

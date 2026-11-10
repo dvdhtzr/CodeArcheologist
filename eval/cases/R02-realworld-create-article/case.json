@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R02-realworld-create-article",
+  "category": "curated",
+  "title": "RealWorld: create article via MediatR",
+  "purpose": "Attribute-routed controllers dispatching through MediatR; indirection must stay unresolved.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R02"
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "src/Conduit/Features/Articles/ArticlesController.cs",
+    "line": 43
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate"
+}

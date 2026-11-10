@@ -19,7 +19,7 @@ internal static class LabSelfTests
         NegativeCorpusCases(evalRoot);
         var corpus = CorpusValidator.Validate(evalRoot);
 
-        foreach (var loaded in corpus.Cases)
+        foreach (var loaded in corpus.Cases.Where(c => c.Case.Category == CaseCategory.Fixture))
         {
             await CheckAsync($"{loaded.Case.Id}: isolated capture, satisfiable anchors, baseline", async () =>
             {
@@ -116,15 +116,164 @@ internal static class LabSelfTests
             }
         });
 
+        await CuratedMachineryAsync(evalRoot);
+
         Check("repository corpus unmodified by lab runs", () =>
             Expect(TreeDigest(evalRoot) == before, "eval/ tree changed during self-test"));
         Console.WriteLine(_failed == 0
-            ? $"GREEN: C6c-1 lab self-test ({_passed} checks): corpus validation, isolated capture of {corpus.Cases.Count} fixtures, satisfiable anchors, baseline, production Gate C path (model-free roles), integrity-breach detection, fixed denominators, non-modification."
+            ? $"GREEN: C6c lab self-test ({_passed} checks): corpus validation, isolated capture of {corpus.Cases.Count(c => c.Case.Category == CaseCategory.Fixture)} fixtures, curated pinning/tamper/expectation machinery, satisfiable anchors, baseline, production Gate C path (model-free roles), integrity-breach detection, fixed denominators, non-modification."
             : $"RED: {_failed} lab self-test check(s) failed.");
         return _failed == 0 ? 0 : 1;
     }
 
     private static int _passed, _failed;
+
+    /// <summary>
+    /// Curated-case machinery without network or real repositories: a
+    /// synthetic checkout built from a fixture is pinned in a temp corpus copy,
+    /// then verified, tampered and rejected.
+    /// </summary>
+    private static async Task CuratedMachineryAsync(string evalRoot)
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-curated-" + Guid.NewGuid().ToString("N"));
+        var corpusCopy = Path.Combine(temp, "eval");
+        var curatedRoot = Path.Combine(temp, "checkouts");
+        try
+        {
+            Copy(evalRoot, corpusCopy);
+            var checkout = Path.Combine(curatedRoot, "R99");
+            Copy(Path.Combine(evalRoot, "cases", "F01-attribute-private-helper", "source"), Path.Combine(checkout, "app"));
+            Copy(Path.Combine(evalRoot, "cases", "F12-no-invocations", "source"), Path.Combine(checkout, "app2"));
+            File.WriteAllText(Path.Combine(checkout, "LICENSE"), "MIT License (synthetic test)");
+            File.Delete(Path.Combine(checkout, "app2", "Controller.cs"));
+            File.WriteAllText(Path.Combine(checkout, "app2", "Plain.cs"), "namespace P; public class Plain { public int X() => 1; }");
+            async Task<(string Fingerprint, int Files)> Pin(string sub)
+            {
+                var (services, _, _, _, snap, _) = await LabHarness.CaptureSourceAsync(Path.Combine(checkout, sub),
+                    Path.Combine(temp, "pin-" + Guid.NewGuid().ToString("N")), "pin", CancellationToken.None);
+                await services.DisposeAsync();
+                return (snap.FingerprintSha256, snap.FileCount);
+            }
+            var app = await Pin("app");
+            var plain = await Pin("app2");
+            var licenceSha = LabSchema.Sha256(File.ReadAllBytes(Path.Combine(checkout, "LICENSE")));
+            CuratedRepository Repo(string id, string sub, string group, (string Fingerprint, int Files) pin) => new(id,
+                "example/synthetic", "https://github.com/example/synthetic", new string('a', 40), "MIT", "LICENSE",
+                licenceSha, sub, pin.Fingerprint, pin.Files, group, "synthetic self-test repository");
+            var manifest = new CuratedManifest(LabSchema.Curated, [Repo("R99", "app", "attribute-controllers", app)]);
+            var manifestPath = Path.Combine(corpusCopy, "curated", "repositories.json");
+            var real = JsonSerializer.Deserialize<CuratedManifest>(File.ReadAllText(manifestPath), LabSchema.Json)!;
+            File.WriteAllText(manifestPath, JsonSerializer.Serialize(real with
+                { Repositories = [.. real.Repositories, .. manifest.Repositories] }, LabSchema.Json));
+            var caseDir = Path.Combine(corpusCopy, "cases", "R99-synthetic-checkout");
+            Directory.CreateDirectory(caseDir);
+            File.WriteAllText(Path.Combine(caseDir, "case.json"), JsonSerializer.Serialize(new LabCase(LabSchema.Case,
+                "R99-synthetic-checkout", CaseCategory.Curated, "Synthetic", "Self-test",
+                new CaseSource("curated-checkout", "", new Dictionary<string, string>(), "R99"),
+                new EntryPointSelector("http-endpoint-attribute", "Controller.cs", 6), false), LabSchema.Json));
+            File.WriteAllText(Path.Combine(caseDir, "labels.json"), JsonSerializer.Serialize(new LabLabels(LabSchema.Labels,
+                "R99-synthetic-checkout", LabelStatus.Draft, "assistant-draft",
+                [new("O1", "Get invokes Format.", new("Controller.cs", 9))], [new("U1", "Provisional callee.")], [], []),
+                LabSchema.Json));
+
+            await CheckAsync("curated: pinned synthetic checkout validates and captures", async () =>
+            {
+                var report = CorpusValidator.Validate(corpusCopy);
+                Expect(report.Valid, "synthetic curated corpus invalid: " + string.Join("; ", report.Errors));
+                var loaded = report.Cases.Single(c => c.Case.Id == "R99-synthetic-checkout");
+                await using var captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot);
+                Expect(LabHarness.UnsatisfiableAnchors(captured).Count == 0, "anchors unsatisfiable");
+                Expect(LabScoring.Score(LabHarness.Baseline(captured, 1), captured).IntegrityBreaches.Count == 0, "breach");
+                Expect(File.Exists(Path.Combine(checkout, "app", "Controller.cs")), "checkout was modified or removed");
+            });
+            await CheckAsync("curated: missing root, tampered licence and tampered bytes fail closed", async () =>
+            {
+                var loaded = CorpusValidator.Validate(corpusCopy).Cases.Single(c => c.Case.Id == "R99-synthetic-checkout");
+                await ExpectLabFailure(() => LabHarness.CaptureAsync(loaded, CancellationToken.None, null), "not acquired");
+                var licence = Path.Combine(checkout, "LICENSE");
+                var original = File.ReadAllText(licence);
+                File.WriteAllText(licence, original + " changed");
+                await ExpectLabFailure(() => LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot), "licence");
+                File.WriteAllText(licence, original);
+                var source = Path.Combine(checkout, "app", "Controller.cs");
+                var bytes = File.ReadAllText(source);
+                File.WriteAllText(source, bytes.Replace("\n", "\r\n"));
+                await ExpectLabFailure(() => LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot), "fingerprint");
+                File.WriteAllText(source, bytes);
+            });
+            await CheckAsync("curated: no-supported-candidate expectation confirms and detects violations", async () =>
+            {
+                var none = new LoadedCase(new LabCase(LabSchema.Case, "R98-x", CaseCategory.Curated, "t", "p",
+                        new CaseSource("curated-checkout", "", new Dictionary<string, string>(), "R99"), null, false,
+                        CaseExpectation.NoSupportedCandidate),
+                    new LabLabels(LabSchema.Labels, "R98-x", LabelStatus.Draft, "assistant-draft", [], [new("U1", "u")], [], []),
+                    caseDir, Repo("R99", "app2", "unsupported-convention", plain));
+                var ok = await LabHarness.CheckExpectationAsync(none, curatedRoot, CancellationToken.None);
+                Expect(ok.Confirmed, "zero-candidate checkout not confirmed: " + ok.Detail);
+                var wrong = none with { Curated = Repo("R99", "app", "unsupported-convention", app) };
+                var bad = await LabHarness.CheckExpectationAsync(wrong, curatedRoot, CancellationToken.None);
+                Expect(!bad.Confirmed && bad.Detail.Contains("unexpected candidates"), "candidate presence not detected");
+            });
+            await CheckAsync("curated: capture-limit expectation fails closed with no snapshot record", async () =>
+            {
+                var big = Path.Combine(checkout, "big");
+                Directory.CreateDirectory(big);
+                await using (var f = File.Create(Path.Combine(big, "Huge.cs")))
+                    f.SetLength(8L * 1024 * 1024 + 1);
+                var limit = new LoadedCase(new LabCase(LabSchema.Case, "R96-x", CaseCategory.Curated, "t", "p",
+                        new CaseSource("curated-checkout", "", new Dictionary<string, string>(), "R99"), null, false,
+                        CaseExpectation.CaptureLimitFailClosed),
+                    new LabLabels(LabSchema.Labels, "R96-x", LabelStatus.Draft, "assistant-draft", [], [new("U1", "u")], [], []),
+                    caseDir, Repo("R99", "big", "capture-limit", ("", 0)));
+                var result = await LabHarness.CheckExpectationAsync(limit, curatedRoot, CancellationToken.None);
+                Expect(result.Confirmed, "limit case not confirmed: " + result.Detail);
+                var small = limit with { Curated = Repo("R99", "app2", "capture-limit", ("", 0)) };
+                var violated = await LabHarness.CheckExpectationAsync(small, curatedRoot, CancellationToken.None);
+                Expect(!violated.Confirmed && violated.Detail.Contains("unexpectedly succeeded"), "success not flagged");
+                Directory.Delete(big, recursive: true);
+            });
+            void Mutated(string name, Func<CuratedManifest, CuratedManifest> edit, string fragment) =>
+                Check("curated manifest rejects " + name, () =>
+                {
+                    var current = JsonSerializer.Deserialize<CuratedManifest>(File.ReadAllText(manifestPath), LabSchema.Json)!;
+                    var saved = File.ReadAllText(manifestPath);
+                    try
+                    {
+                        File.WriteAllText(manifestPath, JsonSerializer.Serialize(edit(current), LabSchema.Json));
+                        var errors = CorpusValidator.Validate(corpusCopy).Errors;
+                        Expect(errors.Any(e => e.Contains(fragment, StringComparison.Ordinal)),
+                            $"expected '{fragment}', got [{string.Join("; ", errors)}]");
+                    }
+                    finally { File.WriteAllText(manifestPath, saved); }
+                });
+            CuratedManifest Edit(CuratedManifest m, Func<CuratedRepository, CuratedRepository> f) =>
+                m with { Repositories = m.Repositories.Select(r => r.Id == "R99" ? f(r) : r).ToArray() };
+            Mutated("an abbreviated commit SHA", m => Edit(m, r => r with { CommitSha = "abc123" }), "full 40-hex SHA");
+            Mutated("a non-permissive licence", m => Edit(m, r => r with { License = "GPL-3.0" }), "approved permissive licence");
+            Mutated("a traversal subtree", m => Edit(m, r => r with { Subtree = "../outside" }), "safe relative path");
+            Mutated("an unpinned fingerprint", m => Edit(m, r => r with { SnapshotFingerprint = "" }), "fingerprint must be pinned");
+            Mutated("a mismatched URL", m => Edit(m, r => r with { Url = "https://example.com/x" }), "url must be");
+            Mutated("a group/expectation mismatch", m => Edit(m, r => r with { Group = "unsupported-convention" }),
+                "expectation must be no-supported-candidate");
+            Mutated("a repository without a case", m => m with { Repositories = [.. m.Repositories,
+                m.Repositories.Single(r => r.Id == "R99") with { Id = "R97" }] }, "R97 has no case");
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try { Directory.Delete(temp, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    private static async Task ExpectLabFailure(Func<Task<CapturedCase>> capture, string fragment)
+    {
+        try
+        {
+            await using var unexpected = await capture();
+        }
+        catch (LabCaseException error) when (error.Message.Contains(fragment, StringComparison.Ordinal)) { return; }
+        throw new InvalidOperationException("expected a fail-closed lab error containing: " + fragment);
+    }
 
     private static void Check(string name, Action body) =>
         CheckAsync(name, () => { body(); return Task.CompletedTask; }).GetAwaiter().GetResult();
@@ -196,8 +345,8 @@ internal static class LabSelfTests
         Mutate("unknown forbidden-claim category", t => Json(t, first + "/labels.json",
             n => n["forbiddenClaims"]![0]!["category"] = "vibes"), "unknown forbidden-claim category");
         Mutate("unknown JSON member", t => Json(t, first + "/case.json", n => n["extra"] = true), "unreadable or invalid");
-        Mutate("unsupported category in C6c-1", t => Json(t, first + "/case.json", n => n["category"] = "held-out"),
-            "only fixture cases are supported");
+        Mutate("unsupported case category", t => Json(t, first + "/case.json", n => n["category"] = "held-out"),
+            "only fixture and curated cases are supported");
         Mutate("case id that differs from its directory", t => Json(t, first + "/case.json", n => n["id"] = "F99-other-case"),
             "case id must equal directory name");
     }

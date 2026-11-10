@@ -43,3 +43,18 @@ The decisions below settle how this is done without the lab measuring itself.
 - Label anchors are source locations chosen by the labeler. The validator checks that each anchor is citable in the analyzer's evidence package, so labels are satisfiable. This is a consistency check, not a derivation of expectations from analyzer output.
 - Metrics that need judgment are reported as `pending-judgment` and are never estimated. These are material-issue detection and usefulness. A lexical "forbidden claim" screen is a review aid flagged for humans, never a score.
 - Results keep their fixed denominators. Incomplete and inconclusive results stay visible.
+
+## Addendum — C6c-2 curated repositories (approved 2026-11-10)
+
+- **Repository list:** the owner approved 15 curated repositories, the new `expected-no-supported-candidate` case kind, and assistant-chosen entry points, which the owner reviews along with the labels.
+- **Subtree scoping (approved):** 6 repositories exceed the analyzers' deliberate 250-file / 8 MiB C# limit.
+  - Each such case captures one pinned subtree through the normal snapshot path instead.
+  - Analyzer limits are unchanged, and callees outside the subtree are honestly unresolved.
+- **Expectation kinds:**
+  - `investigate`;
+  - `no-supported-candidate`: zero supported HTTP candidates, nothing invented;
+  - `capture-limit-fail-closed`: a 413 snapshot limit, and no snapshot record left behind.
+- **Analyzer bug found by the survey and fixed:** `StaticCSharpProjectInspector` decoded `.csproj` bytes including the UTF-8 byte-order mark. The resulting U+FEFF made `XmlReader` reject ordinary Visual Studio projects, so 7 of the 15 real repositories failed closed. Exactly one leading BOM is now stripped; DTD/entity prohibition and all limits are unchanged. A regression test fails without the fix.
+- **Reclassification:** R11 (aspnetrun, Carter) was proposed as an unsupported convention. Its modules still call `app.MapX`, so the survey found 17 supported candidates, and it is now a Minimal API case.
+- **Ocelot:** scoped to the gateway-only `samples/Basic`, because the full `samples/` tree contains downstream services with ordinary endpoints.
+- **Slicing:** C6c-2 is delivered as two PRs. C6c-2a covers the curated repositories; C6c-2b covers the 15 deliberate change experiments.

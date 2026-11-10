@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R11-aspnetrun-checkout-basket",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "app.MapPost(\"/basket/checkout\", ...) inside a Carter module is a written Minimal API candidate.",
+      "anchor": {
+        "filePath": "src/Services/Basket/Basket.API/Basket/CheckoutBasket/CheckoutBasketEndpoints.cs",
+        "line": 10
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside ICarterModule.AddRoutes (registration-site context).",
+      "anchor": {
+        "filePath": "src/Services/Basket/Basket.API/Basket/CheckoutBasket/CheckoutBasketEndpoints.cs",
+        "line": 8
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Whether Carter discovers and invokes AddRoutes is not evidenced in source."
+    },
+    {
+      "id": "U2",
+      "description": "The MediatR handler for CheckoutBasketCommand is not established by binding."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the checkout route is registered at runtime.",
+      "category": "registered-route"
+    },
+    {
+      "id": "X2",
+      "description": "Names the checkout handler as the verified callee of sender.Send.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Framework module discovery (Carter) hides registration."
+    }
+  ]
+}

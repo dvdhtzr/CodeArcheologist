@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R13-healthchecks-ui-resources",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "builder.MapGet($\"{options.ResourcesPath}/...\", ...) is a candidate with a nonliteral route.",
+      "anchor": {
+        "filePath": "Core/UIEndpointsResourceMapper.cs",
+        "line": 27
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside the containing method at line 17 (registration-site context).",
+      "anchor": {
+        "filePath": "Core/UIEndpointsResourceMapper.cs",
+        "line": 17
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The route is interpolated from options and remains unresolved."
+    },
+    {
+      "id": "U2",
+      "description": "The mapping runs once per resource in a loop; how many endpoints exist at runtime is unknown."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States concrete resource URLs as registered.",
+      "category": "registered-route"
+    },
+    {
+      "id": "X2",
+      "description": "Claims all health-check endpoints are found (MapHealthChecks-style registrations are not candidates).",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Loop-generated, nonliteral registrations."
+    }
+  ]
+}

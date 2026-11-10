@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R02-realworld-create-article",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpPost] candidate on ArticlesController.Create.",
+      "anchor": {
+        "filePath": "src/Conduit/Features/Articles/ArticlesController.cs",
+        "line": 43
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Create invokes mediator.Send(command).",
+      "anchor": {
+        "filePath": "src/Conduit/Features/Articles/ArticlesController.cs",
+        "line": 48
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Which MediatR handler processes Create.Command is not established by source binding."
+    },
+    {
+      "id": "U2",
+      "description": "The [Authorize] attribute is written syntax; effective authorization policy is unverified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Names the Create.Handler as the verified callee of mediator.Send.",
+      "category": "compiled-binding"
+    },
+    {
+      "id": "X2",
+      "description": "States that the endpoint requires no authorization.",
+      "category": "authorization-inferred"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Mediator indirection hides the real downstream logic from one-hop evidence."
+    }
+  ]
+}

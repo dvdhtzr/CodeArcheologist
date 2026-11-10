@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R04-equinox-create-customer",
+  "category": "curated",
+  "title": "Equinox: create customer via application service",
+  "purpose": "Classic controllers over application services and DI registrations.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R04"
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "src/Equinox.Services.Api/Controllers/CustomerController.cs",
+    "line": 35
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

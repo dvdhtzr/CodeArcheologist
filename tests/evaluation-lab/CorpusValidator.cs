@@ -36,6 +36,11 @@ public static partial class CorpusValidator
         var config = Read<LabConfig>(Path.Combine(evalRoot, "lab-config.json"), errors);
         if (config is not null) ValidateConfig(config, errors);
 
+        var manifestPath = Path.Combine(evalRoot, "curated", "repositories.json");
+        var manifest = File.Exists(manifestPath) ? Read<CuratedManifest>(manifestPath, errors) : null;
+        var curated = new Dictionary<string, CuratedRepository>(StringComparer.Ordinal);
+        if (manifest is not null) ValidateManifest(manifest, curated, errors);
+
         var casesRoot = Path.Combine(evalRoot, "cases");
         if (!Directory.Exists(casesRoot)) errors.Add("cases directory missing");
         else
@@ -46,10 +51,13 @@ public static partial class CorpusValidator
                 var labels = Read<LabLabels>(Path.Combine(dir, "labels.json"), errors);
                 if (labCase is null || labels is null) continue;
                 var before = errors.Count;
-                ValidateCase(name, dir, labCase, labels, errors);
-                if (errors.Count == before) cases.Add(new(labCase, labels, dir));
+                ValidateCase(name, dir, labCase, labels, curated, errors);
+                if (errors.Count == before)
+                    cases.Add(new(labCase, labels, dir, labCase.Source.Repository is { } r ? curated[r] : null));
             }
 
+        foreach (var unused in curated.Keys.Where(k => !cases.Any(c => c.Case.Source.Repository == k)))
+            errors.Add($"curated repository {unused} has no case");
         var ids = cases.Select(c => c.Case.Id).ToArray();
         if (ids.Distinct(StringComparer.Ordinal).Count() != ids.Length) errors.Add("duplicate case IDs");
         return new(cases, config!, errors,
@@ -86,19 +94,68 @@ public static partial class CorpusValidator
             errors.Add("lab-config: invalid threshold status");
     }
 
-    private static void ValidateCase(string dirName, string dir, LabCase c, LabLabels l, List<string> errors)
+    [GeneratedRegex("^R[0-9]{2}$")] private static partial Regex CuratedId();
+    [GeneratedRegex("^[0-9a-f]{40}$")] private static partial Regex CommitSha();
+    [GeneratedRegex("^[0-9a-f]{64}$")] private static partial Regex Sha256Hex();
+    [GeneratedRegex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")] private static partial Regex RepoName();
+
+    /// <summary>A relative path with no rooting, traversal or backslashes.</summary>
+    private static bool SafeRelative(string path, bool allowEmpty) =>
+        (allowEmpty && path.Length == 0) ||
+        (path.Length is > 0 and <= 512 && !Path.IsPathRooted(path) && !path.Contains('\\') &&
+         !path.Contains(':') && path.Split('/').All(seg => seg.Length > 0 && seg != "." && seg != ".."));
+
+    private static void ValidateManifest(CuratedManifest m, Dictionary<string, CuratedRepository> byId,
+        List<string> errors)
+    {
+        if (m.SchemaVersion != LabSchema.Curated) errors.Add("curated manifest: unsupported schema");
+        foreach (var r in m.Repositories)
+        {
+            var p = "curated " + r.Id + ": ";
+            if (!CuratedId().IsMatch(r.Id) || !byId.TryAdd(r.Id, r)) { errors.Add(p + "invalid or duplicate id"); continue; }
+            if (!RepoName().IsMatch(r.Repository) || r.Url != "https://github.com/" + r.Repository)
+                errors.Add(p + "url must be https://github.com/<owner>/<repo>");
+            if (!CommitSha().IsMatch(r.CommitSha)) errors.Add(p + "commit must be a full 40-hex SHA");
+            if (!Sha256Hex().IsMatch(r.LicenseSha256) || !SafeRelative(r.LicensePath, false))
+                errors.Add(p + "licence path/hash invalid");
+            if (r.License is not ("MIT" or "Apache-2.0" or "BSD-3-Clause"))
+                errors.Add(p + "licence must be an approved permissive licence");
+            if (!SafeRelative(r.Subtree, true)) errors.Add(p + "subtree must be a safe relative path");
+            if (r.Group != "capture-limit" && (!Sha256Hex().IsMatch(r.SnapshotFingerprint) || r.SnapshotFileCount < 1))
+                errors.Add(p + "snapshot fingerprint must be pinned");
+            if (r.Group == "capture-limit" && r.SnapshotFingerprint.Length != 0)
+                errors.Add(p + "a capture-limit repository has no trusted fingerprint");
+            if (r.Group is not ("attribute-controllers" or "minimal-api" or "unsupported-convention" or "capture-limit"))
+                errors.Add(p + "unknown group");
+            if (string.IsNullOrWhiteSpace(r.Purpose)) errors.Add(p + "purpose required");
+        }
+    }
+
+    private static void ValidateCase(string dirName, string dir, LabCase c, LabLabels l,
+        IReadOnlyDictionary<string, CuratedRepository> curated, List<string> errors)
     {
         var p = dirName + ": ";
         if (c.SchemaVersion != LabSchema.Case) errors.Add(p + "unsupported case schema");
         if (c.Id != dirName || !CaseId().IsMatch(c.Id)) errors.Add(p + "case id must equal directory name");
-        if (c.Category != CaseCategory.Fixture)
-            errors.Add(p + "only fixture cases are supported in C6c-1");
+        if (c.Category is not (CaseCategory.Fixture or CaseCategory.Curated))
+            errors.Add(p + "only fixture and curated cases are supported");
         if (string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Purpose))
             errors.Add(p + "title and purpose required");
-        if (c.Source.Kind != "in-repo-fixture" || c.Source.Directory != "source")
-            errors.Add(p + "source must be the in-repo 'source' directory");
-        if (c.EntryPoint.Kind is not ("http-endpoint-attribute" or "http-minimal-mapping") || c.EntryPoint.Line < 1)
+        if (!CaseExpectation.All.Contains(c.Expectation)) errors.Add(p + "unknown expectation");
+        if ((c.Expectation == CaseExpectation.Investigate) != (c.EntryPoint is not null))
+            errors.Add(p + "an entry point is required exactly when the expectation is investigate");
+        if (c.EntryPoint is { } e && (e.Kind is not ("http-endpoint-attribute" or "http-minimal-mapping") ||
+                e.Line < 1 || !SafeRelative(e.FilePath, false)))
             errors.Add(p + "unsupported entry point selector");
+        if (c.Category == CaseCategory.Curated)
+        {
+            ValidateCuratedCase(p, c, l, curated, errors);
+            ValidateLabels(p, c, l, file => SafeRelative(file, false), errors);
+            return;
+        }
+        if (c.Expectation != CaseExpectation.Investigate) errors.Add(p + "fixtures must be investigate cases");
+        if (c.Source.Kind != "in-repo-fixture" || c.Source.Directory != "source" || c.Source.Repository is not null)
+            errors.Add(p + "source must be the in-repo 'source' directory");
 
         // Pinned fixture bytes: every file listed, nothing unlisted, hashes exact.
         var sourceDir = Path.Combine(dir, "source");
@@ -122,8 +179,35 @@ public static partial class CorpusValidator
                         ? " (line endings were converted to CRLF on checkout; see .gitattributes and eval/README.md)"
                         : ""));
             }
-        if (!c.Source.FileSha256.ContainsKey(c.EntryPoint.FilePath))
+        if (c.EntryPoint is { } entry && !c.Source.FileSha256.ContainsKey(entry.FilePath))
             errors.Add(p + "entry point file is not a pinned fixture file");
+        ValidateLabels(p, c, l, file => c.Source.FileSha256.ContainsKey(file), errors);
+    }
+
+    private static void ValidateCuratedCase(string p, LabCase c, LabLabels l,
+        IReadOnlyDictionary<string, CuratedRepository> curated, List<string> errors)
+    {
+        if (c.Source.Kind != "curated-checkout" || c.Source.Directory.Length != 0 || c.Source.FileSha256.Count != 0 ||
+            c.Source.Repository is not { } id || !curated.TryGetValue(id, out var repo))
+        {
+            errors.Add(p + "curated source must name a pinned manifest repository");
+            return;
+        }
+        if (!c.Id.StartsWith(id + "-", StringComparison.Ordinal)) errors.Add(p + "curated case id must start with its repository id");
+        var expected = repo.Group switch
+        {
+            "capture-limit" => CaseExpectation.CaptureLimitFailClosed,
+            "unsupported-convention" => CaseExpectation.NoSupportedCandidate,
+            _ => CaseExpectation.Investigate
+        };
+        if (c.Expectation != expected) errors.Add(p + $"expectation must be {expected} for group {repo.Group}");
+        if (c.Expectation != CaseExpectation.Investigate && l.RequiredObservations.Count != 0)
+            errors.Add(p + "non-investigate cases cannot require cited observations");
+    }
+
+    private static void ValidateLabels(string p, LabCase c, LabLabels l, Func<string, bool> anchorFileAllowed,
+        List<string> errors)
+    {
 
         if (l.SchemaVersion != LabSchema.Labels) errors.Add(p + "unsupported labels schema");
         if (l.CaseId != c.Id) errors.Add(p + "labels belong to another case");
@@ -138,7 +222,7 @@ public static partial class CorpusValidator
         if (itemIds.Any(id => !ItemId().IsMatch(id)) || itemIds.Distinct(StringComparer.Ordinal).Count() != itemIds.Length)
             errors.Add(p + "label item IDs must be unique short IDs");
         foreach (var o in l.RequiredObservations)
-            if (!c.Source.FileSha256.ContainsKey(o.Anchor.FilePath) || o.Anchor.Line < 1)
+            if (!anchorFileAllowed(o.Anchor.FilePath) || o.Anchor.Line < 1)
                 errors.Add(p + $"observation {o.Id} anchor is not in a pinned fixture file");
         if (l.ForbiddenClaims.Any(f => !ForbiddenCategories.Contains(f.Category)))
             errors.Add(p + "unknown forbidden-claim category");

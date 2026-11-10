@@ -13,8 +13,9 @@ try
     {
         case "--validate-corpus":
             return Validate(evalRoot, out _) ? 0 : 1;
-        case "--describe" when args.Length == 2:
-            return await DescribeAsync(evalRoot, Path.GetFileName(Path.GetFullPath(args[1]).TrimEnd('/', '\\')));
+        case "--describe" when args.Length is 2 or 4:
+            return await DescribeAsync(evalRoot, Path.GetFileName(Path.GetFullPath(args[1]).TrimEnd('/', '\\')),
+                args.Length == 4 && args[2] == "--curated-root" ? Path.GetFullPath(args[3]) : null);
         case "--survey" when args.Length == 2:
             return await SurveyAsync(Path.GetFullPath(args[1]));
         case "--self-test":
@@ -26,8 +27,9 @@ try
                 Usage:
                   --validate-corpus                    static corpus + budget checks (model-free)
                   --self-test                          harness, comparators, scoring (model-free)
-                  --describe <case-dir>                print citable evidence locations for labeling
-                  --run --out <dir> [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
+                  --survey <dir>                       read-only capture survey: fingerprint, size, HTTP candidates
+                  --describe <case-dir> [--curated-root <dir>]   citable evidence locations for labeling
+                  --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
                 """);
             return 2;
     }
@@ -55,12 +57,12 @@ static bool Validate(string evalRoot, out CorpusReport report)
     return report.Valid;
 }
 
-static async Task<int> DescribeAsync(string evalRoot, string caseId)
+static async Task<int> DescribeAsync(string evalRoot, string caseId, string? curatedRoot)
 {
     var report = CorpusValidator.Validate(evalRoot);
     var loaded = report.Cases.SingleOrDefault(c => c.Case.Id == caseId)
         ?? throw new InvalidOperationException("Case is not valid in the corpus: " + string.Join("; ", report.Errors));
-    await using var captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None);
+    await using var captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot);
     Console.WriteLine($"entry {captured.Scope.EntryPointId}");
     foreach (var c in LabHarness.Citable(captured.Package))
         Console.WriteLine($"  {c.FilePath}:{c.Line}  {c.EvidenceStatus}  {c.CanonicalId}");
@@ -115,11 +117,34 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
     var comparators = Option("--comparators")?.Split(',') ?? Comparator.All;
     if (comparators.Any(c => !Comparator.All.Contains(c))) { Console.Error.WriteLine("Unknown comparator."); return 2; }
     Directory.CreateDirectory(outDir);
+    var curatedRoot = Option("--curated-root") is { } cr ? Path.GetFullPath(cr) : null;
     var scores = new List<CaseScore>();
     var failures = new List<string>();
+    var expectations = new List<LabHarness.ExpectationResult>();
+    var notAcquired = new List<string>();
     foreach (var loaded in corpus.Cases.Where(c => selected.Contains(c.Case.Id)))
     {
-        await using var captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None);
+        if (loaded.Curated is not null && curatedRoot is null)
+        {
+            notAcquired.Add(loaded.Case.Id); // visible in the summary, never silently dropped
+            continue;
+        }
+        if (loaded.Case.Expectation != CaseExpectation.Investigate)
+        {
+            try
+            {
+                var result = await LabHarness.CheckExpectationAsync(loaded, curatedRoot, CancellationToken.None);
+                expectations.Add(result);
+                if (!result.Confirmed) failures.Add($"{loaded.Case.Id}: expectation violated: {result.Detail}");
+                Console.WriteLine($"{loaded.Case.Id} {result.Expectation}: {(result.Confirmed ? "confirmed" : "VIOLATED")} ({result.Detail})");
+            }
+            catch (LabCaseException error) { failures.Add(error.Message); Console.WriteLine(error.Message); }
+            continue;
+        }
+        CapturedCase captured;
+        try { captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None, curatedRoot); }
+        catch (LabCaseException error) { failures.Add(error.Message); Console.WriteLine(error.Message); continue; }
+        await using var _captured = captured;
         var unsatisfiable = LabHarness.UnsatisfiableAnchors(captured);
         if (unsatisfiable.Count > 0)
         {
@@ -159,6 +184,8 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
         thresholdStatus = corpus.Config.ThresholdStatus,
         configSha256 = LabSchema.Sha256(File.ReadAllBytes(Path.Combine(evalRoot, "lab-config.json"))),
         comparators = LabScoring.Summarize(scores),
+        expectations,
+        notAcquired,
         pendingJudgment = new[] { "material-issue-detection", "actionable-usefulness (blinded owner A/B, C6c-3)" },
         failures
     };
@@ -167,6 +194,8 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
         Console.WriteLine($"{s.Comparator}: {s.Completed}/{s.Evaluations} completed, breaches={s.IntegrityBreaches}, " +
             $"anchor recall={s.ObservationAnchorRecall:P0}" +
             (s.MeanObjectionCoverage is { } m ? $", objection coverage={m:P0}" : "") + $", review flags={s.ReviewFlags}");
+    if (notAcquired.Count > 0)
+        Console.WriteLine($"NOT ACQUIRED ({notAcquired.Count}): {string.Join(", ", notAcquired)}. Pass --curated-root after running the acquisition script.");
     var totalBreaches = scores.Sum(s => s.IntegrityBreaches.Count);
     Console.WriteLine(totalBreaches == 0 && failures.Count == 0
         ? $"{(provisional ? "PROVISIONAL" : "SCORED")} run finished: zero integrity breaches. Usefulness and issue detection pending blinded judgment."

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R15-orchardcore-capture-limit",
+  "category": "curated",
+  "title": "OrchardCore: capture limit must fail closed",
+  "purpose": "Very large repository: capture must fail closed on snapshot limits with no partial record.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R15"
+  },
+  "entryPoint": null,
+  "diagnosticRepeat": false,
+  "expectation": "capture-limit-fail-closed"
+}

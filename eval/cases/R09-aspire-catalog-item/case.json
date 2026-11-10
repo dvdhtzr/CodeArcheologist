@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R09-aspire-catalog-item",
+  "category": "curated",
+  "title": "aspire-samples: catalog item by id among many services",
+  "purpose": "Many small services in one snapshot; evidence must stay scoped to the selected entry point.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R09"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "samples/aspire-shop/AspireShop.CatalogService/CatalogApi.cs",
+    "line": 48
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

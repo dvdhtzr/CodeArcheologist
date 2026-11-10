@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R09-aspire-catalog-item",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "group.MapGet(\"items/{catalogItemId:int}\", ...) is a written Minimal API candidate.",
+      "anchor": {
+        "filePath": "samples/aspire-shop/AspireShop.CatalogService/CatalogApi.cs",
+        "line": 48
+      }
+    },
+    {
+      "id": "O2",
+      "description": "The mapping is inside the containing method at line 9 (registration-site context).",
+      "anchor": {
+        "filePath": "samples/aspire-shop/AspireShop.CatalogService/CatalogApi.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The lambda's EF Core query is not a direct invocation of the containing method and is not runtime-verified."
+    },
+    {
+      "id": "U2",
+      "description": "Other services in the snapshot are unrelated to this entry point."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Attributes behavior of other aspire samples to this endpoint.",
+      "category": "compiled-binding"
+    },
+    {
+      "id": "X2",
+      "description": "States the route is registered under a specific host.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Evidence must stay scoped to the selected entry point in a multi-service snapshot."
+    }
+  ]
+}

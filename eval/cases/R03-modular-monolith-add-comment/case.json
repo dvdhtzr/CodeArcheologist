@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R03-modular-monolith-add-comment",
+  "category": "curated",
+  "title": "Modular monolith: add meeting comment",
+  "purpose": "Modular monolith API layer; module internals are outside the scoped subtree and must stay unknown.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R03"
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "CompanyName.MyMeetings.API/Modules/Meetings/MeetingComments/MeetingCommentsController.cs",
+    "line": 24
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

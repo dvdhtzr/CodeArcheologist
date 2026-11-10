@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R03-modular-monolith-add-comment",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpPost] candidate on MeetingCommentsController.AddComment.",
+      "anchor": {
+        "filePath": "CompanyName.MyMeetings.API/Modules/Meetings/MeetingComments/MeetingCommentsController.cs",
+        "line": 24
+      }
+    },
+    {
+      "id": "O2",
+      "description": "AddComment invokes _meetingModule.ExecuteCommandAsync.",
+      "anchor": {
+        "filePath": "CompanyName.MyMeetings.API/Modules/Meetings/MeetingComments/MeetingCommentsController.cs",
+        "line": 30
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The Meetings module implementation is outside the scoped src/API subtree and is unknown."
+    },
+    {
+      "id": "U2",
+      "description": "[HasPermission] is a custom attribute; its enforcement is unverified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Describes the module's command handling as verified behavior.",
+      "category": "runtime-verified"
+    },
+    {
+      "id": "X2",
+      "description": "Infers the permission check is enforced at runtime.",
+      "category": "authorization-inferred"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Cross-module boundary: impact beyond the API layer cannot be derived from this snapshot."
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R11-aspnetrun-checkout-basket",
+  "category": "curated",
+  "title": "aspnetrun: Carter checkout basket",
+  "purpose": "Carter modules that still call app.MapX (reclassified from unsupported by the survey).",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R11"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "src/Services/Basket/Basket.API/Basket/CheckoutBasket/CheckoutBasketEndpoints.cs",
+    "line": 10
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

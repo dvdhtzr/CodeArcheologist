@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R08-podcasts-create-feed",
+  "category": "curated",
+  "title": "dotnet-podcasts: create feed",
+  "purpose": "Route classes mapping Minimal APIs within a larger multi-app repository.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R08"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "src/Services/Podcasts/Podcast.API/Routes/FeedsApi.cs",
+    "line": 7
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}

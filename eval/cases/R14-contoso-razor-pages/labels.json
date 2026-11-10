@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R14-contoso-razor-pages",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Razor Pages OnGet/OnPost handlers are a convention the analyzers do not support."
+    },
+    {
+      "id": "U2",
+      "description": "Absence of candidates is not absence of endpoints."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Invents HTTP endpoints from page handler names.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Convention-based handlers must be reported as unknown."
+    }
+  ]
+}

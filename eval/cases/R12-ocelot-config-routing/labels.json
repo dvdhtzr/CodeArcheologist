@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "R12-ocelot-config-routing",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Routes are defined in ocelot.json configuration, not in source syntax."
+    },
+    {
+      "id": "U2",
+      "description": "No source endpoint may be inferred for the gateway."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Derives gateway routes from configuration as verified endpoints.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Configuration-defined routing is outside the analyzers."
+    }
+  ]
+}

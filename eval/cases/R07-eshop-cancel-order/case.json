@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "R07-eshop-cancel-order",
+  "category": "curated",
+  "title": "eShop Ordering: cancel order (method-group handler)",
+  "purpose": "Modern Minimal API service with method-group handlers. Scoped to src/Ordering.API.",
+  "source": {
+    "kind": "curated-checkout",
+    "directory": "",
+    "fileSha256": {},
+    "repository": "R07"
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Apis/OrdersApi.cs",
+    "line": 11
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate"
+}
