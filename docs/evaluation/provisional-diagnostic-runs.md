@@ -101,3 +101,37 @@ Owner run on Windows, contract v4.
 **Caveats:**
 - This is a provisional, small sample: 12 cases, 3 trials each, draft labels.
 - Review flags rose from 5 to 17. These come from more concrete but hedged statements, such as "likely acts as an HTTP GET endpoint… unverified". They are review aids, not breaches. Usefulness and overclaiming need the owner's blinded judgment (C6c-3).
+
+## E2 — up to three evidence views per role (contract `gate-c-evidence-capabilities-v5`)
+
+**Change:**
+- Each independent role picks one to three distinct evidence views, most useful first, in one strictly parsed structured answer. Before, it picked exactly one.
+- The host fetches each view through the same bounded role session: every request counts against the 6-call budget, and overlapping items keep the same handle. The views are merged into one view, de-duplicated by handle.
+
+Unchanged: the questions, excerpt, schemas, validation, independence, checkpoints and two-item limits.
+
+**Acceptance:** measured against run 4, the current `main`:
+- zero integrity breaches;
+- Gate C anchor recall above 57%;
+- average trial spread below 0.46.
+
+Otherwise E2 is reverted, and the measurement is recorded either way.
+
+## Run 5 — after E2
+
+Owner run on Windows, contract v5.
+
+| Comparator | Completed | Integrity breaches | Anchor recall | Objection coverage | Review flags |
+|---|---|---|---|---|---|
+| deterministic-baseline | 12/12 | 0 | 94% | — | 0 |
+| gate-b | 12/12 | 0 | 35% | — | 0 |
+| gate-c | **36/36** | **0** | **94%** | 100% | **9** |
+
+- **Trial spread:** the average fell from 0.46 to **0.00**. All 12 cases were consistent across their three trials. C03, C06, C11 and F05 each went from 1.00 to 0.00.
+- **Verdict: E2 meets all pre-set criteria.** Zero breaches, recall above 57%, spread below 0.46. Review flags also fell from 17 to 9.
+
+**Caveats:**
+- **What recall does and does not measure.** Anchor recall measures whether reports cite the labelled evidence locations, not whether their statements are correct or useful. Gate C now cites as completely as the deterministic baseline, which restates all evidence by construction. Whether Gate C adds *insight* beyond that restatement is the open question, and only the owner's blinded usefulness judgment (C6c-3) can answer it.
+- **Perfect consistency** (spread 0.00) may partly reflect roles converging on the same view selection. Consistency is not correctness.
+- The sample is provisional and small, and the labels are drafts.
+

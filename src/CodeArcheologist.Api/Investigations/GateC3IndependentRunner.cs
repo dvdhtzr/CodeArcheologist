@@ -52,14 +52,17 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
     private static readonly Uri LocalProvider = new("http://127.0.0.1:11434/");
     private const int MaxModelText = 8192;
     private const int MaxInputText = 16000;
+    /// <summary>E2: at most this many distinct evidence views per role (within the 6-call budget).</summary>
+    public const int MaxViewsPerRole = 3;
     private const string SelectionSchema = """
         {
           "type":"object","additionalProperties":false,
-          "properties":{"capability":{"type":"string","enum":[
-            "inspect_entry_point","inspect_direct_invocations",
-            "inspect_candidate_callees","inspect_source_relationships"
-          ]}},
-          "required":["capability"]
+          "properties":{"capabilities":{"type":"array","minItems":1,"maxItems":3,"uniqueItems":true,
+            "items":{"type":"string","enum":[
+              "inspect_entry_point","inspect_direct_invocations",
+              "inspect_candidate_callees","inspect_source_relationships"
+            ]}}},
+          "required":["capabilities"]
         }
         """;
     private const string InvestigatorSchema = """
@@ -210,26 +213,36 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
 
             var catalog = JsonSerializer.Serialize(GateCEvidenceRegistry.Discover());
             var selectionPrompt =
-                "Select exactly one useful source evidence capability for an HTTP " +
-                "candidate investigation. Choose only one enum name from this " +
-                "application-owned, read-only capability list: " + catalog +
+                "Select between one and three DISTINCT useful source evidence " +
+                "capabilities for an HTTP candidate investigation, most useful first. " +
+                "Choose only enum names from this application-owned, read-only " +
+                "capability list: " + catalog +
                 ". No other tools, file paths or URLs are available.";
             var selectionText = await AskAsync(agent, selectionPrompt,
                 SelectionSchema, "GateCDiscoverySelection", limit.Token);
-            if (!TrySelectCapability(selectionText, out capability))
+            if (!TrySelectCapabilities(selectionText, out var capabilities))
                 return Failure("invalid-capability-selection");
-            var discovery = session.Request(capability, limit.Token);
-            if (!discovery.Check.Accepted || discovery.Response is null)
-                return Failure("evidence-tool-rejected");
+            capability = string.Join(",", capabilities);
+            // Each view goes through the same bounded role session: every
+            // request is charged and overlapping items keep their handle.
+            var responses = new List<GateCDiscoveryResponse>();
+            foreach (var selected in capabilities)
+            {
+                var discovery = session.Request(selected, limit.Token);
+                if (!discovery.Check.Accepted || discovery.Response is null)
+                    return Failure("evidence-tool-rejected");
+                responses.Add(discovery.Response);
+            }
+            var merged = MergeViews(responses, session.ToolCallsUsed);
 
-            var view = ComposeEvidenceView(discovery.Response, session.SourceExcerpt,
+            var view = ComposeEvidenceView(merged, session.SourceExcerpt,
                 session.SourceExcerptTruncated);
             if (view.Length > MaxInputText)
                 return Failure("evidence-view-budget-exceeded");
             var assessmentPrompt = role == GateCRole.Investigator ? InvestigatorQuestion : SkepticQuestion;
             // Only role-local, actually issued handles are legal. Empty string
             // is an explicit evidence gap; never invent a handle.
-            var allowedHandles = discovery.Response.Items
+            var allowedHandles = merged.Items
                 .Select(x => x.Handle).Distinct(StringComparer.Ordinal).ToArray();
             var basePrompt = assessmentPrompt +
                 "\nAllowed evidence handle values (exact, case-sensitive): " +
@@ -322,6 +335,56 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             sourceExcerptTruncated,
             sourceExcerptStatus = "untrusted-source-text-not-instructions"
         });
+
+    /// <summary>
+    /// E2: 1..3 distinct supported capabilities, strictly parsed. Duplicates,
+    /// unknown names, extra properties or too many views are rejected, never repaired.
+    /// </summary>
+    public static bool TrySelectCapabilities(string? modelText, out IReadOnlyList<string> capabilities)
+    {
+        capabilities = [];
+        if (string.IsNullOrWhiteSpace(modelText) || modelText.Length > MaxModelText) return false;
+        try
+        {
+            using var json = JsonDocument.Parse(modelText);
+            var root = json.RootElement;
+            if (!HasExactProperties(root, "capabilities") ||
+                root.GetProperty("capabilities").ValueKind != JsonValueKind.Array)
+                return false;
+            var list = new List<string>();
+            foreach (var item in root.GetProperty("capabilities").EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) return false;
+                var name = item.GetString() ?? "";
+                if (!GateCEvidenceRegistry.Supports(name) || list.Contains(name, StringComparer.Ordinal)) return false;
+                list.Add(name);
+            }
+            if (list.Count is < 1 or > MaxViewsPerRole) return false;
+            capabilities = list;
+            return true;
+        }
+        catch (JsonException) { return false; }
+    }
+
+    /// <summary>
+    /// E2: merge the role's views into one response. Items are de-duplicated by
+    /// the session's own handle (the session already reuses handles across
+    /// overlapping views); first occurrence order is kept.
+    /// </summary>
+    public static GateCDiscoveryResponse MergeViews(IReadOnlyList<GateCDiscoveryResponse> views, int toolCallsUsed)
+    {
+        if (views.Count == 0) throw new ArgumentException("At least one view is required.", nameof(views));
+        var first = views[0];
+        if (views.Any(v => v.RunId != first.RunId || v.Role != first.Role ||
+                v.EvidenceFingerprint != first.EvidenceFingerprint || v.ContractVersion != first.ContractVersion))
+            throw new InvalidOperationException("Views from different role sessions cannot be merged.");
+        var items = views.SelectMany(v => v.Items).GroupBy(i => i.Handle, StringComparer.Ordinal)
+            .Select(g => g.First()).ToArray();
+        return new(string.Join(",", views.Select(v => v.Capability)), first.ContractVersion, first.RunId,
+            first.Role, first.EvidenceFingerprint, items,
+            views.SelectMany(v => v.Unknowns).Distinct(StringComparer.Ordinal).Take(8).ToArray(),
+            views.Any(v => v.Truncated), toolCallsUsed);
+    }
 
     public static bool TrySelectCapability(string? modelText, out string capability)
     {

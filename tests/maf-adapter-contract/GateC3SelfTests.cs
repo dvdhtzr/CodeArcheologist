@@ -154,6 +154,31 @@ internal static class GateC3SelfTests
             composed.Contains('<') || composed.Contains('>'))
             throw new InvalidOperationException("Source excerpt can break out of the untrusted-data framing.");
 
+        // E2: strict multi-view selection and merge.
+        static bool Select(string text) => GateC3IndependentRunner.TrySelectCapabilities(text, out _);
+        if (!Select("{\"capabilities\":[\"inspect_entry_point\",\"inspect_direct_invocations\"]}") ||
+            Select("{\"capabilities\":[]}") ||
+            Select("{\"capabilities\":[\"inspect_entry_point\",\"inspect_entry_point\"]}") ||
+            Select("{\"capabilities\":[\"inspect_entry_point\",\"inspect_direct_invocations\",\"inspect_candidate_callees\",\"inspect_source_relationships\"]}") ||
+            Select("{\"capabilities\":[\"read_arbitrary_file\"]}") ||
+            Select("{\"capabilities\":[\"inspect_entry_point\"],\"extra\":1}") ||
+            Select("{\"capability\":\"inspect_entry_point\"}"))
+            throw new InvalidOperationException("E2 capability selection accepted an invalid request.");
+        var item1 = new GateCDiscoveredItem("E1", "annotates-method", GateCEvidenceKind.Candidate, "a", "A.cs", 1, 1);
+        var item2 = new GateCDiscoveredItem("E2", "contains-invocation", GateCEvidenceKind.ObservedSyntax, "b", "A.cs", 2, 1);
+        var viewA = response with { Capability = GateCEvidenceRegistry.EntryPoint, Items = [item1] };
+        var viewB = response with { Capability = GateCEvidenceRegistry.Relationships, Items = [item1, item2], Truncated = true };
+        var merged = GateC3IndependentRunner.MergeViews([viewA, viewB], 2);
+        if (merged.Items.Select(i => i.Handle).SequenceEqual(["E1", "E2"]) == false || !merged.Truncated ||
+            merged.ToolCallsUsed != 2 || merged.Capability != GateCEvidenceRegistry.EntryPoint + "," + GateCEvidenceRegistry.Relationships)
+            throw new InvalidOperationException("E2 view merge lost, duplicated or misreported items.");
+        try
+        {
+            GateC3IndependentRunner.MergeViews([viewA, viewB with { Role = GateCRole.Skeptic }], 2);
+            throw new InvalidOperationException("E2 merged views from different role sessions.");
+        }
+        catch (InvalidOperationException error) when (error.Message.StartsWith("Views from different", StringComparison.Ordinal)) { }
+
         // E3: host-authored questions are fixed, code-directed and keep the handle
         // discipline; the Skeptic question preserves independence; neither leaks
         // corpus-specific hints (lambda/interface/route examples) into the prompt.
