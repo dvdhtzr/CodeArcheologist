@@ -109,7 +109,8 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             GateCRole.Investigator, ct);
         if (investigator.Status != GateCRoleStatus.CompletedValidated)
         {
-            progress = Transition(progress, GateCRunEvent.RejectInvestigator);
+            progress = Transition(progress, OutcomeEvent(
+                GateCRole.Investigator, investigator.Status));
             return new(runId, scope, progress, investigator, skeptic);
         }
         progress = Transition(progress, GateCRunEvent.AcceptInvestigator);
@@ -117,13 +118,38 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
         progress = Transition(progress, GateCRunEvent.StartSkeptic);
         skeptic = await RunRoleAsync(skepticSession, runId, scope,
             GateCRole.Skeptic, ct);
-        progress = Transition(progress, skeptic.Status ==
-            GateCRoleStatus.CompletedValidated
-            ? GateCRunEvent.AcceptSkeptic : GateCRunEvent.RejectSkeptic);
+        progress = Transition(progress, OutcomeEvent(
+            GateCRole.Skeptic, skeptic.Status));
         // C3 ends in independent-assessment state on dual success; it MUST
         // NOT claim the completed Reviewer reconciliation owned by C4.
         return new(runId, scope, progress, investigator, skeptic);
     }
+
+    private static GateCRunEvent OutcomeEvent(GateCRole role,
+        GateCRoleStatus status) => (role, status) switch
+    {
+        (GateCRole.Investigator, GateCRoleStatus.CompletedValidated) =>
+            GateCRunEvent.AcceptInvestigator,
+        (GateCRole.Investigator, GateCRoleStatus.ValidationRejected) =>
+            GateCRunEvent.RejectInvestigator,
+        (GateCRole.Investigator, GateCRoleStatus.Failed) =>
+            GateCRunEvent.FailInvestigator,
+        (GateCRole.Investigator, GateCRoleStatus.TimedOut) =>
+            GateCRunEvent.TimeoutInvestigator,
+        (GateCRole.Investigator, GateCRoleStatus.Cancelled) =>
+            GateCRunEvent.CancelInvestigator,
+        (GateCRole.Skeptic, GateCRoleStatus.CompletedValidated) =>
+            GateCRunEvent.AcceptSkeptic,
+        (GateCRole.Skeptic, GateCRoleStatus.ValidationRejected) =>
+            GateCRunEvent.RejectSkeptic,
+        (GateCRole.Skeptic, GateCRoleStatus.Failed) =>
+            GateCRunEvent.FailSkeptic,
+        (GateCRole.Skeptic, GateCRoleStatus.TimedOut) =>
+            GateCRunEvent.TimeoutSkeptic,
+        (GateCRole.Skeptic, GateCRoleStatus.Cancelled) =>
+            GateCRunEvent.CancelSkeptic,
+        _ => throw new InvalidOperationException("Unsupported role outcome transition.")
+    };
 
     private static GateCRunProgress Transition(GateCRunProgress current,
         GateCRunEvent evt)
@@ -209,7 +235,9 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            return Failure("provider-or-adapter-failure");
+            return new(role, GateCRoleStatus.Failed,
+                "provider-or-adapter-failure", null, capability,
+                session.ToolCallsUsed);
         }
 
         GateC3RoleOutcome Failure(string diagnostic) =>
