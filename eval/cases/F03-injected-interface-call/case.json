@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F03-injected-interface-call",
+  "category": "fixture",
+  "title": "Endpoint calling an injected interface",
+  "purpose": "The callee is an interface method; the concrete implementation is unknown from source.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "9774533e31f5bbf5c7a1b81b25355dc89507ea1399bfbff53ba5341b765a94a0"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 14
+  },
+  "diagnosticRepeat": false
+}

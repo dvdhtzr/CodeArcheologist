@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F07-nonliteral-attribute-route",
+  "category": "fixture",
+  "title": "Nonliteral attribute route",
+  "purpose": "Route templates use constants; the effective URL is not composed from text.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "76070bc50bfb0639c6c0ff1a76f514801f54a3470aa85f1808f7f8101b87c221"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 11
+  },
+  "diagnosticRepeat": false
+}

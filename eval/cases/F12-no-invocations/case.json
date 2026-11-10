@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F12-no-invocations",
+  "category": "fixture",
+  "title": "Endpoint with no invocations",
+  "purpose": "The method returns a constant; there is nothing downstream to report.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "7b96cf4300a6092c51b9b4f238cf914982d97e5ed8855d18141306c48afd8114"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

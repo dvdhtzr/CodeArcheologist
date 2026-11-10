@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F06-local-function",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Square.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Square contains an invocation of Multiply.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "No source-method callee edge exists for the local function call; its target is unresolved in the graph."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the analyzer resolved Multiply as a class method.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Local functions are a distinct execution scope from class methods."
+    }
+  ]
+}

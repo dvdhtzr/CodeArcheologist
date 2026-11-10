@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F04-overload-selection",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Render(42).",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Overload choice comes from reference-free synthetic binding and remains provisional."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Treats both Render overloads as called.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Two overloads exist; only one is the provisional target."
+    }
+  ]
+}

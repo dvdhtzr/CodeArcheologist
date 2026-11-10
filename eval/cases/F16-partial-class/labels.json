@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F16-partial-class",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Helper.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    },
+    {
+      "id": "O3",
+      "description": "The provisional target Helper is declared in Controller.Helpers.cs.",
+      "anchor": {
+        "filePath": "Controller.Helpers.cs",
+        "line": 5
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Cross-file binding is synthetic and provisional-local."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims Helper is verified to run.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": []
+}

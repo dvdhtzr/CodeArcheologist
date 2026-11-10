@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F08-minimal-api-method-group",
+  "category": "fixture",
+  "title": "Minimal API method-group handler",
+  "purpose": "MapGet with a method-group handler; the handler is not inferred from the name.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Program.cs": "7fe85a47a8b33f846d250d9b928ce8f7088ebf3b9711b23a9f5d68b35925b754"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Program.cs",
+    "line": 7
+  },
+  "diagnosticRepeat": false
+}

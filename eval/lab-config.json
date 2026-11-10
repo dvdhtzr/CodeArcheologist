@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "c6c-lab-config-v1",
+  "budgets": {
+    "model": "qwen3.5:9b",
+    "attemptDeadlineSeconds": 360,
+    "roleTimeoutSeconds": 90,
+    "assessmentAttemptsPerRole": 2,
+    "maxToolCallsPerRole": 6,
+    "maxEvidenceItemsPerRole": 48
+  },
+  "primaryTrials": 1,
+  "diagnosticExtraTrials": 2,
+  "comparators": ["deterministic-baseline", "gate-b", "gate-c"],
+  "provisionalThresholds": {
+    "eligibleCompleteWorkflows": 0.90,
+    "materialIssueDetection": 0.85,
+    "materialObjectionCoverage": 1.00,
+    "actionableRecommendations": 0.80,
+    "usefulnessGainOverGateBPoints": 15,
+    "allowedIntegrityBreaches": 0
+  },
+  "thresholdStatus": "provisional"
+}

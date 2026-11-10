@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F20-minimal-api-nonliteral-route",
+  "category": "fixture",
+  "title": "Minimal API nonliteral route",
+  "purpose": "MapPost uses Prefix + \"/orders\"; the route is not composed.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Program.cs": "2f750740eec611f44706390a7f9b6d00342874860caa9412092a8a835b3ec4dd"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Program.cs",
+    "line": 9
+  },
+  "diagnosticRepeat": false
+}

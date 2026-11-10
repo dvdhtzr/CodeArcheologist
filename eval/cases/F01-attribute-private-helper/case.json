@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F01-attribute-private-helper",
+  "category": "fixture",
+  "title": "Attribute endpoint calling a private helper",
+  "purpose": "Baseline: one HTTP GET candidate whose body invokes a same-class private method.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "f395af4f335b4d10912126de022e0eb6e60a94352dbfacbdba8f14890798ed5e"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": true
+}

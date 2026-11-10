@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F20-minimal-api-nonliteral-route",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "app.MapPost is a written Minimal API candidate with a nonliteral route.",
+      "anchor": {
+        "filePath": "Program.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The route is nonliteral and unresolved."
+    },
+    {
+      "id": "U2",
+      "description": "The lambda handler's call to Orders.Accept is not attributed to Map as a method-level invocation."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States /api/v2/orders as a registered route.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Nonliteral Minimal API route must stay unresolved."
+    }
+  ]
+}

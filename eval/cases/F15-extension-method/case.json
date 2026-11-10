@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F15-extension-method",
+  "category": "fixture",
+  "title": "Extension method call",
+  "purpose": "text.Shout() is an extension call; no provisional callee edge is produced.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "e71634d1ac5bbf9b685a60e24cf11fa3d1c273fd7e7f59c6de594619d87878cf"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 11
+  },
+  "diagnosticRepeat": false
+}

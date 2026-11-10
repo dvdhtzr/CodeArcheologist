@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F04-overload-selection",
+  "category": "fixture",
+  "title": "Overload selection",
+  "purpose": "Two same-named overloads; the binding must not be decided by name alone.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "f640abb7eaaddf5bc531df5dfdd2f0350b289a252377ed2fe904f4fd310344b2"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

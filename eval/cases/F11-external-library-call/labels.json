@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F11-external-library-call",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Read.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Read invokes System.IO.Path.GetFileName.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The external callee is unresolved; its behavior is outside the snapshot."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Describes GetFileName's runtime behavior as verified by this analysis.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "External library behavior is not evidenced by the snapshot."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F03-injected-interface-call",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 14
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes _pricing.Quote.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 17
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The provisional callee targets the interface declaration, not any implementation."
+    },
+    {
+      "id": "U2",
+      "description": "No DI registration is present, so the runtime implementation is unknown."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Names a concrete implementation that resolves IPricing.",
+      "category": "di-resolution"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Interface dispatch: impact on implementations cannot be derived from this snapshot."
+    }
+  ]
+}

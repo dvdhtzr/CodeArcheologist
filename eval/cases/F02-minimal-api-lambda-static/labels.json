@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F02-minimal-api-lambda-static",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "app.MapGet is a written Minimal API candidate mapping.",
+      "anchor": {
+        "filePath": "Program.cs",
+        "line": 7
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Whether MapGet is the ASP.NET extension method is unverified (no compilation)."
+    },
+    {
+      "id": "U2",
+      "description": "The lambda handler's call to HealthReport.Create is not attributed to Map as a method-level invocation."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims /health is a registered route at runtime.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "The handler is a lambda; the analyzer does not infer a handler method symbol."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F14-recursion",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Fib.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Recursion inside Fib is beyond the one-hop direct evidence scope."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims complete call-graph or termination analysis.",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Transitive impact is not established by one-hop evidence."
+    }
+  ]
+}

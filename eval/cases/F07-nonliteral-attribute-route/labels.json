@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F07-nonliteral-attribute-route",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate with a nonliteral route on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 11
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Lookup.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 14
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The route is a constant expression and remains unresolved; no full URL can be stated."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States a concrete full URL for the endpoint.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Nonliteral route templates must stay unresolved."
+    }
+  ]
+}
