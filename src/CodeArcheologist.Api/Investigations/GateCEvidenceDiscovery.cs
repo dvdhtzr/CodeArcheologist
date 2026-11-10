@@ -11,8 +11,9 @@ public static class GateCEvidenceRegistry
     // v2 (C6c E1): role evidence views also carry the package's bounded source
     // excerpt as untrusted data. v3 (E3): roles answer fixed host-authored
     // questions about the code. v4 (E3b): every claim must cite an allowed handle.
+    // v5 (E2): each role may request up to three distinct views.
     // Bumped each time so earlier checkpoints fail closed.
-    public const string Version = "gate-c-evidence-capabilities-v4";
+    public const string Version = "gate-c-evidence-capabilities-v5";
     public const string EntryPoint = "inspect_entry_point";
     public const string DirectInvocations = "inspect_direct_invocations";
     public const string CandidateCallees = "inspect_candidate_callees";

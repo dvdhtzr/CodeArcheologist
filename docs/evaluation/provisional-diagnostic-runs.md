@@ -101,3 +101,22 @@ Owner run on Windows, contract v4.
 **Caveats:**
 - This is a provisional, small sample: 12 cases, 3 trials each, draft labels.
 - Review flags rose from 5 to 17. These come from more concrete but hedged statements, such as "likely acts as an HTTP GET endpoint… unverified". They are review aids, not breaches. Usefulness and overclaiming need the owner's blinded judgment (C6c-3).
+
+## E2 — up to three evidence views per role (contract `gate-c-evidence-capabilities-v5`)
+
+**Change:**
+- Each independent role picks one to three distinct evidence views, most useful first, in one strictly parsed structured answer. Before, it picked exactly one.
+- The host fetches each view through the same bounded role session: every request counts against the 6-call budget, and overlapping items keep the same handle. The views are merged into one view, de-duplicated by handle.
+
+Unchanged: the questions, excerpt, schemas, validation, independence, checkpoints and two-item limits.
+
+**Acceptance:** measured against run 4, the current `main`:
+- zero integrity breaches;
+- Gate C anchor recall above 57%;
+- average trial spread below 0.46.
+
+Otherwise E2 is reverted, and the measurement is recorded either way.
+
+## Run 5 — after E2
+
+Pending the owner's run.
