@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using CodeArcheologist.Api.Security;
 using CodeArcheologist.Api.Workspaces;
 using CodeArcheologist.Api.Investigations;
+using CodeArcheologist.Api.Execution;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +30,14 @@ builder.Services.AddSingleton<GateBInvestigator>();
 builder.Services.AddSingleton<GateCEvidenceDiscovery>();
 builder.Services.AddSingleton<GateC3IndependentRunner>();
 builder.Services.AddSingleton<GateC4ReconciliationRunner>();
-builder.Services.AddSingleton<GateC5InvestigationCoordinator>();
+// C6b: admission service + ONE managed hosted worker. No detached tasks.
+builder.Services.AddSingleton<ExecutionOwnershipState>();
+builder.Services.AddSingleton<InvestigationWorkSignal>();
+builder.Services.AddSingleton(InvestigationWorkerOptions.Default);
+builder.Services.AddSingleton<IInvestigationExecutor, MafInvestigationExecutor>();
+builder.Services.AddSingleton<InvestigationAdmissionService>();
+builder.Services.AddSingleton<InvestigationWorker>();
+builder.Services.AddHostedService(services => services.GetRequiredService<InvestigationWorker>());
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -69,7 +77,15 @@ var app = builder.Build();
 // process console; the start scripts provide an easier interactive path.
 // Initialize the versioned metadata database before accepting requests.
 // A migration failure stops startup rather than silently losing user data.
-app.Services.GetRequiredService<WorkspaceStore>().Initialize();
+// C6b startup protocol: (1) migrate only — never recover here; (2) try the
+// OS execution lock; (3) without it: no execution and no recovery; (4–7)
+// with it: new fenced epoch, reconcile abandoned attempts, preserve
+// checkpoints, then idle until work is explicitly admitted.
+var workspaceStore = app.Services.GetRequiredService<WorkspaceStore>();
+workspaceStore.Initialize();
+var executionOwnership = app.Services.GetRequiredService<ExecutionOwnershipState>();
+if (!executionOwnership.TryAcquire(workspaceStore))
+    Console.WriteLine($"Investigation execution disabled in this process: {executionOwnership.Diagnostic}.");
 
 var localAccess = app.Services.GetRequiredService<LocalAccessState>();
 app.Lifetime.ApplicationStarted.Register(() =>
@@ -158,7 +174,7 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
 app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations",
     (Guid workspaceId, Guid repositoryId, Guid snapshotId,
      GateC5CreateRequest request, HttpContext context, WorkspaceStore store,
-     SnapshotEvidenceTools tools, GateC5InvestigationCoordinator coordinator) =>
+     SnapshotEvidenceTools tools, InvestigationAdmissionService admissions) =>
 {
     var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
     if (snapshot is null) return Results.NotFound();
@@ -190,15 +206,20 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
 
     var scope = new GateCScope(workspaceId, repositoryId, snapshotId,
         snapshot.FingerprintSha256, request.EntryPointId, SnapshotEvidenceTools.Version);
-    if (!coordinator.TryStart(scope, idempotencyKey, out var created))
-        return Results.Conflict(new { error = "A local investigation is already running." });
-    if (created is null) return Results.StatusCode(500);
-    if (created.Conflict)
-        return Results.Conflict(new { error = "Idempotency-Key already belongs to another request." });
-    var location = $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{created.Record!.RunId:D}";
-    return created.Created
-        ? Results.Accepted(location, created.Record)
-        : Results.Ok(created.Record);
+    var admission = admissions.Admit(scope, idempotencyKey);
+    var location = admission.Record is null ? null :
+        $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{admission.Record.RunId:D}";
+    return admission.Outcome switch
+    {
+        InvestigationAdmissionOutcome.Admitted => Results.Accepted(location, admission.Record),
+        InvestigationAdmissionOutcome.Replayed => Results.Ok(admission.Record),
+        InvestigationAdmissionOutcome.Conflict =>
+            Results.Conflict(new { error = "Idempotency-Key already belongs to another request." }),
+        InvestigationAdmissionOutcome.Busy =>
+            Results.Conflict(new { error = "A local investigation is already running." }),
+        _ => Results.Json(new { error = "Investigation execution is unavailable in this process." },
+            statusCode: StatusCodes.Status503ServiceUnavailable)
+    };
 }).RequireAuthorization();
 
 // Workspace metadata only. No file paths, repository content or model output

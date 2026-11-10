@@ -22,8 +22,12 @@ public sealed record InvestigationCreateResult(InvestigationSummary? Record,
 
 public sealed partial class WorkspaceStore
 {
+    /// <summary>
+    /// Transactional admission. Only the current fenced owner admits new work,
+    /// so an admitted attempt is always bound to a live lock-holding worker.
+    /// </summary>
     public InvestigationCreateResult CreateInvestigation(
-        GateCScope scope, Guid idempotencyKey)
+        GateCScope scope, Guid idempotencyKey, ExecutionFence fence)
     {
         var digest = Convert.ToHexString(SHA256.HashData(
             Encoding.UTF8.GetBytes(string.Join("\n",
@@ -52,6 +56,7 @@ public sealed partial class WorkspaceStore
             }
         }
 
+        RequireOwner(connection, tx, fence);
         // Immediate SQLite write transaction serializes concurrent admissions.
         // Check ownership before creating any rows; actual reservation follows
         // the attempt insert to satisfy the foreign key.
@@ -92,10 +97,13 @@ public sealed partial class WorkspaceStore
         using (var insert = Command(connection, tx, """
             INSERT INTO investigation_attempts (
                 attempt_id, run_id, attempt_number, contract_version,
-                status, diagnostic, created_at_unix_ms)
-            VALUES ($id,$run,1,$version,'queued','queued',$created);
+                status, diagnostic, created_at_unix_ms,
+                execution_owner_id, ownership_epoch)
+            VALUES ($id,$run,1,$version,'queued','queued',$created,$owner,$epoch);
             """))
         {
+            insert.Parameters.AddWithValue("$owner", fence.OwnerId.ToString("D"));
+            insert.Parameters.AddWithValue("$epoch", fence.Epoch);
             insert.Parameters.AddWithValue("$id", attemptId.ToString("D"));
             insert.Parameters.AddWithValue("$run", id.ToString("D"));
             insert.Parameters.AddWithValue("$version", GateC6ExecutionContract.AttemptVersion);
@@ -113,14 +121,20 @@ public sealed partial class WorkspaceStore
                 throw new InvalidOperationException("Execution slot acquisition failed.");
         }
         AppendEvent(connection, tx, attemptId, "attempt-admitted", "queued",
-            null, "queued");
+            null, "queued", fence.Epoch);
         tx.Commit();
         return new(new InvestigationSummary(id, scope, GateC5ReportContract.Version,
             "running", "queued", now, null), true, false);
     }
 
-    public void FinishInvestigation(Guid runId, GateC5Report report)
+    /// <summary>
+    /// Single fenced terminal write: report row, attempt state, terminal event
+    /// and slot release commit together or not at all.
+    /// </summary>
+    public void FinishInvestigation(ExecutionFence fence, Guid attemptId,
+        Guid runId, GateC5Report report, string terminalCause)
     {
+        RequireCause(terminalCause);
         if (report.RunId != runId || report.Version != GateC5ReportContract.Version ||
             report.Progress.RunId != runId ||
             report.Progress.Status is not (GateCRunStatus.Completed or GateCRunStatus.Incomplete or
@@ -128,6 +142,8 @@ public sealed partial class WorkspaceStore
             throw new InvalidOperationException("Cannot persist nonterminal or foreign report.");
         using var connection = Open();
         using var tx = connection.BeginTransaction(deferred: false);
+        // Fence first: a stale owner learns nothing about current record state.
+        RequireOwner(connection, tx, fence);
         using var update = connection.CreateCommand();
         update.Transaction = tx;
         update.CommandText = """
@@ -153,18 +169,25 @@ public sealed partial class WorkspaceStore
         update.Parameters.AddWithValue("$evidence", report.Scope.EvidenceContractVersion);
         if (update.ExecuteNonQuery() != 1)
             throw new InvalidOperationException("Investigation completion scope or state mismatch.");
-        FinalizeAttempt(connection, tx, runId, report.Progress.Status.ToString().ToLowerInvariant(), report.Diagnostic);
+        RequireAttemptOfRun(connection, tx, attemptId, runId);
+        FinalizeAttempt(connection, tx, fence, attemptId,
+            report.Progress.Status.ToString().ToLowerInvariant(), report.Diagnostic,
+            terminalCause);
         tx.Commit();
     }
 
-    public void FailInvestigation(Guid runId, string diagnostic)
+    public void FailInvestigation(ExecutionFence fence, Guid attemptId,
+        Guid runId, string diagnostic, string terminalCause)
     {
+        RequireCause(terminalCause);
         // Diagnostics are fixed host-controlled categories; not model text or exception messages.
         if (diagnostic is not ("host-execution-failure" or "host-cancelled" or
             "host-report-validation-failed" or "host-execution-rejected"))
             throw new ArgumentException("Unknown safe failure category.", nameof(diagnostic));
         using var connection = Open();
         using var tx = connection.BeginTransaction(deferred: false);
+        // Fence first: a stale owner learns nothing about current record state.
+        RequireOwner(connection, tx, fence);
         using var update = connection.CreateCommand();
         update.Transaction = tx;
         update.CommandText = """
@@ -186,8 +209,63 @@ public sealed partial class WorkspaceStore
             "host-execution-rejected" or "host-report-validation-failed" => "rejected",
             _ => "failed"
         };
-        FinalizeAttempt(connection, tx, runId, attemptStatus, diagnostic);
+        RequireAttemptOfRun(connection, tx, attemptId, runId);
+        FinalizeAttempt(connection, tx, fence, attemptId, attemptStatus, diagnostic,
+            terminalCause);
         tx.Commit();
+    }
+
+    /// <summary>
+    /// Attempt ended without a terminal run outcome (shutdown, deadline):
+    /// the run becomes 'interrupted' and is never resumed automatically.
+    /// </summary>
+    public void InterruptAttempt(ExecutionFence fence, Guid attemptId, Guid runId,
+        string terminalCause)
+    {
+        if (terminalCause is not ("application-shutdown" or "attempt-deadline" or
+            "ownership-lost"))
+            throw new ArgumentException("Unsupported interruption cause.", nameof(terminalCause));
+        using var connection = Open();
+        using var tx = connection.BeginTransaction(deferred: false);
+        // Fence first: a stale owner learns nothing about current record state.
+        RequireOwner(connection, tx, fence);
+        RequireAttemptOfRun(connection, tx, attemptId, runId);
+        using (var update = Command(connection, tx, """
+            UPDATE investigation_reports SET status='interrupted',
+                diagnostic='host-interrupted-awaiting-explicit-action'
+            WHERE run_id=$id AND status='running';
+            """))
+        {
+            update.Parameters.AddWithValue("$id", runId.ToString("D"));
+            if (update.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Interruption record scope or state mismatch.");
+        }
+        FinalizeAttempt(connection, tx, fence, attemptId, "interrupted",
+            "host-attempt-interrupted", terminalCause);
+        tx.Commit();
+    }
+
+    private static void RequireCause(string cause)
+    {
+        if (!TerminalCauses.Contains("'" + cause + "'", StringComparison.Ordinal))
+            throw new ArgumentException("Unknown terminal cause.", nameof(cause));
+    }
+
+    private static void RequireAttemptOfRun(SqliteConnection db, SqliteTransaction tx,
+        Guid attemptId, Guid runId)
+    {
+        var attempt = LoadAttempt(db, tx, attemptId);
+        if (attempt is null || attempt.RunId != runId)
+            throw new InvalidOperationException("Attempt does not belong to this run.");
+    }
+
+    private static InvestigationSummary? LoadRun(SqliteConnection db,
+        SqliteTransaction tx, Guid runId)
+    {
+        using var cmd = Command(db, tx, SummaryColumns + "\n WHERE run_id=$run;");
+        cmd.Parameters.AddWithValue("$run", runId.ToString("D"));
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadInvestigation(reader) : null;
     }
 
     public InvestigationDetail? GetInvestigation(Guid workspace, Guid repository,

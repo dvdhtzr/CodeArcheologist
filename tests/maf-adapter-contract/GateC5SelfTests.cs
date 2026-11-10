@@ -1,3 +1,4 @@
+using CodeArcheologist.Api.Execution;
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Workspaces;
 using Microsoft.Data.Sqlite;
@@ -15,13 +16,17 @@ internal static class GateC5SelfTests
             Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", dir);
             var store = new WorkspaceStore();
             store.Initialize();
+            var processLock = ExecutionProcessLock.TryAcquire(store.DataDirectory, out _)
+                ?? throw new InvalidOperationException("Test could not acquire execution lock.");
+            var fence = store.EstablishOwnership(processLock);
+            store.ReconcileAbandoned(fence);
             using (var connection = new SqliteConnection(
                 new SqliteConnectionStringBuilder { DataSource = store.DatabasePath, Pooling = false }.ToString()))
             {
                 connection.Open();
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = "PRAGMA user_version;";
-                if (Convert.ToInt32(cmd.ExecuteScalar()) != 5)
+                if (Convert.ToInt32(cmd.ExecuteScalar()) != 6)
                     throw new InvalidOperationException("C6 schema was not migrated.");
             }
 
@@ -64,7 +69,7 @@ internal static class GateC5SelfTests
             }
 
             var key = Guid.NewGuid();
-            var create = store.CreateInvestigation(scope, key);
+            var create = store.CreateInvestigation(scope, key, fence);
             if (!create.Created || create.Conflict || create.Record is null)
                 throw new InvalidOperationException("C5 new request was not persisted.");
             var admitted = store.GetAttempt(create.Record.RunId);
@@ -76,14 +81,14 @@ internal static class GateC5SelfTests
                 admissionEvents[0].EventType != "attempt-admitted" ||
                 admissionEvents[0].SequenceNumber != 1)
                 throw new InvalidOperationException("C6 admission event is invalid.");
-            if (!store.CreateInvestigation(scope, Guid.NewGuid()).Busy)
+            if (!store.CreateInvestigation(scope, Guid.NewGuid(), fence).Busy)
                 throw new InvalidOperationException("C6 busy admission created a record.");
             if (store.ListInvestigations(workspace.Id, repositoryId, snapshotId).TotalCount != 1)
                 throw new InvalidOperationException("Busy admission left a ghost report.");
-            var replay = store.CreateInvestigation(scope, key);
+            var replay = store.CreateInvestigation(scope, key, fence);
             if (replay.Created || replay.Conflict || replay.Record?.RunId != create.Record.RunId)
                 throw new InvalidOperationException("C5 idempotent replay failed.");
-            if (!store.CreateInvestigation(scope with { EntryPointId = "other" }, key).Conflict)
+            if (!store.CreateInvestigation(scope with { EntryPointId = "other" }, key, fence).Conflict)
                 throw new InvalidOperationException("C5 conflicting idempotency was accepted.");
             if (store.GetInvestigation(workspace.Id, repositoryId,
                     Guid.NewGuid(), create.Record.RunId) is not null)
@@ -144,8 +149,12 @@ internal static class GateC5SelfTests
             if (report.EvidenceLinks.Count != 2 ||
                 report.EvidenceLinks[0].CanonicalId == report.EvidenceLinks[1].CanonicalId)
                 throw new InvalidOperationException("Role-local evidence identities were conflated.");
-            store.StartAttempt(effectiveRun);
-            store.FinishInvestigation(effectiveRun, report);
+            var claimed = store.ClaimNextQueuedAttempt(fence, TimeSpan.FromMinutes(6))
+                ?? throw new InvalidOperationException("Admitted attempt was not claimable.");
+            if (claimed.Run.RunId != effectiveRun)
+                throw new InvalidOperationException("Claimed a foreign attempt.");
+            store.FinishInvestigation(fence, claimed.Attempt.AttemptId, effectiveRun,
+                report, "completed");
             var completedAttempt = store.GetAttempt(effectiveRun);
             var executionEvents = store.ListEvents(workspace.Id, repositoryId,
                 snapshotId, effectiveRun);
@@ -181,7 +190,8 @@ internal static class GateC5SelfTests
                 throw new InvalidOperationException("C5 report listing failed.");
             try
             {
-                store.FinishInvestigation(effectiveRun, report);
+                store.FinishInvestigation(fence, claimed.Attempt.AttemptId, effectiveRun,
+                    report, "completed");
                 throw new InvalidOperationException("Double completion was accepted.");
             }
             catch (InvalidOperationException ex) when (
@@ -220,7 +230,7 @@ internal static class GateC5SelfTests
             var rejectedKey = Guid.NewGuid();
             try
             {
-                store.CreateInvestigation(scope, rejectedKey);
+                store.CreateInvestigation(scope, rejectedKey, fence);
                 throw new InvalidOperationException("Injected admission failure succeeded.");
             }
             catch (SqliteException) { }
@@ -237,20 +247,32 @@ internal static class GateC5SelfTests
                 if (Convert.ToInt32(cleanup.ExecuteScalar()) != 0)
                     throw new InvalidOperationException("Failed admission left a report.");
             }
-            // Restart marks only active records incomplete; completed reports survive.
-            var interrupted = store.CreateInvestigation(scope, Guid.NewGuid());
+            // Restart: Initialize() alone must NOT touch active work. Only a new
+            // lock holder with a new epoch reconciles; completed reports survive.
+            var interrupted = store.CreateInvestigation(scope, Guid.NewGuid(), fence);
             store.Initialize();
-            var interruptedAttempt = store.GetAttempt(interrupted.Record!.RunId);
+            if (store.GetAttempt(interrupted.Record!.RunId)?.Status != "queued")
+                throw new InvalidOperationException("Initialize() recovered active work without ownership.");
+            processLock.Dispose();
+            using var restartLock = ExecutionProcessLock.TryAcquire(store.DataDirectory, out _)
+                ?? throw new InvalidOperationException("Restart could not acquire execution lock.");
+            var restartFence = store.EstablishOwnership(restartLock);
+            if (restartFence.Epoch != fence.Epoch + 1)
+                throw new InvalidOperationException("Ownership epoch is not monotonic.");
+            store.ReconcileAbandoned(restartFence);
+            var interruptedAttempt = store.GetAttempt(interrupted.Record.RunId);
             var interruptedEvents = store.ListEvents(workspace.Id, repositoryId,
                 snapshotId, interrupted.Record.RunId);
-            if (interruptedAttempt?.Status != "rejected" ||
+            if (interruptedAttempt?.Status != "interrupted" ||
+                interruptedAttempt.TerminalCause != "process-interrupted" ||
                 interruptedEvents.Count != 2 ||
-                interruptedEvents[1].EventType != "attempt-rejected")
+                interruptedEvents[1].EventType != "attempt-interrupted" ||
+                interruptedEvents[1].OwnershipEpoch != restartFence.Epoch)
                 throw new InvalidOperationException("C6 restart event was not recorded.");
             var restarted = store.GetInvestigation(workspace.Id, repositoryId,
                 snapshotId, interrupted.Record!.RunId);
-            if (restarted?.Summary.Status != "incomplete" ||
-                restarted.Summary.Diagnostic != "host-restarted-before-completion" ||
+            if (restarted?.Summary.Status != "interrupted" ||
+                restarted.Summary.Diagnostic != "host-interrupted-awaiting-explicit-action" ||
                 restarted.Report is not null ||
                 store.GetInvestigation(workspace.Id, repositoryId,
                     snapshotId, effectiveRun)?.Report is null)

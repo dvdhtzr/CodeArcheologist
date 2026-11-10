@@ -1,0 +1,279 @@
+using CodeArcheologist.Api.Execution;
+using CodeArcheologist.Api.Workspaces;
+
+namespace CodeArcheologist.Api.Investigations;
+
+/// <summary>
+/// The model-executing stage sequence for one claimed attempt. Production
+/// binds <see cref="MafInvestigationExecutor"/> (genuine MAF/Ollama roles);
+/// deterministic tests bind model-free fixtures.
+/// </summary>
+public interface IInvestigationExecutor
+{
+    Task<GateC4RunOutcome> ExecuteAsync(SnapshotRecord snapshot, GateCScope scope,
+        Guid runId, CancellationToken cancellationToken);
+}
+
+public sealed class MafInvestigationExecutor(GateC4ReconciliationRunner runner)
+    : IInvestigationExecutor
+{
+    public Task<GateC4RunOutcome> ExecuteAsync(SnapshotRecord snapshot, GateCScope scope,
+        Guid runId, CancellationToken cancellationToken) =>
+        runner.RunAsync(snapshot, scope, runId, cancellationToken);
+}
+
+public sealed record InvestigationWorkerOptions(TimeSpan AttemptDeadline,
+    TimeSpan HeartbeatInterval)
+{
+    public static InvestigationWorkerOptions Default { get; } =
+        new(GateC6ExecutionContract.AttemptDeadline, TimeSpan.FromSeconds(10));
+}
+
+public enum InvestigationWorkerState { Idle, Executing, Halted, NotOwner }
+
+/// <summary>
+/// C6b responsibility 2 — the single managed hosted worker. It owns
+/// scheduling, the per-attempt deadline, cancellation and lifetime.
+///
+/// Invariants:
+/// - Executes only while this process holds the OS lock and fenced epoch.
+/// - Never claims work at startup by itself: only attempts admitted by THIS
+///   owner are claimable, and reconciliation has already finalized others.
+/// - The execution slot is released only by the single terminal write that
+///   follows the executor actually returning. An uncooperative model call
+///   keeps the slot held (fail closed) rather than allowing overlap.
+/// - A terminal write is attempted exactly once. If it fails, the worker
+///   halts; it never tries a second, different finalization.
+/// </summary>
+public sealed class InvestigationWorker(WorkspaceStore store,
+    ExecutionOwnershipState ownership, InvestigationWorkSignal signal,
+    IInvestigationExecutor executor, InvestigationWorkerOptions options,
+    ILogger<InvestigationWorker> logger) : BackgroundService
+{
+    private volatile InvestigationWorkerState _state = InvestigationWorkerState.Idle;
+    private int _executions;
+
+    public InvestigationWorkerState State => _state;
+
+    /// <summary>Number of executor invocations by this worker (diagnostics/tests).</summary>
+    public int Executions => Volatile.Read(ref _executions);
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var fence = ownership.Fence;
+        if (fence is null)
+        {
+            _state = InvestigationWorkerState.NotOwner;
+            logger.LogWarning("Investigation execution disabled: {Diagnostic}", ownership.Diagnostic);
+            return;
+        }
+
+        // Ownership loss is deliberately NOT linked to shutdown, so the two
+        // causes remain distinguishable when classifying the terminal outcome.
+        using var ownershipLost = new CancellationTokenSource();
+        using var stopOrLost = CancellationTokenSource.CreateLinkedTokenSource(
+            stoppingToken, ownershipLost.Token);
+        var heartbeat = HeartbeatAsync(fence, ownershipLost, stopOrLost.Token);
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested &&
+                   !ownershipLost.IsCancellationRequested &&
+                   _state != InvestigationWorkerState.Halted)
+            {
+                ClaimedAttempt? claim;
+                try
+                {
+                    claim = store.ClaimNextQueuedAttempt(fence, options.AttemptDeadline);
+                }
+                catch (ExecutionFenceException error)
+                {
+                    LoseOwnership(error.Diagnostic, ownershipLost);
+                    break;
+                }
+
+                if (claim is null)
+                {
+                    try { await signal.WaitAsync(options.HeartbeatInterval, stopOrLost.Token); }
+                    catch (OperationCanceledException) { break; }
+                    continue;
+                }
+
+                _state = InvestigationWorkerState.Executing;
+                await RunAttemptAsync(fence, claim, stoppingToken, ownershipLost);
+                if (_state == InvestigationWorkerState.Executing)
+                    _state = InvestigationWorkerState.Idle;
+            }
+        }
+        finally
+        {
+            await stopOrLost.CancelAsync();
+            try { await heartbeat; } catch (OperationCanceledException) { }
+            if (_state != InvestigationWorkerState.Halted &&
+                ownership.Status == ExecutionOwnershipStatus.Owner)
+            {
+                try { store.TryReleaseOwnership(fence); }
+                catch (ExecutionFenceException) { }
+            }
+        }
+    }
+
+    private async Task HeartbeatAsync(ExecutionFence fence,
+        CancellationTokenSource ownershipLost, CancellationToken stopOrLost)
+    {
+        using var timer = new PeriodicTimer(options.HeartbeatInterval);
+        while (await timer.WaitForNextTickAsync(stopOrLost))
+        {
+            try { store.Heartbeat(fence); }
+            catch (ExecutionFenceException error)
+            {
+                LoseOwnership(error.Diagnostic, ownershipLost);
+                return;
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                // A transient write failure is not ownership loss; liveness is diagnostic only.
+                logger.LogWarning("Execution heartbeat write failed ({Type}).", error.GetType().Name);
+            }
+        }
+    }
+
+    private void LoseOwnership(string diagnostic, CancellationTokenSource ownershipLost)
+    {
+        ownership.MarkLost(diagnostic);
+        logger.LogError("Execution ownership lost: {Diagnostic}. Worker stops executing.", diagnostic);
+        ownershipLost.Cancel();
+    }
+
+    private async Task RunAttemptAsync(ExecutionFence fence, ClaimedAttempt claim,
+        CancellationToken stoppingToken, CancellationTokenSource ownershipLost)
+    {
+        var run = claim.Run;
+        var attemptId = claim.Attempt.AttemptId;
+        using var deadline = new CancellationTokenSource();
+        var remaining = claim.DeadlineAtUtc - DateTimeOffset.UtcNow;
+        deadline.CancelAfter(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
+        using var attemptToken = CancellationTokenSource.CreateLinkedTokenSource(
+            stoppingToken, ownershipLost.Token, deadline.Token);
+
+        TerminalDecision decision;
+        var snapshot = store.GetSnapshot(run.Scope.WorkspaceId,
+            run.Scope.RepositoryId, run.Scope.SnapshotId);
+        if (snapshot is null || snapshot.FingerprintSha256 != run.Scope.FingerprintSha256)
+        {
+            decision = TerminalDecision.Fail("host-execution-rejected", "evidence-rejected");
+        }
+        else
+        {
+            GateC4RunOutcome? outcome = null;
+            Exception? fault = null;
+            Interlocked.Increment(ref _executions);
+            try
+            {
+                // The ONLY model-executing call. Awaited to completion even if
+                // cancellation was requested: the slot is not released while it runs.
+                outcome = await executor.ExecuteAsync(snapshot, run.Scope, run.RunId,
+                    attemptToken.Token);
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                fault = error;
+            }
+            decision = Classify(outcome, fault, run, stoppingToken,
+                ownershipLost.IsCancellationRequested, deadline.IsCancellationRequested);
+        }
+
+        if (decision.Kind == TerminalKind.None)
+        {
+            // Ownership was lost: any write would be rejected by the fence.
+            // The new owner (after this process exits) reconciles the attempt.
+            _state = InvestigationWorkerState.Halted;
+            return;
+        }
+
+        try
+        {
+            switch (decision.Kind)
+            {
+                case TerminalKind.Report:
+                    store.FinishInvestigation(fence, attemptId, run.RunId,
+                        decision.Report!, decision.Cause);
+                    break;
+                case TerminalKind.Interrupt:
+                    store.InterruptAttempt(fence, attemptId, run.RunId, decision.Cause);
+                    break;
+                default:
+                    store.FailInvestigation(fence, attemptId, run.RunId,
+                        decision.Diagnostic!, decision.Cause);
+                    break;
+            }
+        }
+        catch (ExecutionFenceException error)
+        {
+            LoseOwnership(error.Diagnostic, ownershipLost);
+            _state = InvestigationWorkerState.Halted;
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            // Do NOT attempt a second finalization of the same record. The
+            // attempt stays active and the slot stays held: fail closed until
+            // an explicit restart reconciles it as interrupted.
+            logger.LogError("Terminal persistence failed ({Type}); worker halted.",
+                error.GetType().Name);
+            _state = InvestigationWorkerState.Halted;
+        }
+    }
+
+    internal enum TerminalKind { None, Report, Interrupt, Fail }
+
+    internal sealed record TerminalDecision(TerminalKind Kind, string Cause,
+        GateC5Report? Report = null, string? Diagnostic = null)
+    {
+        public static TerminalDecision Fail(string diagnostic, string cause) =>
+            new(TerminalKind.Fail, cause, null, diagnostic);
+    }
+
+    /// <summary>
+    /// Host-observed classification. Which host token fired takes precedence
+    /// over what the (cancellation-aware) runner reported, so a shutdown or
+    /// deadline is never mislabelled as user cancellation.
+    /// </summary>
+    internal static TerminalDecision Classify(GateC4RunOutcome? outcome, Exception? fault,
+        InvestigationSummary run, CancellationToken stopping, bool ownershipLost,
+        bool deadlineExpired)
+    {
+        if (ownershipLost) return new(TerminalKind.None, "ownership-lost");
+        if (stopping.IsCancellationRequested)
+            return new(TerminalKind.Interrupt, "application-shutdown");
+        if (deadlineExpired) return new(TerminalKind.Interrupt, "attempt-deadline");
+        if (fault is not null || outcome is null)
+            return TerminalDecision.Fail("host-execution-failure", "host-failure");
+
+        GateC5Report report;
+        try
+        {
+            report = GateC5ReportFactory.Create(outcome, run.StartedAtUtc, DateTimeOffset.UtcNow);
+        }
+        catch (InvalidOperationException)
+        {
+            return TerminalDecision.Fail("host-report-validation-failed", "report-validation-failed");
+        }
+
+        var roles = new[] { outcome.Independent.Investigator.Status,
+            outcome.Independent.Skeptic.Status, outcome.Reviewer.Status };
+        var cause = outcome.Progress.Status switch
+        {
+            GateCRunStatus.Completed => "completed",
+            GateCRunStatus.Rejected => "evidence-rejected",
+            // No user cancellation exists in this phase: a role-level Cancelled
+            // without a host token is not trustworthy as a user action.
+            GateCRunStatus.Cancelled => "host-failure",
+            _ when roles.Contains(GateCRoleStatus.TimedOut) => "role-timeout",
+            _ when roles.Contains(GateCRoleStatus.Failed) => "provider-error",
+            _ when roles.Contains(GateCRoleStatus.ValidationRejected) => "validation-rejected",
+            _ => "host-failure"
+        };
+        if (outcome.Progress.Status == GateCRunStatus.Cancelled)
+            return TerminalDecision.Fail("host-execution-failure", cause);
+        return new(TerminalKind.Report, cause, report);
+    }
+}

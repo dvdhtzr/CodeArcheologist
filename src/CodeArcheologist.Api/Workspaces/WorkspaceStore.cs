@@ -30,7 +30,7 @@ public sealed record CreateWorkspaceResult(
 /// </summary>
 public sealed partial class WorkspaceStore
 {
-    private const int CurrentSchemaVersion = 5;
+    private const int CurrentSchemaVersion = 6;
     private readonly string _connectionString;
 
     public WorkspaceStore()
@@ -51,6 +51,7 @@ public sealed partial class WorkspaceStore
 
         var root = Path.GetFullPath(dataDirectory);
         Directory.CreateDirectory(root);
+        DataDirectory = root;
         DatabasePath = Path.Combine(root, "workspaces.sqlite3");
 
         _connectionString = new SqliteConnectionStringBuilder
@@ -63,13 +64,37 @@ public sealed partial class WorkspaceStore
 
     public string DatabasePath { get; }
 
-    public void Initialize()
+    /// <summary>Local application data directory that also holds the OS execution lock.</summary>
+    public string DataDirectory { get; }
+
+    /// <summary>
+    /// Opens and migrates SQLite ONLY. Since C6b this never reconciles,
+    /// interrupts or recovers investigation work: that requires the OS
+    /// execution lock and a fenced ownership epoch (see ReconcileAbandoned).
+    /// A second process may therefore safely call this while another
+    /// process is executing an investigation.
+    /// </summary>
+    public void Initialize() => InitializeTo(CurrentSchemaVersion);
+
+    /// <summary>Test seam: migrate to an older schema to verify forward migration.</summary>
+    internal void InitializeTo(int targetVersion)
     {
+        if (targetVersion is < 5 or > CurrentSchemaVersion)
+            throw new ArgumentOutOfRangeException(nameof(targetVersion));
         using var connection = Open();
         using (var journal = connection.CreateCommand())
         {
             journal.CommandText = "PRAGMA journal_mode = WAL;";
             journal.ExecuteNonQuery();
+        }
+        // The v6 table rebuilds follow SQLite's documented procedure, which
+        // requires foreign-key enforcement to be suspended OUTSIDE a transaction
+        // and an explicit foreign_key_check before commit. The connection is
+        // disposed afterwards; every other connection enables foreign keys.
+        using (var fk = connection.CreateCommand())
+        {
+            fk.CommandText = "PRAGMA foreign_keys = OFF;";
+            fk.ExecuteNonQuery();
         }
 
         using var transaction = connection.BeginTransaction();
@@ -77,6 +102,11 @@ public sealed partial class WorkspaceStore
         versionQuery.Transaction = transaction;
         versionQuery.CommandText = "PRAGMA user_version;";
         var current = Convert.ToInt32(versionQuery.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (current >= targetVersion && current <= CurrentSchemaVersion)
+        {
+            transaction.Commit();
+            return;
+        }
         if (current > CurrentSchemaVersion)
         {
             throw new InvalidOperationException(
@@ -288,25 +318,17 @@ public sealed partial class WorkspaceStore
             migration.ExecuteNonQuery();
         }
 
-        // A process restart never resumes a previous in-process MAF workflow.
-        // Preserve the record and explicitly mark its incomplete state.
-        using (var interrupted = connection.CreateCommand())
-        {
-            interrupted.Transaction = transaction;
-            interrupted.CommandText = """
-                UPDATE investigation_reports SET status='incomplete',
-                    diagnostic='host-restarted-before-completion',
-                    finished_at_unix_ms=$now
-                WHERE status='running' AND NOT EXISTS (
-                    SELECT 1 FROM investigation_attempts a WHERE a.run_id=investigation_reports.run_id
-                );
-                """;
-            interrupted.Parameters.AddWithValue("$now",
-                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            interrupted.ExecuteNonQuery();
-        }
+        if (current < 6 && targetVersion >= 6)
+            MigrateToV6(connection, transaction);
 
-        RecoverC6Attempts(connection, transaction);
+        using (var check = connection.CreateCommand())
+        {
+            check.Transaction = transaction;
+            check.CommandText = "PRAGMA foreign_key_check;";
+            using var violations = check.ExecuteReader();
+            if (violations.Read())
+                throw new InvalidOperationException("Schema migration produced foreign-key violations.");
+        }
         transaction.Commit();
     }
 
