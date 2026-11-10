@@ -31,7 +31,7 @@ public sealed class LocalRequestGuard(RequestDelegate next)
         "http://127.0.0.1:5174"
     };
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, ClientOriginPolicy clientOrigins)
     {
         var host = context.Request.Host;
         if (host.Port != ApiPort || !LocalHosts.Contains(host.Host))
@@ -44,6 +44,19 @@ public sealed class LocalRequestGuard(RequestDelegate next)
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
         context.Response.Headers["Cache-Control"] = "no-store";
 
+        var requestOrigin = context.Request.Headers["Origin"].ToString();
+        bool OriginAllowed(string o) => LocalOrigins.Contains(o) || clientOrigins.Allows(o) ||
+            (Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DEV_UI") == "1" && DeveloperOrigins.Contains(o));
+
+        // W1: the SignalR hub (including its WebSocket upgrade GET) accepts
+        // browser connections only from allowed origins; it is never anonymous.
+        if (context.Request.Path.StartsWithSegments(LocalBearerHandler.HubPathPrefix) &&
+            requestOrigin.Length > 0 && !OriginAllowed(requestOrigin))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
         if (!context.Request.Path.StartsWithSegments("/api") ||
             HttpMethods.IsGet(context.Request.Method) ||
             HttpMethods.IsHead(context.Request.Method) ||
@@ -54,16 +67,15 @@ public sealed class LocalRequestGuard(RequestDelegate next)
         }
 
         var fetchSite = context.Request.Headers["Sec-Fetch-Site"].ToString();
-        if (string.Equals(fetchSite, "cross-site", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(fetchSite, "cross-site", StringComparison.OrdinalIgnoreCase) &&
+            !clientOrigins.Allows(requestOrigin))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
 
-        var origin = context.Request.Headers["Origin"].ToString();
-        var allowedOrigin = LocalOrigins.Contains(origin) ||
-            (Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DEV_UI") == "1" &&
-             DeveloperOrigins.Contains(origin));
+        var origin = requestOrigin;
+        var allowedOrigin = OriginAllowed(origin);
 
         if (origin.Length > 0 && !allowedOrigin)
         {
@@ -80,6 +92,15 @@ public sealed class LocalRequestGuard(RequestDelegate next)
             return;
         }
 
+        // Bearer-authenticated requests carry no ambient credential, so they
+        // need neither the custom header nor the cookie-bound CSRF token. The
+        // Origin allowlist above, idempotency keys and concurrency still apply.
+        if (context.User.FindFirst(LocalBearerHandler.AuthMethodClaim)?.Value == LocalBearerHandler.SchemeName)
+        {
+            await next(context);
+            return;
+        }
+
         if (context.Request.Headers["X-CodeArcheologist-Request"].ToString() != "1")
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -88,7 +109,8 @@ public sealed class LocalRequestGuard(RequestDelegate next)
 
         // Pairing is the one unauthenticated mutation and requires an explicit
         // 128-bit bootstrap code. No cookies are accepted as pairing authority.
-        if (string.Equals(context.Request.Path.Value, "/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) &&
+        if ((string.Equals(context.Request.Path.Value, "/api/v1/auth/login", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(context.Request.Path.Value, "/api/v1/auth/token", StringComparison.OrdinalIgnoreCase)) &&
             HttpMethods.IsPost(context.Request.Method))
         {
             await next(context);

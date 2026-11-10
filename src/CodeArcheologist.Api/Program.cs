@@ -2,10 +2,12 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using CodeArcheologist.Api.Security;
 using CodeArcheologist.Api.Workspaces;
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Execution;
+using CodeArcheologist.Api.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,7 +47,28 @@ builder.Services.AddSingleton<InvestigationExecutionProjectionService>();
 builder.Services.AddSingleton<InvestigationAdmissionService>();
 builder.Services.AddSingleton<InvestigationWorker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<InvestigationWorker>());
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+// W1 white-label API: explicit loopback client-origin allowlist, push-only
+// SignalR hub, OpenAPI contract. The API itself still listens on loopback only.
+builder.Services.AddSingleton(services =>
+    new ClientOriginPolicy(services.GetRequiredService<WorkspaceStore>().DataDirectory));
+builder.Services.AddCors();
+builder.Services.AddSingleton<ICorsPolicyProvider, ClientCorsPolicyProvider>();
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = false; // only fixed HubException codes reach clients
+    options.MaximumReceiveMessageSize = 4096;
+});
+builder.Services.AddSingleton<RealtimeSubscriptions>();
+builder.Services.AddHostedService<RealtimePublisher>();
+builder.Services.AddOpenApi("v1");
+
+// Cookie (bundled client, CSRF-protected) or process-bound bearer token
+// (white-label clients); the policy scheme picks per request.
+builder.Services.AddAuthentication(options => options.DefaultScheme = "Local")
+    .AddPolicyScheme("Local", "Local", options => options.ForwardDefaultSelector = context =>
+        LocalBearerHandler.ReadToken(context.Request) is not null
+            ? LocalBearerHandler.SchemeName : CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddScheme<AuthenticationSchemeOptions, LocalBearerHandler>(LocalBearerHandler.SchemeName, _ => { })
     .AddCookie(options =>
     {
         options.Cookie.Name = "CodeArcheologist.Session";
@@ -98,9 +121,14 @@ var localAccess = app.Services.GetRequiredService<LocalAccessState>();
 app.Lifetime.ApplicationStarted.Register(() =>
     Console.WriteLine($"Code Archeologist local pairing code: {localAccess.BootstrapCode}"));
 
+app.UseCors();
 app.UseAuthentication();
 app.UseMiddleware<LocalRequestGuard>();
 app.UseAuthorization();
+
+// Versioned contracts for white-label front ends (schema only; no data).
+app.MapOpenApi("/api/{documentName}/openapi.json");
+app.MapHub<InvestigationEventsHub>(RealtimeContract.HubPath);
 
 app.MapGet("/api/v1/health", () =>
     Results.Ok(new { status = "ok", component = "api", stage = "local-access" }))
@@ -138,6 +166,21 @@ app.MapGet("/api/v1/auth/session", (HttpContext context) =>
         csrfToken = context.User.FindFirst(LocalRequestGuard.CsrfClaimType)?.Value
     }))
     .RequireAuthorization();
+
+// W1: exchange the console pairing code for a short-lived, process-bound
+// bearer token for white-label clients (REST and SignalR). Same lockout as login.
+app.MapPost("/api/v1/auth/token", (LoginRequest request, LocalAccessState access) =>
+{
+    if (!access.TryPair(request.Code)) return Results.Unauthorized();
+    var (token, expires) = access.IssueToken();
+    return Results.Ok(new { tokenType = "Bearer", accessToken = token, expiresAtUtc = expires });
+});
+
+app.MapPost("/api/v1/auth/token/revoke", (HttpContext context, LocalAccessState access) =>
+{
+    access.RevokeToken(LocalBearerHandler.ReadToken(context.Request));
+    return Results.NoContent();
+}).RequireAuthorization();
 
 app.MapPost("/api/v1/auth/logout", async (HttpContext context,
     LocalAccessState access) =>
