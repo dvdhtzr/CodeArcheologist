@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F13-multiple-verbs",
+  "category": "fixture",
+  "title": "Multiple HTTP verbs on one controller",
+  "purpose": "The selected entry is the [HttpPost] Create; the [HttpGet] List must not be conflated.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "dcc0126cf3b9cb47bda8bef19211824130bba11914ae22b1095dddf594bba94a"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 9
+  },
+  "diagnosticRepeat": false
+}

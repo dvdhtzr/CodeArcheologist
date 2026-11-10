@@ -26,6 +26,10 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
     private const int MaxModelText = 8192;
     private const int MaxInputText = 16000;
     public const string ModelId = "qwen3.5:9b";
+    /// <summary>Per-role model deadline (declared in the C6c lab budget config).</summary>
+    public const int RoleTimeoutSeconds = 90;
+    /// <summary>At most one host-rejected output may be followed by one corrected attempt.</summary>
+    public const int AssessmentAttempts = 2;
     private const string Model = ModelId;
     private static readonly Uri Endpoint = new("http://127.0.0.1:11434/");
     private const string ReviewerSchema = """
@@ -106,7 +110,7 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(90));
+        timeout.CancelAfter(TimeSpan.FromSeconds(RoleTimeoutSeconds));
         try
         {
             // Both role payloads have already passed C1/C2 host validation.
@@ -177,7 +181,7 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
             // A single correction attempt must pass the same strict host gate.
             // Neither the model nor the host may silently fill missing coverage.
             var prompt = basePrompt;
-            for (var attempt = 0; attempt < 2; attempt++)
+            for (var attempt = 0; attempt < AssessmentAttempts; attempt++)
             {
                 var response = await reviewer.RunAsync(prompt,
                     options: options, cancellationToken: timeout.Token);
@@ -195,7 +199,7 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
                         return new(GateCRoleStatus.CompletedValidated,
                             "review-validated-not-semantic-proof", parsed, checkedReview);
                 }
-                if (attempt == 1) return Invalid(diagnostic);
+                if (attempt == AssessmentAttempts - 1) return Invalid(diagnostic);
                 prompt = basePrompt + "\nYour previous response was rejected " +
                     "by the host validator: " + diagnostic +
                     ". Return a NEW complete JSON response with exactly the " +

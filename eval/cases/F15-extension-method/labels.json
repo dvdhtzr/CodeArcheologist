@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F15-extension-method",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 11
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Shout on the string value.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 14
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The extension method target is unresolved in the graph even though a same-named declaration exists."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Links the call to TextExtensions.Shout by name as verified.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Name matching must not resolve the extension call."
+    }
+  ]
+}

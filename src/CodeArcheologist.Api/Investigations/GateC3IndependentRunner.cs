@@ -24,6 +24,10 @@ public sealed record GateC3RunOutcome(Guid RunId, GateCScope Scope,
 public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDiscovery)
 {
     public const string ModelId = "qwen3.5:9b";
+    /// <summary>Per-role model deadline (declared in the C6c lab budget config).</summary>
+    public const int RoleTimeoutSeconds = 90;
+    /// <summary>At most one host-rejected output may be followed by one corrected attempt.</summary>
+    public const int AssessmentAttempts = 2;
     private const string Model = ModelId;
     private static readonly Uri LocalProvider = new("http://127.0.0.1:11434/");
     private const int MaxModelText = 8192;
@@ -171,7 +175,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
         GateCRole role, CancellationToken callerCancellation)
     {
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(callerCancellation);
-        limit.CancelAfter(TimeSpan.FromSeconds(90));
+        limit.CancelAfter(TimeSpan.FromSeconds(RoleTimeoutSeconds));
         string? capability = null;
         try
         {
@@ -227,7 +231,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             // only after a *host-rejected* output and is revalidated normally;
             // never repair references or assessments in the host.
             var prompt = basePrompt;
-            for (var attempt = 0; attempt < 2; attempt++)
+            for (var attempt = 0; attempt < AssessmentAttempts; attempt++)
             {
                 var text = await AskAsync(agent, prompt,
                     role == GateCRole.Investigator ? InvestigatorSchema : SkepticSchema,
@@ -241,7 +245,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                         "valid-structured-assessment-not-semantic-proof",
                         parsed, capability, session.ToolCallsUsed, session.ReportLinks(),
                         session.GraphAnalyzerVersion);
-                if (attempt == 1) return Failure(diagnostic);
+                if (attempt == AssessmentAttempts - 1) return Failure(diagnostic);
                 prompt = basePrompt +
                     "\nThe previous output was rejected by the host validator: " +
                     diagnostic + ". Produce a NEW complete JSON assessment " +

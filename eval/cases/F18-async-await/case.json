@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F18-async-await",
+  "category": "fixture",
+  "title": "Async endpoint awaiting a helper",
+  "purpose": "await FetchAsync(); asynchrony does not change the one-hop evidence.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "15f256b4096727027f5b811df99349cfa55d5c74088fd24c23c24e8153717ac1"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F09-di-registration-and-consumer",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Startup.cs",
+        "line": 20
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes _clock.Now.",
+      "anchor": {
+        "filePath": "Startup.cs",
+        "line": 21
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The callee targets the IClock interface method; resolution to SystemClock is not established."
+    },
+    {
+      "id": "U2",
+      "description": "The AddScoped registration is a source-syntax candidate, not an effective runtime registration."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Asserts the endpoint uses SystemClock at runtime.",
+      "category": "di-resolution"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Linking IClock to SystemClock by type-name similarity would be unsupported."
+    }
+  ]
+}

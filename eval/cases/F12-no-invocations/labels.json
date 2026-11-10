@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F12-no-invocations",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "No invocation sites exist in the method body; an empty dependency set is expected, not a gap."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Invents downstream calls or dependencies.",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": []
+}

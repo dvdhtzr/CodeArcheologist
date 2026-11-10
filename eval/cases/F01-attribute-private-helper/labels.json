@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F01-attribute-private-helper",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "The [HttpGet] attribute is a written candidate entry point on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get contains an invocation of Format.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The callee link to Format is provisional-local synthetic binding, not compiler-verified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the endpoint is registered or reachable at runtime.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Route composition (api/orders + {id}) is written text, not a resolved URL."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F05-lambda-contained-invocation",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Count.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The Expensive() call sits inside a lambda scope and is not a direct invocation of Count."
+    },
+    {
+      "id": "U2",
+      "description": "Whether the deferred lambda ever executes is unknown."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims Count calls Expensive at runtime.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Lambda-contained invocation must not be attributed to the enclosing method."
+    }
+  ]
+}

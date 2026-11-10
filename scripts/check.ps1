@@ -24,6 +24,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Gate C1 model-free investigation contract chec
 if ($LASTEXITCODE -ne 0) { throw 'Gate C5a model-free report and persistence checks failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --gate-c6b-self-test
 if ($LASTEXITCODE -ne 0) { throw 'Gate C6b model-free ownership, fencing and worker checks failed.' }
+$labProject = Join-Path $root 'tests/evaluation-lab/EvaluationLab.csproj'
+& dotnet run --project $labProject --configuration Release -- --validate-corpus
+if ($LASTEXITCODE -ne 0) { throw 'C6c evaluation corpus validation failed.' }
+& dotnet run --project $labProject --configuration Release --no-build -- --self-test
+if ($LASTEXITCODE -ne 0) { throw 'C6c evaluation lab model-free self-test failed.' }
 & npm ci --prefix $client --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation (npm ci) failed.' }
 & npm --prefix $client run typecheck

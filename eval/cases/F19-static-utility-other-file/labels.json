@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F19-static-utility-other-file",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Slugs.Make.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    },
+    {
+      "id": "O3",
+      "description": "The provisional target Make is declared in Slugs.cs.",
+      "anchor": {
+        "filePath": "Slugs.cs",
+        "line": 5
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The cross-file callee is provisional-local, not project-verified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims Slugs.Make is verified to run for this request.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": []
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F09-di-registration-and-consumer",
+  "category": "fixture",
+  "title": "DI registration and consumer",
+  "purpose": "AddScoped<IClock, SystemClock> exists elsewhere; the endpoint calls IClock.Now.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Startup.cs": "052e92576504a6e47580e2422ccdfab06c1f6e690bf8c4a6d01f1acd3c1eafab"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Startup.cs",
+    "line": 20
+  },
+  "diagnosticRepeat": true
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F08-minimal-api-method-group",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "app.MapGet is a written Minimal API candidate mapping.",
+      "anchor": {
+        "filePath": "Program.cs",
+        "line": 7
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Handlers.Version as the handler is not inferred by the analyzer from the method-group name."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims /version is a registered route at runtime.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Method-group handler binding is unverified."
+    }
+  ]
+}

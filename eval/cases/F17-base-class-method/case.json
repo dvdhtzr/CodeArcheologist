@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F17-base-class-method",
+  "category": "fixture",
+  "title": "Base class method",
+  "purpose": "Envelope is inherited from an abstract base class.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "59ec3f03bead3bf5219e9b2ddb99c7765fe571608ba9fa57aed8c1c61bcf4d5c"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 11
+  },
+  "diagnosticRepeat": false
+}

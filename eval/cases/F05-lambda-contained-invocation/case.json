@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F05-lambda-contained-invocation",
+  "category": "fixture",
+  "title": "Invocation inside a lambda",
+  "purpose": "The only call is inside a deferred lambda that is never invoked in the method body.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "b3012cada039bbfb5517a53212545652d8e7c4c83768678e63ea4b44825573f3"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": true
+}

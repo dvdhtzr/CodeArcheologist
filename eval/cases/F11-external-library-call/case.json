@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F11-external-library-call",
+  "category": "fixture",
+  "title": "External library call",
+  "purpose": "System.IO.Path.GetFileName has no source declaration in the snapshot.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "ff5ab38e0550822525bc8b166aa77316ef870ebd1a4b79cd0f75f2257c6098a5"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F17-base-class-method",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 11
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes Envelope.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 14
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The inherited target is provisional-local; inheritance is not compiler-verified."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Asserts a verified inheritance relationship.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": []
+}

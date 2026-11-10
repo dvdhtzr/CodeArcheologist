@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F06-local-function",
+  "category": "fixture",
+  "title": "Local function call",
+  "purpose": "The endpoint calls a static local function; no provisional callee edge is produced.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.cs": "d7fd09c9d33c3b48db18d219f32449d29279adb2e29fd2e2fb5be65268fdcd32"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

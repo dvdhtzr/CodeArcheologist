@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F16-partial-class",
+  "category": "fixture",
+  "title": "Partial class across files",
+  "purpose": "The helper is declared in a second file of the same partial class.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Controller.Helpers.cs": "40a58e50d8af7ef7861f0958ad6288158f05e7f18e071cf327ec1f6fde8d5e43",
+      "Controller.cs": "97a276f228a155d9615e7783562f48d07c6a435ccdc28faa8729befdba3a9417"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

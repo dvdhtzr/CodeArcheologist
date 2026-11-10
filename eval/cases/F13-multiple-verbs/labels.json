@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F13-multiple-verbs",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpPost] candidate on Create.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Create invokes Save.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 12
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Save is a provisional-local callee."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Attributes List's Load call to the Create entry point.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Evidence must stay scoped to the selected entry point."
+    }
+  ]
+}

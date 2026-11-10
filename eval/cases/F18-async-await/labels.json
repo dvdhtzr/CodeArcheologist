@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "F18-async-await",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "[HttpGet] candidate on Get.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    },
+    {
+      "id": "O2",
+      "description": "Get invokes FetchAsync.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Scheduling and completion behavior of the awaited task are runtime concerns outside the snapshot."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims runtime completion or timing behavior.",
+      "category": "runtime-verified"
+    }
+  ],
+  "materialIssues": []
+}

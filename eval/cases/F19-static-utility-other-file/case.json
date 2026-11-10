@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F19-static-utility-other-file",
+  "category": "fixture",
+  "title": "Static utility in another file",
+  "purpose": "Slugs.Make is declared in Slugs.cs.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Slugs.cs": "a3bb915710feac024f2396c78d1b01c894754a5899c90f4fbe2287fbbd54fcfc",
+      "Controller.cs": "d2c5b34dfc68cd2df105667083d6e60e07b90e3c93f66c888db3e578790b37ca"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false
+}

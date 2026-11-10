@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "F02-minimal-api-lambda-static",
+  "category": "fixture",
+  "title": "Minimal API lambda calling a static method",
+  "purpose": "A MapGet registration whose handler is a lambda; the static call inside the lambda belongs to the lambda scope.",
+  "source": {
+    "kind": "in-repo-fixture",
+    "directory": "source",
+    "fileSha256": {
+      "Program.cs": "edf60b80cde39385db2d1db64e23db07b270ee265f307fe624d910150bf57619"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Program.cs",
+    "line": 7
+  },
+  "diagnosticRepeat": false
+}
