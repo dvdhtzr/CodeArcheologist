@@ -5,6 +5,15 @@ $apiProject = Join-Path $root 'src/CodeArcheologist.Api/CodeArcheologist.Api.csp
 $client = Join-Path $root 'src/CodeArcheologist.Client'
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw '.NET 10 SDK is required.' }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Node.js and npm are required.' }
+# Use the exact Release build validated by scripts/check.ps1. Plain 'dotnet
+# run' defaults to Debug and can trigger a separate restore/build with stale
+# assets; never turn a successful Release verification into a Debug startup.
+& dotnet build $apiProject --configuration Release
+if ($LASTEXITCODE -ne 0) { throw 'API Release build failed; developer processes were not started.' }
+$apiDll = Join-Path $root 'src/CodeArcheologist.Api/bin/Release/net10.0/CodeArcheologist.Api.dll'
+if (-not (Test-Path -LiteralPath $apiDll -PathType Leaf)) {
+  throw "Verified Release API assembly is missing: $apiDll"
+}
 if (-not (Test-Path (Join-Path $client 'node_modules'))) {
   & npm ci --prefix $client --no-audit --no-fund
   if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
@@ -17,8 +26,10 @@ $code = ([BitConverter]::ToString($secretBytes)).Replace('-', '').ToLowerInvaria
 $env:CODE_ARCHEOLOGIST_BOOTSTRAP_CODE = $code
 $env:CODE_ARCHEOLOGIST_DEV_UI = '1'
 try {
-  # Quote project paths to support repository locations containing spaces.
-  $api = Start-Process -FilePath 'dotnet' -ArgumentList @('run','--project', ('"' + $apiProject + '"'),'--no-launch-profile') -PassThru
+  # Launch only the already verified Release assembly. 'exec' does not
+  # compile, restore packages, or select a separate Debug configuration.
+  # Quote the DLL path so repository directories may contain spaces.
+  $api = Start-Process -FilePath 'dotnet' -ArgumentList @('exec', ('"' + $apiDll + '"')) -PassThru
 }
 finally {
   Remove-Item Env:CODE_ARCHEOLOGIST_BOOTSTRAP_CODE -ErrorAction SilentlyContinue

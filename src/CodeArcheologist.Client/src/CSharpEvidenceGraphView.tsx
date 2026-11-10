@@ -159,8 +159,9 @@ function EvidenceAddress({ path, hash, line, column }: {
 }
 
 export function CSharpEvidenceGraphView({
-  endpoint, evidenceToolEndpoint, csrfToken,
-}: { endpoint: string; evidenceToolEndpoint: string; csrfToken: string }) {
+  endpoint, evidenceToolEndpoint, csrfToken, focusNodeId,
+}: { endpoint: string; evidenceToolEndpoint: string; csrfToken: string;
+  focusNodeId?: string | null }) {
   const [report, setReport] = useState<EvidenceGraphReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -334,6 +335,15 @@ export function CSharpEvidenceGraphView({
 
   const nodesById = useMemo(() => new Map(
     (report?.nodes ?? []).map(node => [node.id, node])), [report]);
+
+  // C5b navigation only selects a node found in this *verified* snapshot graph.
+  // A stale/foreign caller ID cannot create an invented graph relationship.
+  useEffect(() => {
+    if (!report || !focusNodeId) return;
+    const node = report.nodes.find(item => item.id === focusNodeId);
+    if (!node) return;
+    inspectGraphNode(node.id, node.kind);
+  }, [report, focusNodeId]);
 
   // Callee edges were previously discoverable only after a user happened
   // to choose an invocation with a candidate target. Expose them directly.
