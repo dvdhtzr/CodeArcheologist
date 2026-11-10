@@ -59,6 +59,44 @@ internal static class GateC5SelfTests
             var create = store.CreateInvestigation(scope, key);
             if (!create.Created || create.Conflict || create.Record is null)
                 throw new InvalidOperationException("C5 new request was not persisted.");
+            var admitted = store.GetAttempt(create.Record.RunId);
+            if (admitted?.Status != "queued" || admitted.LastEventSequence != 1)
+                throw new InvalidOperationException("C6 attempt admission was not atomic.");
+            var admissionEvents = store.ListEvents(workspace.Id, repositoryId, snapshotId,
+                create.Record.RunId);
+            if (admissionEvents.Count != 1 ||
+                admissionEvents[0].EventType != "attempt-admitted" ||
+                admissionEvents[0].SequenceNumber != 1)
+                throw new InvalidOperationException("C6 admission event is invalid.");
+            if (!store.CreateInvestigation(scope, Guid.NewGuid()).Busy)
+                throw new InvalidOperationException("C6 busy admission created a record.");
+            var completedAttempt = store.GetAttempt(effectiveRun);
+            var executionEvents = store.ListEvents(workspace.Id, repositoryId,
+                snapshotId, effectiveRun);
+            if (completedAttempt?.Status != "completed" ||
+                completedAttempt.LastEventSequence != 3 ||
+                executionEvents.Count != 3 ||
+                executionEvents[1].EventType != "attempt-started" ||
+                executionEvents[2].EventType != "attempt-completed" ||
+                executionEvents.Select(x => x.SequenceNumber)
+                    .SequenceEqual(new long[] { 1, 2, 3 }) == false)
+                throw new InvalidOperationException("C6 terminal event sequence is invalid.");
+            using (var db = new SqliteConnection(
+                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath, Pooling = false }.ToString()))
+            {
+                db.Open();
+                using var bad = db.CreateCommand();
+                bad.CommandText = "UPDATE investigation_events SET diagnostic='tampered' WHERE attempt_id=$id;";
+                bad.Parameters.AddWithValue("$id", completedAttempt.AttemptId.ToString("D"));
+                try
+                {
+                    bad.ExecuteNonQuery();
+                    throw new InvalidOperationException("Event mutation succeeded.");
+                }
+                catch (SqliteException) { }
+            }
+            if (store.ListInvestigations(workspace.Id, repositoryId, snapshotId).TotalCount != 1)
+                throw new InvalidOperationException("Busy admission left a ghost report.");
             var replay = store.CreateInvestigation(scope, key);
             if (replay.Created || replay.Conflict || replay.Record?.RunId != create.Record.RunId)
                 throw new InvalidOperationException("C5 idempotent replay failed.");
@@ -157,6 +195,40 @@ internal static class GateC5SelfTests
             ExpectRejected(() => GateC5ReportFactory.Create(invalidLink,
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
+            // Fault injection: a rejected event insert must roll back the report,
+            // attempt, and slot reservation together.
+            using (var db = new SqliteConnection(
+                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath, Pooling = false }.ToString()))
+            {
+                db.Open();
+                using var trap = db.CreateCommand();
+                trap.CommandText = """
+                    CREATE TRIGGER test_reject_admission BEFORE INSERT ON investigation_events
+                    WHEN NEW.event_type='attempt-admitted'
+                    BEGIN SELECT RAISE(ABORT, 'fault injected'); END;
+                    """;
+                trap.ExecuteNonQuery();
+            }
+            var rejectedKey = Guid.NewGuid();
+            try
+            {
+                store.CreateInvestigation(scope, rejectedKey);
+                throw new InvalidOperationException("Injected admission failure succeeded.");
+            }
+            catch (SqliteException) { }
+            using (var db = new SqliteConnection(
+                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath, Pooling = false }.ToString()))
+            {
+                db.Open();
+                using var cleanup = db.CreateCommand();
+                cleanup.CommandText = """
+                    DROP TRIGGER test_reject_admission;
+                    SELECT COUNT(*) FROM investigation_reports WHERE idempotency_key=$key;
+                    """;
+                cleanup.Parameters.AddWithValue("$key", rejectedKey.ToString("D"));
+                if (Convert.ToInt32(cleanup.ExecuteScalar()) != 0)
+                    throw new InvalidOperationException("Failed admission left a report.");
+            }
             // Restart marks only active records incomplete; completed reports survive.
             var interrupted = store.CreateInvestigation(scope, Guid.NewGuid());
             store.Initialize();
