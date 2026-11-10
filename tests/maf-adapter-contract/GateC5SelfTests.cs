@@ -25,6 +25,14 @@ internal static class GateC5SelfTests
                     throw new InvalidOperationException("C6 schema was not migrated.");
             }
 
+            // Execution state and workflow state are intentionally independent.
+            if (!GateC6AttemptTransitions.Allowed("queued", "running") ||
+                !GateC6AttemptTransitions.Allowed("running", "interrupted") ||
+                GateC6AttemptTransitions.Allowed("completed", "running") ||
+                GateC6AttemptTransitions.Allowed("queued", "completed") ||
+                GateC6AttemptTransitions.Allowed("running", "queued"))
+                throw new InvalidOperationException("C6 illegal execution transition accepted.");
+
             var workspace = store.Create("C5 test", Guid.NewGuid()).Workspace;
             var repositoryId = Guid.NewGuid();
             var snapshotId = Guid.NewGuid();
@@ -232,6 +240,13 @@ internal static class GateC5SelfTests
             // Restart marks only active records incomplete; completed reports survive.
             var interrupted = store.CreateInvestigation(scope, Guid.NewGuid());
             store.Initialize();
+            var interruptedAttempt = store.GetAttempt(interrupted.Record!.RunId);
+            var interruptedEvents = store.ListEvents(workspace.Id, repositoryId,
+                snapshotId, interrupted.Record.RunId);
+            if (interruptedAttempt?.Status != "rejected" ||
+                interruptedEvents.Count != 2 ||
+                interruptedEvents[1].EventType != "attempt-rejected")
+                throw new InvalidOperationException("C6 restart event was not recorded.");
             var restarted = store.GetInvestigation(workspace.Id, repositoryId,
                 snapshotId, interrupted.Record!.RunId);
             if (restarted?.Summary.Status != "incomplete" ||
