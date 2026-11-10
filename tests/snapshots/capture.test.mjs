@@ -1043,6 +1043,28 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
           '/evidence-tools/entry-point?entryPointId=' +
           encodeURIComponent(httpEntry.id), session)).status, 404);
 
+        // C5a API: scoped report listing and rejection before model execution.
+        const gateC5 = endpoint + '/' + snapshot.id + '/investigations';
+        assert.equal((await get(gateC5)).status, 401);
+        const emptyInvestigations = await get(gateC5, session);
+        assert.equal(emptyInvestigations.status, 200);
+        assert.equal((await emptyInvestigations.json()).totalCount, 0);
+        assert.equal((await get(gateC5 + '/' + randomUUID(), session)).status, 404);
+        assert.equal((await post(gateC5, session,
+          { entryPointId: httpEntry.id }, { csrf: null })).status, 403);
+        assert.equal((await post(gateC5, session,
+          { entryPointId: httpEntry.id },
+          { origin: 'https://attacker.example' })).status, 403);
+        assert.equal((await post(gateC5, session,
+          { entryPointId: '' })).status, 400);
+        assert.equal((await post(gateC5, session,
+          { entryPointId: 'invented:never-captured' })).status, 404);
+        assert.equal((await post(gateC5, session,
+          { entryPointId: diEntry.id })).status, 404);
+        assert.equal((await post(endpoint + '/' + randomUUID() +
+          '/investigations', session,
+          { entryPointId: httpEntry.id })).status, 404);
+
         const gateB = endpoint + '/' + snapshot.id + '/investigations/gate-b';
         assert.equal((await post(gateB, session,
           { entryPointId: 'invented:never-captured' })).status, 404,
