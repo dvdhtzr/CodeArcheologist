@@ -23,6 +23,7 @@ Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in th
 | `--run --out <dir> [--cases ...] [--comparators ...] [--provisional]` | genuine local Ollama for `gate-b` and `gate-c` | Runs and scores; writes per-evaluation report and score JSON plus `summary.json` |
 | `--review-labels [--curated-root <dir>]` | none | Interactive owner sign-off: shows each draft case, its source and draft labels; `a` marks it `owner-approved` (`assistant-draft-owner-reviewed`), `s` skips, `q` quits. Resumable; the owner commits the result |
 | `--judge --runs <dir> [--a gate-b] [--b gate-c] [--out <file>]` | none | Blinded pairwise judging of completed reports from an earlier run (see below) |
+| `--checklist --runs <dir> [--max 5] [--out <file>]` | none | Short blinded material-issue checklist over a completed run (see below) |
 
 ### Isolation
 For each case the lab:
@@ -128,3 +129,5 @@ Limitations, stated plainly:
 - Blinding is **partial**: Gate B and Gate C reports still differ in structure and length, so the owner may recognise them.
 - These judgments come from **provisional** runs whose labels may not yet be approved. They inform direction; they are not the metric of record. The scored usefulness metric (ADR 0020) needs a non-provisional run after label sign-off.
 - No LLM judge is used. Usefulness stays `pending-judgment` in lab scores; the judgment file is the owner's record.
+
+**Material-issue checklist.** `--checklist` asks the owner yes/no questions instead of an overall preference. Each question names one material issue from the owner-approved labels and shows one anonymous report per comparator, in random order: "does this report mention the problem?". To keep the owner's load small, a word-match screen orders and selects the questions. It asks only about issues where the two reports' word overlap with the issue differs, most different first, capped at `--max` pairs (default 5, so 10 answers). The screen only selects questions and never scores: issues it skips are reported as **not judged**, never as ties or misses. Answers are saved after each pair (`c6c-issue-checklist-v1`) and the tool can be resumed. The selection biases the sample towards issues where the reports differ, so the counts describe the differences found, not overall detection rates.

@@ -117,6 +117,107 @@ public static class LabOwnerTools
         foreach (var m in l.MaterialIssues) output.WriteLine($"  issue      {m.Id}: {m.Description}");
     }
 
+    // ------------------------------------------------------- issue checklist
+
+    public const string ChecklistSchema = "c6c-issue-checklist-v1";
+
+    public sealed record IssueCheck(string CaseId, string IssueId, string FirstComparator, int FirstTrial, bool FirstMentions,
+        string SecondComparator, int SecondTrial, bool SecondMentions);
+
+    public sealed record IssueCheckFile(string SchemaVersion, string RunsDirectory, DateTimeOffset StartedAtUtc,
+        IReadOnlyList<IssueCheck> Checks);
+
+    private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
+    {
+        "this", "that", "with", "from", "into", "only", "than", "then", "they", "them", "their", "there", "where",
+        "which", "while", "when", "what", "does", "done", "have", "been", "being", "also", "more", "most", "must",
+        "never", "not", "nor", "over", "under", "same", "such", "some", "each", "both", "other", "still", "upon",
+        "will", "would", "could", "should", "here", "your", "just", "very", "via", "about", "after", "before",
+    };
+
+    /// <summary>Share of an issue's content words present in a report. Used ONLY to order and select
+    /// questions for the owner; it is never a score (rule 57: lexical screens only flag for review).</summary>
+    public static double LexicalOverlap(string issue, LabReport report)
+    {
+        static IEnumerable<string> Words(string t) => System.Text.RegularExpressions.Regex
+            .Matches(t.ToLowerInvariant(), "[a-z0-9]+").Select(m => m.Value).Where(w => w.Length >= 4 && !StopWords.Contains(w));
+        var wanted = Words(issue).ToHashSet(StringComparer.Ordinal);
+        if (wanted.Count == 0) return 0;
+        var present = Words(string.Join(" ", report.Claims.Select(c => c.Text))).ToHashSet(StringComparer.Ordinal);
+        return (double)wanted.Count(present.Contains) / wanted.Count;
+    }
+
+    /// <summary>
+    /// Short owner checklist: for owner-approved material issues, asks whether each of two anonymous
+    /// reports (one per comparator, random order) mentions the issue. Only issue pairs where the
+    /// reports appear to differ are eligible, most different first, capped at <paramref name="maxPairs"/>.
+    /// Pairs not asked are reported as not judged, never as ties. Resumable.
+    /// </summary>
+    public static int Checklist(string evalRoot, string runsDirectory, string a, string b, string checksPath,
+        TextReader input, TextWriter output, int maxPairs = 5, int? seed = null)
+    {
+        var random = seed is { } s ? new Random(s) : new Random(RandomNumberGenerator.GetInt32(int.MaxValue));
+        var corpus = CorpusValidator.Validate(evalRoot);
+        if (!corpus.Valid) { output.WriteLine("Corpus is invalid; run --validate-corpus."); return 1; }
+        var labels = corpus.Cases.Where(c => c.Labels.Status == LabelStatus.OwnerApproved)
+            .ToDictionary(c => c.Case.Id, c => c.Labels, StringComparer.Ordinal);
+        var reports = Directory.GetFiles(runsDirectory, "*.report.json")
+            .Select(f => JsonSerializer.Deserialize<LabReport>(File.ReadAllText(f), LabSchema.Json)!)
+            .Where(r => r.Outcome == "completed").ToArray();
+        var done = File.Exists(checksPath)
+            ? JsonSerializer.Deserialize<IssueCheckFile>(File.ReadAllText(checksPath), LabSchema.Json)!.Checks.ToList()
+            : [];
+
+        var eligible = new List<(string CaseId, MaterialIssue Issue, LabReport First, LabReport Second, double Gap)>();
+        var notEligible = 0;
+        foreach (var caseId in reports.Select(r => r.CaseId).Distinct().Order(StringComparer.Ordinal))
+        {
+            if (!labels.TryGetValue(caseId, out var set)) continue;
+            var first = Pick(reports, caseId, a, random);
+            var second = Pick(reports, caseId, b, random);
+            if (first is null || second is null) continue;
+            foreach (var issue in set.MaterialIssues)
+            {
+                var gap = Math.Abs(LexicalOverlap(issue.Description, first) - LexicalOverlap(issue.Description, second));
+                if (gap > 0) eligible.Add((caseId, issue, first, second, gap)); else notEligible++;
+            }
+        }
+        var queue = eligible.Where(e => done.All(d => d.CaseId != e.CaseId || d.IssueId != e.Issue.Id))
+            .OrderByDescending(e => e.Gap).ThenBy(e => e.CaseId, StringComparer.Ordinal).ThenBy(e => e.Issue.Id, StringComparer.Ordinal)
+            .Take(Math.Max(0, maxPairs - done.Count)).ToList();
+
+        var total = done.Count + queue.Count;
+        output.WriteLine("Issue checklist. Each question names one real problem from your approved labels and shows");
+        output.WriteLine("two anonymous reports in random order. Answer whether each report mentions that problem.");
+        foreach (var item in queue)
+        {
+            var (x, y) = random.Next(2) == 1 ? (item.Second, item.First) : (item.First, item.Second);
+            output.WriteLine();
+            output.WriteLine(new string('=', 78));
+            output.WriteLine($"Question {done.Count + 1} of {total}: {item.CaseId}");
+            output.WriteLine($"PROBLEM: {item.Issue.Description}");
+            Show("REPORT 1", x, output);
+            Show("REPORT 2", y, output);
+            var one = Ask(input, output, "Does REPORT 1 mention this problem? [y/n/q] ", "y", "n", "q");
+            if (one is null or "q") break;
+            var two = Ask(input, output, "Does REPORT 2 mention this problem? [y/n/q] ", "y", "n", "q");
+            if (two is null or "q") break;
+            done.Add(new(item.CaseId, item.Issue.Id, x.Comparator, x.Trial, one == "y", y.Comparator, y.Trial, two == "y"));
+            File.WriteAllText(checksPath, JsonSerializer.Serialize(
+                new IssueCheckFile(ChecklistSchema, Path.GetFullPath(runsDirectory), DateTimeOffset.UtcNow, done), LabSchema.Json));
+        }
+
+        int Mentioned(string who) => done.Count(d => (d.FirstComparator == who && d.FirstMentions) || (d.SecondComparator == who && d.SecondMentions));
+        output.WriteLine();
+        output.WriteLine("=== CHECKLIST REVEAL (fixed denominator: every judged problem counts) ===");
+        output.WriteLine($"Problems judged: {done.Count}");
+        output.WriteLine($"Mentioned: {a} {Mentioned(a)}/{done.Count}   {b} {Mentioned(b)}/{done.Count}");
+        output.WriteLine($"Not judged: {eligible.Count + notEligible - done.Count} problem(s) " +
+            $"({notEligible} where the two reports looked alike to a word-match screen, the rest beyond the {maxPairs}-question cap).");
+        output.WriteLine("Note: a word-match screen chose which problems to ask about; it scored nothing. Small sample, one judge.");
+        return 0;
+    }
+
     // ------------------------------------------------------- blinded judging
 
     public sealed record Judgment(string CaseId, string LeftComparator, string RightComparator,

@@ -27,6 +27,14 @@ try
             return LabOwnerTools.ReviewLabels(evalRoot,
                 args.Length == 3 && args[1] == "--curated-root" ? Path.GetFullPath(args[2]) : null,
                 Console.In, Console.Out);
+        case "--checklist" when args.Length >= 3 && args[1] == "--runs":
+        {
+            string Opt(string name, string fallback) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
+            var runs = Path.GetFullPath(args[2]);
+            return LabOwnerTools.Checklist(evalRoot, runs, Opt("--a", Comparator.GateB), Opt("--b", Comparator.GateC),
+                Path.GetFullPath(Opt("--out", Path.Combine(runs, "issue-checklist.json"))), Console.In, Console.Out,
+                int.Parse(Opt("--max", "5"), System.Globalization.CultureInfo.InvariantCulture));
+        }
         case "--judge" when args.Length >= 3 && args[1] == "--runs":
         {
             string Opt(string name, string fallback) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
@@ -45,6 +53,7 @@ try
                   --describe <case-dir> [--curated-root <dir>]   citable evidence locations for labeling
                   --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
                   --review-labels [--curated-root <dir>]          owner label sign-off (interactive, resumable)
+                  --checklist --runs <dir> [--max 5] [--out <file>]   short blinded material-issue checklist (interactive, resumable)
                   --judge --runs <dir> [--a gate-b] [--b gate-c] [--out <file>]   blinded pairwise comparison (interactive, resumable)
                 """);
             return 2;

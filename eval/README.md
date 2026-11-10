@@ -50,4 +50,5 @@ The following arrive in C6c-2 and C6c-3:
 ## Owner tools
 
 - `--review-labels [--curated-root <dir>]`: guided sign-off of draft labels (approve / skip / quit; resumable).
+- `--checklist --runs <run-dir> [--max 5]`: short yes/no checklist of whether each anonymous report mentions an approved material issue.
 - `--judge --runs <run-dir> [--out <file>]`: blinded pairwise usefulness judging of a completed run. See `docs/architecture/gate-c6c-evaluation-laboratory.md`.

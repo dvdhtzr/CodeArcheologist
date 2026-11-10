@@ -153,3 +153,32 @@ The owner judged run 5's 12 diagnostic cases with `--judge` (Gate B vs Gate C, o
 - **Caveats:** the run was provisional (its labels were still drafts when it ran); blinding is partial; n = 12 with one judge. This is direction, not the metric of record.
 
 In the same session the owner approved all 50 label sets with `--review-labels` (status `owner-approved`, provenance `assistant-draft-owner-reviewed`).
+
+## Run 6: the 15 curated real repositories (provisional, labels owner-approved)
+
+Owner run on Windows, contract v5, all 50 labels owner-approved, thresholds still provisional. `check.ps1` GREEN in the same session.
+
+| Comparator | Completed | Integrity breaches | Anchor recall | Objection coverage | Review flags |
+|---|---|---|---|---|---|
+| deterministic-baseline | 11/11 | 0 | 64% | — | 0 |
+| gate-b | 11/11 | 0 | 50% | — | 0 |
+| gate-c | 14/15 | **0** | **67%** | 100% | 5 |
+
+- **Expectation cases:** R10, R12 and R14 were confirmed as `no-supported-candidate` (nothing invented). R15 was confirmed as failing closed (413), with no snapshot record.
+- **Completion:** Gate C was incomplete once (R02 trial 1). Its 93% is above the provisional 90% threshold.
+- **Recall on real code:** even the baseline reaches only 64%. Several labelled anchors, such as registration-site context, are locations no comparator cites. Gate C matches or exceeds the baseline. It cited both anchors in R02, R03 and R04, where Gate B cited one.
+
+### Owner material-issue checklist (`--checklist`, default cap 5)
+
+| | Gate B | Gate C |
+|---|---|---|
+| Problems mentioned (of 5 judged) | **0/5** | **4/5** |
+
+There were 13 eligible problems. 5 were judged. 4 were not asked because the word-match screen saw no difference, and 4 fell beyond the cap.
+
+**Reading:** on real repositories, where the reports differed, the owner found that Gate C mentioned the labelled real problem in 4 of 5 cases and Gate B in none. This is the first owner-judged evidence of a Gate C advantage. It fits the earlier tie on small fixtures, which have little to find beyond restating evidence.
+
+**Caveats, stated plainly:**
+- **Selection bias.** The word-match screen picks problems where the reports' word overlap differs. Gate C reports are longer, so the screen is likely to pick problems Gate C repeats. These counts describe differences found, not detection rates. The material-issue detection threshold (85%) is not measurable from this sample.
+- n = 5 with one judge, provisional thresholds, partial blinding.
+- An unbiased estimate needs a random sample of problems, not one chosen by difference.
