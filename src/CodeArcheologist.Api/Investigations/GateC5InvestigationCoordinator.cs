@@ -10,30 +10,16 @@ public sealed class GateC5InvestigationCoordinator(
     WorkspaceStore store, GateC4ReconciliationRunner runner,
     IHostApplicationLifetime lifetime)
 {
-    private int _active;
-
     public bool TryStart(GateCScope scope, Guid idempotencyKey,
         out InvestigationCreateResult? result)
     {
-        result = null;
-        if (Interlocked.CompareExchange(ref _active, 1, 0) != 0)
-            return false;
-
-        try
-        {
-            result = store.CreateInvestigation(scope, idempotencyKey);
-            if (!result.Created || result.Conflict) return true;
-            var record = result.Record!;
-            // The operation is deliberately detached from request cancellation.
-            // Host shutdown and a global execution deadline still cancel it.
-            _ = Task.Run(() => ExecuteAsync(record), CancellationToken.None);
-            return true;
-        }
-        finally
-        {
-            if (result?.Created != true || result.Conflict)
-                Interlocked.Exchange(ref _active, 0);
-        }
+        // Database transaction owns admission and the single execution slot.
+        // Replays return the original record without scheduling another run.
+        result = store.CreateInvestigation(scope, idempotencyKey);
+        if (result.Busy) return false;
+        if (result.Created && !result.Conflict)
+            _ = Task.Run(() => ExecuteAsync(result.Record!), CancellationToken.None);
+        return true;
     }
 
     private async Task ExecuteAsync(InvestigationSummary record)
@@ -41,6 +27,7 @@ public sealed class GateC5InvestigationCoordinator(
         var runId = record.RunId;
         try
         {
+            store.StartAttempt(runId);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(
                 lifetime.ApplicationStopping);
             deadline.CancelAfter(TimeSpan.FromMinutes(6));
@@ -71,10 +58,6 @@ public sealed class GateC5InvestigationCoordinator(
         {
             // Do not expose source, prompt, or provider exception text.
             store.FailInvestigation(runId, "host-execution-failure");
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _active, 0);
         }
     }
 }
