@@ -120,21 +120,26 @@ public sealed class GateCEvidenceSession
         // Charge every authorized call even when its result is empty.
         _calls++;
         var selected = SelectItems(capability!);
-        var remaining = MaxTotalItems - _itemsIssued;
-        if (remaining <= 0)
-            return Deny("evidence-item-budget-exceeded");
-        var issued = selected.Take(Math.Min(12, remaining)).ToArray();
-        _itemsIssued += issued.Length;
         var results = new List<GateCDiscoveredItem>();
-        foreach (var item in issued)
+        foreach (var item in selected.Take(12))
         {
             ct.ThrowIfCancellationRequested();
-            // Never merge separate evidence types or conflate candidate and
-            // observed statuses. A handle maps to exactly one canonical ID.
-            var handle = "E" + (_handles.Count + 1).ToString(
+            // Reuse existing handles when views overlap or are repeated.
+            // Otherwise model-facing handles could alias one canonical edge
+            // and break the independent host catalog invariant.
+            var known = _handles.Values.FirstOrDefault(h => h.CanonicalId == item.Id);
+            if (known is null && _itemsIssued >= MaxTotalItems)
+                return Deny("evidence-item-budget-exceeded");
+            var handle = known?.Handle ?? "E" + (_handles.Count + 1).ToString(
                 System.Globalization.CultureInfo.InvariantCulture);
-            _handles.Add(handle,
-                new GateCEvidenceHandle(handle, item.Id, item.Status));
+            if (known is not null && known.Kind != item.Status)
+                throw new InvalidOperationException("Evidence status changed within a role session.");
+            if (known is null)
+            {
+                _handles.Add(handle,
+                    new GateCEvidenceHandle(handle, item.Id, item.Status));
+                _itemsIssued++;
+            }
             results.Add(new GateCDiscoveredItem(handle, item.Kind,
                 item.Status, item.Label, item.FilePath, item.Line, item.Column));
         }
@@ -142,7 +147,7 @@ public sealed class GateCEvidenceSession
             new GateCDiscoveryResponse(capability!, GateCEvidenceRegistry.Version,
                 _runId, _role, _scope.FingerprintSha256, results,
                 _package.Unknowns.Take(8).ToArray(),
-                selected.Count > issued.Length, _calls));
+                selected.Count > results.Count, _calls));
     }
 
     private sealed record Item(string Id, string Kind, GateCEvidenceKind Status,
