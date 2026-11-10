@@ -61,6 +61,7 @@ type EvidenceItem = {
   id: string; kind: string; evidenceStatus: string; filePath?: string | null;
   fileSha256?: string | null; evidencePath?: string; evidenceSha256?: string;
   line: number | null; column: number | null;
+  fromId?: string; toId?: string;
 };
 type EvidencePackage = {
   contractVersion: string; snapshotId: string; fingerprintSha256: string;
@@ -86,9 +87,10 @@ async function requireOk(response: Response, fallback: string) {
 }
 function isTerminal(status: string) { return status !== 'running'; }
 
-function EvidenceReferences({ handles, role, links, verified, onVerify }: {
+function EvidenceReferences({ handles, role, links, verified, onVerify, onInspect }: {
   handles: string[]; role: number; links: EvidenceLink[];
   verified: Record<string, Verification>; onVerify: (link: EvidenceLink) => void;
+  onInspect: (nodeId: string) => void;
 }) {
   if (handles.length === 0) return <span className="investigation-muted">No cited source handle (declared evidence gap).</span>;
   return (
@@ -107,7 +109,12 @@ function EvidenceReferences({ handles, role, links, verified, onVerify }: {
                 {link.filePath && <code>{link.filePath}{link.line === null ? '' : ':' + link.line}</code>}
                 {!check && <small>Snapshot evidence not yet revalidated — select to verify.</small>}
                 {check?.state === 'verified' && (
-                  <small role="status">Verified against original saved snapshot · SHA-256 {shortId(link.fileSha256 ?? '')}</small>
+                  <>
+                    <small role="status">Verified against original saved snapshot · SHA-256 {shortId(link.fileSha256 ?? '')}</small>
+                    <button type="button" onClick={() => onInspect(check.match.fromId ?? check.match.id)}>
+                      Inspect {check.match.fromId ? 'relation source' : 'evidence node'} in snapshot graph
+                    </button>
+                  </>
                 )}
                 {check?.state === 'unavailable' && (
                   <small role="alert">Cannot verify this link: {check.reason}</small>
@@ -123,9 +130,10 @@ function EvidenceReferences({ handles, role, links, verified, onVerify }: {
   );
 }
 
-export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, snapshotId, fingerprintSha256, csrfToken }: {
+export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, snapshotId, fingerprintSha256, csrfToken, onInspectGraph }: {
   endpoint: string; workspaceId: string; repositoryId: string;
   snapshotId: string; fingerprintSha256: string; csrfToken: string;
+  onInspectGraph: (nodeId: string) => void;
 }) {
   const api = endpoint + '/investigations';
   const [entries, setEntries] = useState<EntryPoint[]>([]);
@@ -377,7 +385,8 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
                                 <span className="investigation-eyebrow">UNVERIFIED HYPOTHESIS · {h.id}</span>
                                 <p>{h.text}</p><p><strong>Unknown:</strong> {h.uncertainty}</p>
                                 <EvidenceReferences handles={h.evidenceHandles} role={roleIndex}
-                                  links={report.evidenceLinks} verified={verification} onVerify={link => void verifyEvidence(link)} />
+                                  links={report.evidenceLinks} verified={verification} onVerify={link => void verifyEvidence(link)}
+                                  onInspect={onInspectGraph} />
                               </article>
                             ))}
                             {roleIndex === 1 && outcome.assessment?.concerns.map(h => (
