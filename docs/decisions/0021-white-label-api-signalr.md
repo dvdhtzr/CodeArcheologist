@@ -28,3 +28,13 @@
 ## Unchanged
 
 The cookie + CSRF path, loopback binding, Host validation, execution ownership, fencing, idempotency, and every evidence rule (AGENTS 1–57).
+
+## Addendum — W2 capability resources (approved 2026-11-10; owner reported `check.ps1` GREEN on Windows)
+
+- **New read-only resources** (`code-archeologist-capabilities-v1`): `entry-points`, `methods`, and `impact?methodId=`.
+  - They are server-side projections of the existing evidence graph.
+  - `impact` applies the ADR 0015 one-hop rule, with explicit unknown and limit fields.
+  - No analyzer, edge kind or status was added.
+- **Entry-point evidence:** the existing `evidence-tools/entry-point?entryPointId=` endpoint is documented rather than duplicated. Node IDs contain `/` and `:`, so they are query parameters.
+- **Snapshot push** (`SubscribeRepository` / `snapshotCaptured`): sent only after a snapshot is committed, consistent with rule 59. No progress percentages are sent (rule 3). The baseline is taken at subscribe time, so a snapshot committed before the publisher's first poll is still pushed.
+

@@ -8,6 +8,7 @@ using CodeArcheologist.Api.Workspaces;
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Execution;
 using CodeArcheologist.Api.Realtime;
+using CodeArcheologist.Api.Capabilities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -129,6 +130,8 @@ app.UseAuthorization();
 // Versioned contracts for white-label front ends (schema only; no data).
 app.MapOpenApi("/api/{documentName}/openapi.json");
 app.MapHub<InvestigationEventsHub>(RealtimeContract.HubPath);
+// W2: read-only capability resources (entry points, methods, one-hop impact).
+app.MapSnapshotCapabilities();
 
 app.MapGet("/api/v1/health", () =>
     Results.Ok(new { status = "ok", component = "api", stage = "local-access" }))
