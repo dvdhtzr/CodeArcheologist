@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C09-verb-get-to-post",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get now carries an [HttpPost] candidate.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 6
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The written verb is a candidate, not a registered method."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Still describes the endpoint as a GET.",
+      "category": "completeness"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "The same method's verb attribute changes."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C09-verb-get-to-post",
+  "category": "change-experiment",
+  "title": "Change [HttpGet] to [HttpPost]",
+  "purpose": "Deliberate change experiment (affected): The same method's verb attribute changes.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "eb11e6423fecc3eab41b0a921e2f46eba54ca511e9303a4c0a6953ff9ca1a73c"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "d08c64d81d86cbe7a53e4ba68bdba5fb972d6f8e01d968f0513d8814b0ad7756"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 6
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "The same method's verb attribute changes.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

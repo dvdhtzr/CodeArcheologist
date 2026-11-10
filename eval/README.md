@@ -37,10 +37,13 @@ Rules:
 
 `curated/repositories.json` pins 15 public, permissively licensed repositories: commit SHA, licence hash, subtree, and snapshot fingerprint. Acquire them outside the repository with `scripts/acquire-curated.ps1 -Target <dir>` (Windows) or `scripts/acquire-curated.sh <dir>`, then pass `--curated-root <dir>` to the lab. Nothing from these repositories is built or executed. Entry points and labels for these cases are assistant drafts awaiting your review, like the fixtures.
 
+## Change experiments
+
+`cases/C*/` hold `before/` and `after/` fixture versions differing by one edit. `case.json` declares the edit, its impact (`affected` or `unaffected`), the before-version entry point, and optionally the edited method. The lab checks the before/after evidence delta and the one-hop caller relation deterministically, then runs the comparators on the after version.
+
 ## Not in C6c-1
 
 The following arrive in C6c-2 and C6c-3:
-- change experiments (C6c-2b);
 - held-out cases (owner-authored; SHA-256 seal only);
 - blinded usefulness judging;
 - the remaining 8 diagnostic repeat cases.

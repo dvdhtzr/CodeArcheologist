@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C06-direct-to-interface",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes _formatter.Format.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 14
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The callee targets the IFormatter interface; no implementation is known."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Names an implementation of IFormatter as resolved.",
+      "category": "di-resolution"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Get calls _formatter.Format via an injected IFormatter."
+    }
+  ]
+}

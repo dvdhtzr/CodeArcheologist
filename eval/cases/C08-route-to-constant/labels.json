@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C08-route-to-constant",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "The [HttpGet] candidate now has a nonliteral route.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 8
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The constant route is unresolved; no full URL can be stated."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States the resolved route template as verified.",
+      "category": "registered-route"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "[HttpGet(\"{id}\")] becomes [HttpGet(Routes.ById)]."
+    }
+  ]
+}

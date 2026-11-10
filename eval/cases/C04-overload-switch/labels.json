@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C04-overload-switch",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "Get invokes Render with a string argument.",
+      "anchor": {
+        "filePath": "Controller.cs",
+        "line": 9
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "Overload choice comes from synthetic binding and remains provisional."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "States the int overload is still the target.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "Render(id) becomes Render(id.ToString()), selecting the string overload."
+    }
+  ]
+}

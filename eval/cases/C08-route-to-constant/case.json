@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C08-route-to-constant",
+  "category": "change-experiment",
+  "title": "Change the route literal to a constant",
+  "purpose": "Deliberate change experiment (affected): [HttpGet(\"{id}\")] becomes [HttpGet(Routes.ById)].",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "ce4e16ed934cda38a4ecac37771c527bdc522300cdd5c6dbc183254e2446b686"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "6203bb2598c36b25de28cd86fd9669b207e0ecc61e7597bd2dd8c1f66d7e8db7"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 8
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "[HttpGet(\"{id}\")] becomes [HttpGet(Routes.ById)].",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 6
+    },
+    "impactTarget": null
+  }
+}

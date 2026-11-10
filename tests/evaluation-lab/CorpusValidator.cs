@@ -174,8 +174,8 @@ public static partial class CorpusValidator
         var p = dirName + ": ";
         if (c.SchemaVersion != LabSchema.Case) errors.Add(p + "unsupported case schema");
         if (c.Id != dirName || !CaseId().IsMatch(c.Id)) errors.Add(p + "case id must equal directory name");
-        if (c.Category is not (CaseCategory.Fixture or CaseCategory.Curated))
-            errors.Add(p + "only fixture and curated cases are supported");
+        if (c.Category is not (CaseCategory.Fixture or CaseCategory.Curated or CaseCategory.ChangeExperiment))
+            errors.Add(p + "only fixture, curated and change-experiment cases are supported");
         if (string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Purpose))
             errors.Add(p + "title and purpose required");
         if (!CaseExpectation.All.Contains(c.Expectation)) errors.Add(p + "unknown expectation");
@@ -191,20 +191,49 @@ public static partial class CorpusValidator
             return;
         }
         if (c.Expectation != CaseExpectation.Investigate) errors.Add(p + "fixtures must be investigate cases");
-        if (c.Source.Kind != "in-repo-fixture" || c.Source.Directory != "source" || c.Source.Repository is not null)
+        var change = c.Category == CaseCategory.ChangeExperiment;
+        if (change)
+        {
+            if (c.Source.Kind != "in-repo-change" || c.Source.Directory != "after" || c.Source.Repository is not null ||
+                c.Source.BeforeFileSha256 is not { Count: > 0 } before || c.Change is not { } spec)
+            {
+                errors.Add(p + "change experiments need source kind in-repo-change, 'after' directory, pinned before files and a change spec");
+                return;
+            }
+            ValidatePinned(p, Path.Combine(dir, "before"), before, errors);
+            if (spec.Impact is not ("affected" or "unaffected")) errors.Add(p + "impact must be affected or unaffected");
+            if (string.IsNullOrWhiteSpace(spec.Edit)) errors.Add(p + "edit description required");
+            if (!before.ContainsKey(spec.BeforeEntryPoint.FilePath) || spec.BeforeEntryPoint.Line < 1 ||
+                spec.BeforeEntryPoint.Kind != c.EntryPoint?.Kind)
+                errors.Add(p + "before entry point must be the same kind in a pinned before file");
+            if (spec.ImpactTarget is { } t && (!before.ContainsKey(t.FilePath) || t.Line < 1))
+                errors.Add(p + "impact target must be in a pinned before file");
+        }
+        else if (c.Source.Kind != "in-repo-fixture" || c.Source.Directory != "source" || c.Source.Repository is not null ||
+                 c.Source.BeforeFileSha256 is not null || c.Change is not null)
             errors.Add(p + "source must be the in-repo 'source' directory");
 
+        ValidatePinned(p, Path.Combine(dir, c.Source.Directory), c.Source.FileSha256, errors);
+        if (c.EntryPoint is { } entry && !c.Source.FileSha256.ContainsKey(entry.FilePath))
+            errors.Add(p + "entry point file is not a pinned fixture file");
+        ValidateLabels(p, c, l, file => c.Source.FileSha256.ContainsKey(file), errors);
+    }
+
+    /// <summary>Pinned bytes: every file listed, nothing unlisted, hashes exact.</summary>
+    private static void ValidatePinned(string p, string sourceDir, IReadOnlyDictionary<string, string> pinned,
+        List<string> errors)
+    {
         // Pinned fixture bytes: every file listed, nothing unlisted, hashes exact.
-        var sourceDir = Path.Combine(dir, "source");
+
         var actual = Directory.Exists(sourceDir)
             ? Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories)
                 .ToDictionary(f => Path.GetRelativePath(sourceDir, f).Replace('\\', '/'),
                     f => LabSchema.Sha256(File.ReadAllBytes(f)), StringComparer.Ordinal)
             : new Dictionary<string, string>(StringComparer.Ordinal);
         if (actual.Count == 0) errors.Add(p + "fixture source missing");
-        if (!actual.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(c.Source.FileSha256.Keys))
+        if (!actual.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(pinned.Keys))
             errors.Add(p + "fixture file list differs from the pinned manifest");
-        foreach (var (file, hash) in c.Source.FileSha256)
+        foreach (var (file, hash) in pinned)
             if (actual.TryGetValue(file, out var real) && real != hash)
             {
                 // Diagnose (never accept) the common Windows checkout conversion.
@@ -216,9 +245,6 @@ public static partial class CorpusValidator
                         ? " (line endings were converted to CRLF on checkout; see .gitattributes and eval/README.md)"
                         : ""));
             }
-        if (c.EntryPoint is { } entry && !c.Source.FileSha256.ContainsKey(entry.FilePath))
-            errors.Add(p + "entry point file is not a pinned fixture file");
-        ValidateLabels(p, c, l, file => c.Source.FileSha256.ContainsKey(file), errors);
     }
 
     private static void ValidateCuratedCase(string p, LabCase c, LabLabels l,

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "c6c-labels-v1",
+  "caseId": "C10-lambda-to-method-group",
+  "status": "draft",
+  "authoredBy": "assistant-draft",
+  "requiredObservations": [
+    {
+      "id": "O1",
+      "description": "app.MapGet is a Minimal API candidate with a method-group handler.",
+      "anchor": {
+        "filePath": "Program.cs",
+        "line": 7
+      }
+    }
+  ],
+  "requiredUncertainties": [
+    {
+      "id": "U1",
+      "description": "The handler is not inferred from the method-group name."
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "X1",
+      "description": "Claims the analyzer bound HealthReport.Create as the handler.",
+      "category": "compiled-binding"
+    }
+  ],
+  "materialIssues": [
+    {
+      "id": "M1",
+      "description": "() => HealthReport.Create() becomes HealthReport.Create."
+    }
+  ]
+}

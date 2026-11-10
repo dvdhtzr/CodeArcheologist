@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C10-lambda-to-method-group",
+  "category": "change-experiment",
+  "title": "Minimal API: lambda handler becomes a method group",
+  "purpose": "Deliberate change experiment (affected): () => HealthReport.Create() becomes HealthReport.Create.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Program.cs": "b7a72ca1b1ac1decc26d456b6c176e5397c6404baf44da42c5dfed3b3b69b74e"
+    },
+    "beforeFileSha256": {
+      "Program.cs": "04cfd5b385aa32b9c62581836acc1f23f3b2590d3daf5476b5371edc4ca2fa93"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-minimal-mapping",
+    "filePath": "Program.cs",
+    "line": 7
+  },
+  "diagnosticRepeat": false,
+  "expectation": "investigate",
+  "change": {
+    "edit": "() => HealthReport.Create() becomes HealthReport.Create.",
+    "impact": "affected",
+    "beforeEntryPoint": {
+      "kind": "http-minimal-mapping",
+      "filePath": "Program.cs",
+      "line": 7
+    },
+    "impactTarget": null
+  }
+}

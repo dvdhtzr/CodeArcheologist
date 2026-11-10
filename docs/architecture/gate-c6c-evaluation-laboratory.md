@@ -8,7 +8,7 @@ Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in th
 |---|---|---|
 | C6c-1 | Case and label schema, corpus validator, budget declaration, isolated harness, 3 comparators, deterministic metrics, 20 fixtures | owner GREEN (Windows `check.ps1`); Linux passed; label sign-off pending |
 | C6c-2a | 15 curated real repositories: manifest, owner-run acquisition scripts, subtree scoping, expectation kinds, BOM analyzer fix, per-file manifests, case-collision rule | owner GREEN on Windows (`check.ps1`, `acquire-curated.ps1`, provisional baseline over all 35 cases); Linux passed; label sign-off pending |
-| C6c-2b | 15 deliberate change experiments | not started |
+| C6c-2b | 15 deliberate change experiments: before/after fixtures, deterministic evidence delta and one-hop impact checks | implemented; Linux self-test (66 checks) passed; owner verification and label sign-off pending |
 | C6c-3 | Blinded owner A/B usefulness judging; 10 held-out cases (owner-authored, sealed); repeatability trials | not started |
 | C7 | Scored acceptance run, integrity audit, documented limitations, owner release decision | not started |
 

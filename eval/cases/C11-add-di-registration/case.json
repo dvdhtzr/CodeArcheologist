@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "c6c-case-v1",
+  "id": "C11-add-di-registration",
+  "category": "change-experiment",
+  "title": "Add a DI registration elsewhere",
+  "purpose": "Deliberate change experiment (unaffected): A Composition class registering IClock -> SystemClock is added.",
+  "source": {
+    "kind": "in-repo-change",
+    "directory": "after",
+    "fileSha256": {
+      "Controller.cs": "894fb86ef97b31d27987e5f900cb018f00ddae64c9f4b2ccffff5bda38146af9"
+    },
+    "beforeFileSha256": {
+      "Controller.cs": "faa4b83e9fef45e1733878dc5cf85c54c32fd9a554ed0dca87202173bc40cc05"
+    }
+  },
+  "entryPoint": {
+    "kind": "http-endpoint-attribute",
+    "filePath": "Controller.cs",
+    "line": 17
+  },
+  "diagnosticRepeat": true,
+  "expectation": "investigate",
+  "change": {
+    "edit": "A Composition class registering IClock -> SystemClock is added.",
+    "impact": "unaffected",
+    "beforeEntryPoint": {
+      "kind": "http-endpoint-attribute",
+      "filePath": "Controller.cs",
+      "line": 12
+    },
+    "impactTarget": null
+  }
+}
