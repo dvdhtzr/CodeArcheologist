@@ -80,14 +80,14 @@ internal static class GateC5SelfTests
                     GateCContract.Version, effectiveRun, scope, GateCRole.Investigator,
                     ["E1"], [new GateCHypothesis("H1", "Possible call", ["E1"],
                         "Not runtime proof")], [], ["Binding unknown"]),
-                "inspect_entry_point", 1, [investigatorLink]);
+                "inspect_entry_point", 1, [investigatorLink], "test-analyzer-v1");
             var skeptic = new GateC3RoleOutcome(GateCRole.Skeptic,
                 GateCRoleStatus.CompletedValidated, "valid", new(
                     GateCContract.Version, effectiveRun, scope, GateCRole.Skeptic,
                     ["E1"], [], [new GateCConcern("S1",
                         GateCConcernKind.InsufficientEvidence,
                         "Runtime not proven", ["E1"])], ["Runtime unknown"]),
-                "inspect_candidate_callees", 1, [skepticLink]);
+                "inspect_candidate_callees", 1, [skepticLink], "test-analyzer-v1");
 
             var review = new GateCReviewerAssessment(GateCContract.Version,
                 effectiveRun, scope, GateCRole.Reviewer,
