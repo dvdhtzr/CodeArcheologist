@@ -11,9 +11,15 @@ public enum GateCRunEvent
     StartInvestigator,
     AcceptInvestigator,
     RejectInvestigator,
+    FailInvestigator,
+    TimeoutInvestigator,
+    CancelInvestigator,
     StartSkeptic,
     AcceptSkeptic,
     RejectSkeptic,
+    FailSkeptic,
+    TimeoutSkeptic,
+    CancelSkeptic,
     BeginReviewer,
     AcceptReviewer,
     RejectReviewer,
@@ -99,6 +105,32 @@ public static class GateCStateTransitions
                 return Permit(current with {
                     SkepticStatus = GateCRoleStatus.ValidationRejected,
                     Status = GateCRunStatus.Incomplete });
+            case GateCRunEvent.FailInvestigator or
+                GateCRunEvent.TimeoutInvestigator or GateCRunEvent.CancelInvestigator
+                when current.Status == GateCRunStatus.IndependentAssessment &&
+                     current.InvestigatorStatus == GateCRoleStatus.Running:
+                return Permit(current with {
+                    InvestigatorStatus = requested switch
+                    {
+                        GateCRunEvent.TimeoutInvestigator => GateCRoleStatus.TimedOut,
+                        GateCRunEvent.CancelInvestigator => GateCRoleStatus.Cancelled,
+                        _ => GateCRoleStatus.Failed
+                    },
+                    Status = requested == GateCRunEvent.CancelInvestigator
+                        ? GateCRunStatus.Cancelled : GateCRunStatus.Incomplete });
+            case GateCRunEvent.FailSkeptic or
+                GateCRunEvent.TimeoutSkeptic or GateCRunEvent.CancelSkeptic
+                when current.Status == GateCRunStatus.IndependentAssessment &&
+                     current.SkepticStatus == GateCRoleStatus.Running:
+                return Permit(current with {
+                    SkepticStatus = requested switch
+                    {
+                        GateCRunEvent.TimeoutSkeptic => GateCRoleStatus.TimedOut,
+                        GateCRunEvent.CancelSkeptic => GateCRoleStatus.Cancelled,
+                        _ => GateCRoleStatus.Failed
+                    },
+                    Status = requested == GateCRunEvent.CancelSkeptic
+                        ? GateCRunStatus.Cancelled : GateCRunStatus.Incomplete });
             case GateCRunEvent.BeginReviewer
                 when current.Status == GateCRunStatus.IndependentAssessment &&
                      current.InvestigatorStatus == GateCRoleStatus.CompletedValidated &&
