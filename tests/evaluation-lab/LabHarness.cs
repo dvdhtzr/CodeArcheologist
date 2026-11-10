@@ -68,6 +68,30 @@ public static class LabHarness
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             await File.WriteAllBytesAsync(target, bytes, ct);
         }
+        var (services, store, workspace, repository, snapshot, graph) =
+            await CaptureSourceAsync(source, data, "Lab " + loaded.Case.Id, ct);
+        var selector = loaded.Case.EntryPoint;
+        var matches = graph.Nodes.Where(n => n.Kind == selector.Kind && n.FilePath == selector.FilePath &&
+            n.Line == selector.Line).ToArray();
+        if (matches.Length != 1)
+            throw new LabCaseException(loaded.Case.Id, $"entry-point selector matched {matches.Length} candidates; " +
+                "available: " + string.Join(", ", graph.Nodes.Where(n => n.Kind.StartsWith("http-", StringComparison.Ordinal))
+                    .Select(n => $"{n.Kind}@{n.FilePath}:{n.Line}")));
+        var package = services.GetRequiredService<SnapshotEvidenceTools>().ReadEntryPoint(snapshot, matches[0].Id, ct);
+        var scope = new GateCScope(workspace.Id, repository.Id, snapshot.Id, snapshot.FingerprintSha256,
+            matches[0].Id, SnapshotEvidenceTools.Version);
+        return new(loaded, services, store, snapshot, scope, package, root);
+    }
+
+    /// <summary>
+    /// Read-only capture of a local source directory through the production
+    /// services into the given disposable data directory. The source is only
+    /// read; .git and build outputs are excluded by the snapshot policy.
+    /// </summary>
+    internal static async Task<(ServiceProvider, WorkspaceStore, WorkspaceRecord, RepositorySourceRecord,
+        SnapshotRecord, CSharpEvidenceGraphReport)> CaptureSourceAsync(string source, string data, string name,
+        CancellationToken ct)
+    {
         // Process-local override for this disposable lab run only.
         Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", data);
         var services = new ServiceCollection()
@@ -80,27 +104,25 @@ public static class LabHarness
             .AddSingleton<SnapshotEvidenceTools>().AddSingleton<GateCEvidenceDiscovery>()
             .AddSingleton<GateBInvestigator>()
             .BuildServiceProvider();
-        var store = services.GetRequiredService<WorkspaceStore>();
-        store.Initialize();
-        var workspace = store.Create("Lab " + loaded.Case.Id, Guid.NewGuid()).Workspace;
-        var location = RepositoryPathPolicy.Validate(source, store.DatabasePath).Location
-            ?? throw new InvalidOperationException("Lab fixture registration rejected.");
-        var repository = store.RegisterRepository(workspace.Id, location, Guid.NewGuid()).Repository
-            ?? throw new InvalidOperationException("Lab fixture registration failed.");
-        var snapshot = (await services.GetRequiredService<SnapshotCaptureService>()
-            .CaptureAsync(workspace.Id, repository.Id, Guid.NewGuid(), ct)).Snapshot;
-        var graph = services.GetRequiredService<CSharpEvidenceGraphBuilder>().Build(snapshot, ct);
-        var selector = loaded.Case.EntryPoint;
-        var matches = graph.Nodes.Where(n => n.Kind == selector.Kind && n.FilePath == selector.FilePath &&
-            n.Line == selector.Line).ToArray();
-        if (matches.Length != 1)
-            throw new LabCaseException(loaded.Case.Id, $"entry-point selector matched {matches.Length} candidates; " +
-                "available: " + string.Join(", ", graph.Nodes.Where(n => n.Kind.StartsWith("http-", StringComparison.Ordinal))
-                    .Select(n => $"{n.Kind}@{n.FilePath}:{n.Line}")));
-        var package = services.GetRequiredService<SnapshotEvidenceTools>().ReadEntryPoint(snapshot, matches[0].Id, ct);
-        var scope = new GateCScope(workspace.Id, repository.Id, snapshot.Id, snapshot.FingerprintSha256,
-            matches[0].Id, SnapshotEvidenceTools.Version);
-        return new(loaded, services, store, snapshot, scope, package, root);
+        try
+        {
+            var store = services.GetRequiredService<WorkspaceStore>();
+            store.Initialize();
+            var workspace = store.Create(name, Guid.NewGuid()).Workspace;
+            var location = RepositoryPathPolicy.Validate(source, store.DatabasePath).Location
+                ?? throw new InvalidOperationException("Lab source registration rejected.");
+            var repository = store.RegisterRepository(workspace.Id, location, Guid.NewGuid()).Repository
+                ?? throw new InvalidOperationException("Lab source registration failed.");
+            var snapshot = (await services.GetRequiredService<SnapshotCaptureService>()
+                .CaptureAsync(workspace.Id, repository.Id, Guid.NewGuid(), ct)).Snapshot;
+            var graph = services.GetRequiredService<CSharpEvidenceGraphBuilder>().Build(snapshot, ct);
+            return (services, store, workspace, repository, snapshot, graph);
+        }
+        catch
+        {
+            await services.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>

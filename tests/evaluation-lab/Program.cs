@@ -15,6 +15,8 @@ try
             return Validate(evalRoot, out _) ? 0 : 1;
         case "--describe" when args.Length == 2:
             return await DescribeAsync(evalRoot, Path.GetFileName(Path.GetFullPath(args[1]).TrimEnd('/', '\\')));
+        case "--survey" when args.Length == 2:
+            return await SurveyAsync(Path.GetFullPath(args[1]));
         case "--self-test":
             return await LabSelfTests.RunAsync(evalRoot);
         case "--run":
@@ -64,6 +66,35 @@ static async Task<int> DescribeAsync(string evalRoot, string caseId)
         Console.WriteLine($"  {c.FilePath}:{c.Line}  {c.EvidenceStatus}  {c.CanonicalId}");
     foreach (var u in captured.Package.Unknowns) Console.WriteLine("  unknown: " + u);
     return 0;
+}
+
+// Read-only survey of a local checkout (curated-case preparation): snapshot
+// fingerprint, size, and every supported HTTP candidate, or the fail-closed reason.
+static async Task<int> SurveyAsync(string source)
+{
+    var root = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-survey-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var (services, _, _, _, snapshot, graph) = await LabHarness.CaptureSourceAsync(source,
+            Path.Combine(root, "data"), "Lab survey", CancellationToken.None);
+        await using var _s = services;
+        Console.WriteLine($"fingerprint {snapshot.FingerprintSha256} files={snapshot.FileCount} bytes={snapshot.TotalBytes} analyzer={graph.AnalyzerVersion}");
+        foreach (var n in graph.Nodes.Where(n => n.Kind is "http-endpoint-attribute" or "http-minimal-mapping")
+                     .OrderBy(n => n.FilePath, StringComparer.Ordinal).ThenBy(n => n.Line))
+            Console.WriteLine($"  {n.Kind} {n.FilePath}:{n.Line} {n.Label}");
+        return 0;
+    }
+    catch (Exception error) when (error is not OutOfMemoryException)
+    {
+        Console.WriteLine($"fail-closed {error.GetType().Name}: {error.Message}");
+        return 3;
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(root, recursive: true); } catch (IOException) { }
+    }
 }
 
 static async Task<int> RunAsync(string evalRoot, string[] options)

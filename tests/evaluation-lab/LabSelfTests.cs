@@ -90,6 +90,32 @@ internal static class LabSelfTests
                 Expect(JsonSerializer.Deserialize<LabReport>(json, LabSchema.Json) is not null, "report not round-trippable");
             });
 
+        await CheckAsync("UTF-8 BOM project and source files capture (regression)", async () =>
+        {
+            var root = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-bom-" + Guid.NewGuid().ToString("N"));
+            var src = Path.Combine(root, "source");
+            Directory.CreateDirectory(src);
+            var bom = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+            File.WriteAllText(Path.Combine(src, "App.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk.Web\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>", bom);
+            File.WriteAllText(Path.Combine(src, "Controller.cs"),
+                "namespace Bom;\n[Route(\"api/x\")]\npublic class XController\n{\n    [HttpGet]\n    public int Get() => Help();\n    private int Help() => 1;\n}\n", bom);
+            Expect(File.ReadAllBytes(Path.Combine(src, "App.csproj"))[0] == 0xEF, "fixture lacks a BOM");
+            try
+            {
+                var (services, _, _, _, _, graph) = await LabHarness.CaptureSourceAsync(src,
+                    Path.Combine(root, "data"), "BOM regression", CancellationToken.None);
+                await using var _ = services;
+                var entry = graph.Nodes.SingleOrDefault(n => n.Kind == "http-endpoint-attribute");
+                Expect(entry is { Line: 5 }, "BOM-prefixed source lost its HTTP candidate or shifted lines");
+            }
+            finally
+            {
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+                Directory.Delete(root, recursive: true);
+            }
+        });
+
         Check("repository corpus unmodified by lab runs", () =>
             Expect(TreeDigest(evalRoot) == before, "eval/ tree changed during self-test"));
         Console.WriteLine(_failed == 0

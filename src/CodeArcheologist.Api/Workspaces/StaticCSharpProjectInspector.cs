@@ -84,7 +84,13 @@ public sealed class StaticCSharpProjectInspector(SnapshotCaptureService capture)
             string xml;
             try
             {
-                xml = StrictUtf8.GetString(bytes);
+                // A leading UTF-8 byte-order mark is valid UTF-8 encoding metadata
+                // (Visual Studio writes it by default). Decoding it into the string
+                // would leave U+FEFF before the root element and make XmlReader
+                // reject an otherwise ordinary project. Strip exactly one BOM; all
+                // DTD/entity prohibitions and size limits still apply unchanged.
+                var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+                xml = StrictUtf8.GetString(bytes, hasBom ? 3 : 0, bytes.Length - (hasBom ? 3 : 0));
             }
             catch (DecoderFallbackException)
             {
