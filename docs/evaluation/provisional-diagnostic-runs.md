@@ -119,4 +119,19 @@ Otherwise E2 is reverted, and the measurement is recorded either way.
 
 ## Run 5 — after E2
 
-Pending the owner's run.
+Owner run on Windows, contract v5.
+
+| Comparator | Completed | Integrity breaches | Anchor recall | Objection coverage | Review flags |
+|---|---|---|---|---|---|
+| deterministic-baseline | 12/12 | 0 | 94% | — | 0 |
+| gate-b | 12/12 | 0 | 35% | — | 0 |
+| gate-c | **36/36** | **0** | **94%** | 100% | **9** |
+
+- **Trial spread:** the average fell from 0.46 to **0.00**. All 12 cases were consistent across their three trials. C03, C06, C11 and F05 each went from 1.00 to 0.00.
+- **Verdict: E2 meets all pre-set criteria.** Zero breaches, recall above 57%, spread below 0.46. Review flags also fell from 17 to 9.
+
+**Caveats:**
+- **What recall does and does not measure.** Anchor recall measures whether reports cite the labelled evidence locations, not whether their statements are correct or useful. Gate C now cites as completely as the deterministic baseline, which restates all evidence by construction. Whether Gate C adds *insight* beyond that restatement is the open question, and only the owner's blinded usefulness judgment (C6c-3) can answer it.
+- **Perfect consistency** (spread 0.00) may partly reflect roles converging on the same view selection. Consistency is not correctness.
+- The sample is provisional and small, and the labels are drafts.
+
