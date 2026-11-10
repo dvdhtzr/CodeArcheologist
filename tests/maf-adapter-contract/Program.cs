@@ -52,6 +52,12 @@ if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose" or "--ga
     return;
 }
 
+if (args.Length == 1 && args[0] == "--gate-c1-self-test")
+{
+    GateCSelfTests.Run();
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--gate-b-self-test")
 {
     GateBSelfTests.Run();
