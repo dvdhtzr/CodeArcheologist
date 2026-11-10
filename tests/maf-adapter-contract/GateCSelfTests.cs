@@ -179,6 +179,8 @@ internal static class GateCSelfTests
             ExpectInvalid(result.Check, "illegal-run-transition");
         }
 
+        GateCDiscoverySelfTests.Run();
+
         Console.WriteLine(
             "GREEN: Gate C1 independent assessments, host evidence scope, " +
             "material challenge coverage and no-fact-promotion contracts.");
