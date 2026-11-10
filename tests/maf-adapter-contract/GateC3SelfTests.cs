@@ -154,6 +154,23 @@ internal static class GateC3SelfTests
             composed.Contains('<') || composed.Contains('>'))
             throw new InvalidOperationException("Source excerpt can break out of the untrusted-data framing.");
 
+        // E3: host-authored questions are fixed, code-directed and keep the handle
+        // discipline; the Skeptic question preserves independence; neither leaks
+        // corpus-specific hints (lambda/interface/route examples) into the prompt.
+        foreach (var question in new[] { GateC3IndependentRunner.InvestigatorQuestion, GateC3IndependentRunner.SkepticQuestion })
+        {
+            if (!question.StartsWith("Question:", StringComparison.Ordinal) || !question.Contains("sourceExcerpt") ||
+                !question.Contains("handle") || !question.Contains("at most two"))
+                throw new InvalidOperationException("E3 question lost its constraints.");
+            if (new[] { "lambda", "interface", "route", "DI ", "overload" }.Any(hint =>
+                    question.Contains(hint, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("E3 question leaks corpus-specific hints.");
+        }
+        if (!GateC3IndependentRunner.InvestigatorQuestion.Contains("UNVERIFIED"))
+            throw new InvalidOperationException("E3 Investigator question must keep hypotheses unverified.");
+        if (!GateC3IndependentRunner.SkepticQuestion.Contains("must not refer to any Investigator assessment"))
+            throw new InvalidOperationException("E3 Skeptic question weakens independence.");
+
         Console.WriteLine("GREEN: Gate C3 role-specific output parsing and model-free negative contracts.");
 
         void Reject(string text)

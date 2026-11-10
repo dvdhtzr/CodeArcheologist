@@ -24,6 +24,26 @@ public sealed record GateC3RunOutcome(Guid RunId, GateCScope Scope,
 public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDiscovery)
 {
     public const string ModelId = "qwen3.5:9b";
+
+    // E3: fixed, host-authored investigative questions (never model- or user-supplied;
+    // AGENTS rules 5 and 47). They are generic on purpose: no examples drawn from
+    // the evaluation corpus, so the lab does not measure prompt-to-test leakage. They direct each role at the code itself rather than
+    // at the evidence caveats. Output schemas, validation and limits are unchanged.
+    public const string InvestigatorQuestion =
+        "Question: using the sourceExcerpt and the evidence items, what does this entry point's method " +
+        "do? State which calls it makes and on what, in at most two UNVERIFIED hypotheses about this " +
+        "specific code. Cite the evidence handle that supports each hypothesis, or an empty handle when " +
+        "the point comes only from the excerpt. Put what the evidence cannot show (runtime behavior, " +
+        "registration, implementations) in uncertainty and unknown, not in the hypothesis itself. " +
+        "If no evidence items exist, return empty arrays and a concrete unknown.";
+
+    public const string SkepticQuestion =
+        "Question: independently, which statements someone might make about this specific method's " +
+        "behavior would NOT be supported by the sourceExcerpt and evidence items, and what alternative " +
+        "reading of this code exists? Give at most two concerns about this specific code, each " +
+        "with an existing handle or an empty handle for missing evidence. You have not seen and must " +
+        "not refer to any Investigator assessment. If there are no items, return empty arrays and a " +
+        "concrete unknown.";
     /// <summary>Per-role model deadline (declared in the C6c lab budget config).</summary>
     public const int RoleTimeoutSeconds = 90;
     /// <summary>At most one host-rejected output may be followed by one corrected attempt.</summary>
@@ -206,16 +226,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 session.SourceExcerptTruncated);
             if (view.Length > MaxInputText)
                 return Failure("evidence-view-budget-exceeded");
-            var assessmentPrompt = role == GateCRole.Investigator
-                ? "From this source-only evidence view, propose at most two " +
-                  "UNVERIFIED hypotheses, each with an existing handle or an empty " +
-                  "handle for an evidence gap. Explicitly state uncertainty. " +
-                  "If no evidence items exist, return empty arrays and a concrete unknown."
-                : "Independently identify at most two specific source-evidence " +
-                  "limitations or competing hypotheses. Do not refer to any " +
-                  "Investigator assessment. Use only existing evidence handles, or " +
-                  "an empty handle for missing evidence. If there are no items, " +
-                  "return empty arrays and a concrete unknown.";
+            var assessmentPrompt = role == GateCRole.Investigator ? InvestigatorQuestion : SkepticQuestion;
             // Only role-local, actually issued handles are legal. Empty string
             // is an explicit evidence gap; never invent a handle.
             var allowedHandles = discovery.Response.Items

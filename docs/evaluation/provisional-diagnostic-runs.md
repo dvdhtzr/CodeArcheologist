@@ -37,4 +37,25 @@ Otherwise E1 is reverted, and the measurement is recorded either way.
 
 ## Run 2 — after E1
 
+Owner run on Windows. The summary lines were not captured. Qualitatively, the Gate C reports were unchanged in kind: they still mostly restated evidence caveats.
+
+- In C07, no role mentioned the lambda, even though the excerpt (the full method span) contained `System.Func<string> render = () => Format(id);`.
+- In F09, the DI registration lies outside the entry method's excerpt, so not mentioning it is expected there.
+
+**Verdict:** E1 is not sufficient on its own. Its plumbing (excerpt plus version bump) is kept, because E3 depends on it.
+
+**Diagnosis:** the roles were never asked a question about the code. They were asked only to "propose UNVERIFIED hypotheses" or "identify limitations", while the evidence they received is dominated by caveat text.
+
+## E3 — fixed host-authored investigative questions (contract `gate-c-evidence-capabilities-v3`)
+
+**Change:** each independent role answers a fixed, host-authored question about the code. The exact text is `GateC3IndependentRunner.InvestigatorQuestion` / `SkepticQuestion`.
+- The Investigator states what the method does and which calls it makes, citing handles, and keeps what is unprovable in uncertainty.
+- The Skeptic independently names unsupported statements and alternative readings of the code, without referring to any Investigator output.
+
+Unchanged: schemas, validation, independence, checkpoints, and the limit of two items per role.
+
+**Acceptance:** the same as E1, measured against run 1. Also check qualitatively whether the C07 reports mention the lambda.
+
+## Run 3 — after E3
+
 Pending the owner's run.

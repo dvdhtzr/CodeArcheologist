@@ -9,8 +9,9 @@ namespace CodeArcheologist.Api.Investigations;
 public static class GateCEvidenceRegistry
 {
     // v2 (C6c E1): role evidence views also carry the package's bounded source
-    // excerpt as untrusted data. Bumped so pre-E1 checkpoints fail closed.
-    public const string Version = "gate-c-evidence-capabilities-v2";
+    // excerpt as untrusted data. v3 (E3): roles answer fixed host-authored
+    // questions about the code. Bumped each time so earlier checkpoints fail closed.
+    public const string Version = "gate-c-evidence-capabilities-v3";
     public const string EntryPoint = "inspect_entry_point";
     public const string DirectInvocations = "inspect_direct_invocations";
     public const string CandidateCallees = "inspect_candidate_callees";
