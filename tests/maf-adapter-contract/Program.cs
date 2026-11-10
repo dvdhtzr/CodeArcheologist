@@ -40,6 +40,12 @@ static string Validate(string? text)
     }
 }
 
+if (args.Length > 0 && args[0] == "--gate-c3-run")
+{
+    Environment.ExitCode = await GateC3LocalRun.RunAsync(args);
+    return;
+}
+
 if (args.Length > 0 && args[0] is "--gate-b-fixture" or "--gate-b-fixture-faults")
 {
     Environment.ExitCode = await GateBFixtureRun.RunAsync(args);
