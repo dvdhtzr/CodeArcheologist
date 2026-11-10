@@ -15,7 +15,7 @@ internal static class GateC5SelfTests
             var store = new WorkspaceStore();
             store.Initialize();
             using (var connection = new SqliteConnection(
-                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath }.ToString()))
+                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath, Pooling = false }.ToString()))
             {
                 connection.Open();
                 using var cmd = connection.CreateCommand();
@@ -32,7 +32,7 @@ internal static class GateC5SelfTests
                 SnapshotEvidenceTools.Version);
             // Test fixture inserts only trusted metadata into the disposable database.
             using (var connection = new SqliteConnection(
-                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath }.ToString()))
+                new SqliteConnectionStringBuilder { DataSource = store.DatabasePath, Pooling = false }.ToString()))
             {
                 connection.Open();
                 using var cmd = connection.CreateCommand();
