@@ -181,6 +181,7 @@ internal static class GateCSelfTests
 
         GateCDiscoverySelfTests.Run();
         GateC3SelfTests.Run();
+        GateC4SelfTests.Run();
 
         Console.WriteLine(
             "GREEN: Gate C1 independent assessments, host evidence scope, " +
