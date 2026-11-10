@@ -5,21 +5,13 @@ namespace CodeArcheologist.Api.Investigations;
 
 /// <summary>
 /// The model-executing stage sequence for one claimed attempt. Production
-/// binds <see cref="MafInvestigationExecutor"/> (genuine MAF/Ollama roles);
-/// deterministic tests bind model-free fixtures.
+/// binds <see cref="GateC6StageCoordinator"/> (checkpoint-aware, genuine
+/// MAF roles); deterministic tests bind model-free fixtures.
 /// </summary>
 public interface IInvestigationExecutor
 {
-    Task<GateC4RunOutcome> ExecuteAsync(SnapshotRecord snapshot, GateCScope scope,
-        Guid runId, CancellationToken cancellationToken);
-}
-
-public sealed class MafInvestigationExecutor(GateC4ReconciliationRunner runner)
-    : IInvestigationExecutor
-{
-    public Task<GateC4RunOutcome> ExecuteAsync(SnapshotRecord snapshot, GateCScope scope,
-        Guid runId, CancellationToken cancellationToken) =>
-        runner.RunAsync(snapshot, scope, runId, cancellationToken);
+    Task<GateC4RunOutcome> ExecuteAsync(InvestigationExecutionContext context,
+        CancellationToken cancellationToken);
 }
 
 public sealed record InvestigationWorkerOptions(TimeSpan AttemptDeadline,
@@ -171,17 +163,28 @@ public sealed class InvestigationWorker(WorkspaceStore store,
             {
                 // The ONLY model-executing call. Awaited to completion even if
                 // cancellation was requested: the slot is not released while it runs.
-                outcome = await executor.ExecuteAsync(snapshot, run.Scope, run.RunId,
+                outcome = await executor.ExecuteAsync(
+                    new InvestigationExecutionContext(snapshot, run, claim.Attempt, fence),
                     attemptToken.Token);
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
                 fault = error;
+                if (error is ExecutionFenceException lost)
+                    LoseOwnership(lost.Diagnostic, ownershipLost);
             }
             decision = Classify(outcome, fault, run, stoppingToken,
                 ownershipLost.IsCancellationRequested, deadline.IsCancellationRequested);
         }
 
+        if (decision.Kind == TerminalKind.Halt)
+        {
+            // A checkpoint/stage write failed mid-attempt: behave like a crash
+            // before commit. Write nothing more; restart reconciles explicitly.
+            logger.LogError("Stage persistence failed; worker halted without terminal write.");
+            _state = InvestigationWorkerState.Halted;
+            return;
+        }
         if (decision.Kind == TerminalKind.None)
         {
             // Ownership was lost: any write would be rejected by the fence.
@@ -223,7 +226,7 @@ public sealed class InvestigationWorker(WorkspaceStore store,
         }
     }
 
-    internal enum TerminalKind { None, Report, Interrupt, Fail }
+    internal enum TerminalKind { None, Halt, Report, Interrupt, Fail }
 
     internal sealed record TerminalDecision(TerminalKind Kind, string Cause,
         GateC5Report? Report = null, string? Diagnostic = null)
@@ -241,10 +244,15 @@ public sealed class InvestigationWorker(WorkspaceStore store,
         InvestigationSummary run, CancellationToken stopping, bool ownershipLost,
         bool deadlineExpired)
     {
-        if (ownershipLost) return new(TerminalKind.None, "ownership-lost");
+        // A failed stage/checkpoint write is treated as a crash before commit.
+        if (fault is StagePersistenceException) return new(TerminalKind.Halt, "host-failure");
+        if (ownershipLost || fault is ExecutionFenceException)
+            return new(TerminalKind.None, "ownership-lost");
         if (stopping.IsCancellationRequested)
             return new(TerminalKind.Interrupt, "application-shutdown");
         if (deadlineExpired) return new(TerminalKind.Interrupt, "attempt-deadline");
+        if (fault is CheckpointRejectedException)
+            return new(TerminalKind.Interrupt, "checkpoint-rejected");
         if (fault is not null || outcome is null)
             return TerminalDecision.Fail("host-execution-failure", "host-failure");
 
@@ -274,6 +282,10 @@ public sealed class InvestigationWorker(WorkspaceStore store,
         };
         if (outcome.Progress.Status == GateCRunStatus.Cancelled)
             return TerminalDecision.Fail("host-execution-failure", cause);
+        // Transient role failures leave the RUN recoverable (no report); accepted
+        // checkpoints stay reusable by an explicit continuation.
+        if (cause is "role-timeout" or "provider-error")
+            return new(TerminalKind.Interrupt, cause);
         return new(TerminalKind.Report, cause, report);
     }
 }

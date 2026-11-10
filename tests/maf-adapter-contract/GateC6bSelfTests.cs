@@ -29,17 +29,18 @@ internal static class GateC6bSelfTests
         await ScenarioAsync("attempt deadline is recorded distinctly", WorkerDeadline);
         await ScenarioAsync("failed terminal write is never retried as another outcome", WorkerTerminalWriteFailure);
         ClassificationIsHostObserved();
-        Console.WriteLine("GREEN: C6b Phase 1-2 schema v6, OS lock, fenced epochs, cross-process ownership, reconciliation-after-ownership, stale-write rejection, managed worker lifecycle and fault injection.");
+        await GateC6bCheckpointSelfTests.RunAsync();
+        Console.WriteLine("GREEN: C6b Phases 1-3 schema v6, OS lock, fenced epochs, cross-process ownership, reconciliation-after-ownership, stale-write rejection, managed worker lifecycle, fault injection, role checkpoints and explicit fail-closed continuation.");
     }
 
     // ---------------------------------------------------------------- helpers
 
-    private sealed record Fixture(string Directory, WorkspaceStore Store, GateCScope Scope);
+    internal sealed record Fixture(string Directory, WorkspaceStore Store, GateCScope Scope);
 
     private static void Scenario(string name, Action<Fixture> body) =>
         ScenarioAsync(name, f => { body(f); return Task.CompletedTask; }).GetAwaiter().GetResult();
 
-    private static async Task ScenarioAsync(string name, Func<Fixture, Task> body)
+    internal static async Task ScenarioAsync(string name, Func<Fixture, Task> body)
     {
         var original = Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR");
         var dir = Path.Combine(Path.GetTempPath(), "CodeArcheologist-C6b-" + Guid.NewGuid().ToString("N"));
@@ -77,7 +78,7 @@ internal static class GateC6bSelfTests
         return db;
     }
 
-    private static long Scalar(WorkspaceStore store, string sql, params (string, object)[] args)
+    internal static long Scalar(WorkspaceStore store, string sql, params (string, object)[] args)
     {
         using var db = Raw(store);
         using var cmd = db.CreateCommand();
@@ -86,7 +87,7 @@ internal static class GateC6bSelfTests
         return Convert.ToInt64(cmd.ExecuteScalar());
     }
 
-    private static void Exec(WorkspaceStore store, string sql, params (string, object)[] args)
+    internal static void Exec(WorkspaceStore store, string sql, params (string, object)[] args)
     {
         using var db = Raw(store);
         using var cmd = db.CreateCommand();
@@ -95,14 +96,14 @@ internal static class GateC6bSelfTests
         cmd.ExecuteNonQuery();
     }
 
-    private static void ExpectSqliteAbort(WorkspaceStore store, string sql)
+    internal static void ExpectSqliteAbort(WorkspaceStore store, string sql)
     {
         try { Exec(store, sql); }
         catch (SqliteException) { return; }
         throw new InvalidOperationException("Expected SQLite to abort: " + sql);
     }
 
-    private static void Expect(bool condition, string message)
+    internal static void Expect(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }
@@ -115,7 +116,7 @@ internal static class GateC6bSelfTests
     }
 
     /// <summary>Trusted metadata only; inserts a fixture snapshot row.</summary>
-    private static GateCScope SeedSnapshot(WorkspaceStore store)
+    internal static GateCScope SeedSnapshot(WorkspaceStore store)
     {
         var workspace = store.Create("C6b test", Guid.NewGuid()).Workspace;
         var repositoryId = Guid.NewGuid();
@@ -182,21 +183,22 @@ internal static class GateC6bSelfTests
         CancellationToken, Task<GateC4RunOutcome>> body) : IInvestigationExecutor
     {
         public int Calls;
-        public Task<GateC4RunOutcome> ExecuteAsync(SnapshotRecord snapshot, GateCScope scope,
-            Guid runId, CancellationToken ct)
+        public Task<GateC4RunOutcome> ExecuteAsync(InvestigationExecutionContext context,
+            CancellationToken ct)
         {
             Interlocked.Increment(ref Calls);
-            return body(snapshot, scope, runId, ct);
+            return body(context.Snapshot, context.Run.Scope, context.Run.RunId, ct);
         }
     }
 
-    private sealed record Host(ExecutionOwnershipState Ownership, InvestigationWorker Worker,
-        InvestigationAdmissionService Admission, FixtureExecutor Executor) : IDisposable
+    internal sealed record Host(ExecutionOwnershipState Ownership, InvestigationWorker Worker,
+        InvestigationAdmissionService Admission, IInvestigationExecutor Executor,
+        InvestigationWorkSignal Signal) : IDisposable
     {
         public void Dispose() => Ownership.Dispose();
     }
 
-    private static Host StartHost(WorkspaceStore store, FixtureExecutor executor,
+    internal static Host StartHost(WorkspaceStore store, IInvestigationExecutor executor,
         InvestigationWorkerOptions? options = null, bool acquire = true)
     {
         store.Initialize();
@@ -208,10 +210,10 @@ internal static class GateC6bSelfTests
             options ?? new InvestigationWorkerOptions(TimeSpan.FromMinutes(6),
                 TimeSpan.FromMilliseconds(100)),
             NullLogger<InvestigationWorker>.Instance);
-        return new(ownership, worker, new InvestigationAdmissionService(store, ownership, signal), executor);
+        return new(ownership, worker, new InvestigationAdmissionService(store, ownership, signal), executor, signal);
     }
 
-    private static async Task Until(Func<bool> condition, string what, int timeoutMs = 10000)
+    internal static async Task Until(Func<bool> condition, string what, int timeoutMs = 10000)
     {
         var watch = Stopwatch.StartNew();
         while (!condition())
@@ -222,7 +224,7 @@ internal static class GateC6bSelfTests
         }
     }
 
-    private static long SlotHeld(WorkspaceStore store) => Scalar(store,
+    internal static long SlotHeld(WorkspaceStore store) => Scalar(store,
         "SELECT COUNT(*) FROM investigation_execution_slot WHERE active_attempt_id IS NOT NULL;");
 
     // -------------------------------------------------------------- migration

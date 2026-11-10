@@ -18,7 +18,8 @@ public sealed partial class WorkspaceStore
         'completed','user-cancelled','attempt-deadline','role-timeout',
         'application-shutdown','process-interrupted','provider-error',
         'validation-rejected','evidence-rejected','ownership-lost',
-        'report-validation-failed','host-failure','legacy-c6a-restart'
+        'report-validation-failed','host-failure','legacy-c6a-restart',
+        'checkpoint-rejected'
         """;
 
     internal const string EventTypes = """

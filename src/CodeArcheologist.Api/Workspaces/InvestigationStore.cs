@@ -216,15 +216,22 @@ public sealed partial class WorkspaceStore
     }
 
     /// <summary>
-    /// Attempt ended without a terminal run outcome (shutdown, deadline):
-    /// the run becomes 'interrupted' and is never resumed automatically.
+    /// The attempt ended but the RUN did not reach a terminal outcome: it
+    /// becomes 'interrupted' (no report) and may later be continued only by an
+    /// explicit user action. Accepted checkpoints are untouched. The attempt's
+    /// own status is derived from the host-observed cause.
     /// </summary>
     public void InterruptAttempt(ExecutionFence fence, Guid attemptId, Guid runId,
         string terminalCause)
     {
-        if (terminalCause is not ("application-shutdown" or "attempt-deadline" or
-            "ownership-lost"))
-            throw new ArgumentException("Unsupported interruption cause.", nameof(terminalCause));
+        var attemptStatus = terminalCause switch
+        {
+            "application-shutdown" or "attempt-deadline" or "ownership-lost" => "interrupted",
+            "role-timeout" => "incomplete",
+            "provider-error" => "failed",
+            "checkpoint-rejected" => "rejected",
+            _ => throw new ArgumentException("Unsupported interruption cause.", nameof(terminalCause))
+        };
         using var connection = Open();
         using var tx = connection.BeginTransaction(deferred: false);
         // Fence first: a stale owner learns nothing about current record state.
@@ -240,8 +247,8 @@ public sealed partial class WorkspaceStore
             if (update.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("Interruption record scope or state mismatch.");
         }
-        FinalizeAttempt(connection, tx, fence, attemptId, "interrupted",
-            "host-attempt-interrupted", terminalCause);
+        FinalizeAttempt(connection, tx, fence, attemptId, attemptStatus,
+            "host-attempt-ended-run-recoverable", terminalCause);
         tx.Commit();
     }
 

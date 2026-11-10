@@ -34,7 +34,12 @@ builder.Services.AddSingleton<GateC4ReconciliationRunner>();
 builder.Services.AddSingleton<ExecutionOwnershipState>();
 builder.Services.AddSingleton<InvestigationWorkSignal>();
 builder.Services.AddSingleton(InvestigationWorkerOptions.Default);
-builder.Services.AddSingleton<IInvestigationExecutor, MafInvestigationExecutor>();
+builder.Services.AddSingleton<IGateCEvidenceSessionFactory>(services =>
+    services.GetRequiredService<GateCEvidenceDiscovery>());
+builder.Services.AddSingleton<IGateCRoleStageRunner, MafRoleStageRunner>();
+builder.Services.AddSingleton<GateC6CheckpointRevalidator>();
+builder.Services.AddSingleton<IInvestigationExecutor, GateC6StageCoordinator>();
+builder.Services.AddSingleton<InvestigationContinuationService>();
 builder.Services.AddSingleton<InvestigationAdmissionService>();
 builder.Services.AddSingleton<InvestigationWorker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<InvestigationWorker>());
@@ -169,6 +174,36 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     if (store.GetInvestigation(workspaceId, repositoryId, snapshotId, runId) is null)
         return Results.NotFound();
     return Results.Ok(store.ListEvents(workspaceId, repositoryId, snapshotId, runId));
+}).RequireAuthorization();
+
+// C6b: explicit, authenticated, CSRF-protected (LocalRequestGuard) and
+// idempotent continuation. Requires the expected latest attempt number
+// (optimistic concurrency). Revalidates the snapshot and every accepted
+// checkpoint before admitting a new attempt; never runs a model in-request.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/continue",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     GateC6ContinueRequest request, HttpContext context,
+     InvestigationContinuationService continuations) =>
+{
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var idempotencyKey) || idempotencyKey == Guid.Empty)
+        return Results.BadRequest(new { error = "A nonempty UUID Idempotency-Key is required." });
+    if (request.ExpectedAttemptNumber is not int expected || expected < 1)
+        return Results.BadRequest(new { error = "expectedAttemptNumber is required." });
+    var result = continuations.Continue(workspaceId, repositoryId, snapshotId, runId,
+        idempotencyKey, expected, context.RequestAborted);
+    var body = new { diagnostic = result.Diagnostic, attempt = result.Attempt };
+    return result.Outcome switch
+    {
+        ContinuationOutcome.Admitted => Results.Accepted(
+            $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{runId:D}",
+            body),
+        ContinuationOutcome.Replayed => Results.Ok(body),
+        ContinuationOutcome.NotFound => Results.NotFound(),
+        ContinuationOutcome.CheckpointRejected => Results.Json(body, statusCode: 422),
+        ContinuationOutcome.ExecutionUnavailable => Results.Json(body, statusCode: 503),
+        _ => Results.Conflict(body)
+    };
 }).RequireAuthorization();
 
 app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations",
@@ -624,4 +659,5 @@ app.Run();
 public sealed record LoginRequest(string? Code);
 public sealed record GateBInvestigationRequest(string? EntryPointId);
 public sealed record GateC5CreateRequest(string? EntryPointId);
+public sealed record GateC6ContinueRequest(int? ExpectedAttemptNumber);
 public partial class Program { }

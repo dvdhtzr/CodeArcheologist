@@ -269,7 +269,7 @@ public sealed partial class WorkspaceStore
 
     /// <summary>Fenced stage-level host event for an active attempt.</summary>
     public void AppendStageEvent(ExecutionFence fence, Guid attemptId,
-        string eventType, string stage, string diagnostic)
+        string eventType, string? stage, string diagnostic)
     {
         if (eventType is not ("role-started" or "role-assessment-accepted" or
             "role-assessment-rejected" or "role-failed" or "role-timed-out" or
