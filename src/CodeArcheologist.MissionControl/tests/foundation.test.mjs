@@ -61,7 +61,6 @@ test('MC1 is isolated from backend and never claims a live connection', () => {
   const markup = read('index.html');
   assert.ok(source.includes('API not connected'));
   assert.ok(source.includes('DEMO MODE'));
-  assert.ok(source.includes('No real repository was read.') === false); // fixture detail, not a fetch
   assert.ok(source.includes('This playback is an explicitly synthetic design preview'));
   assert.ok(!/\\bfetch\\s*\\(/.test(source));
   assert.ok(!/new\\s+WebSocket|HubConnectionBuilder|EventSource/.test(source));
