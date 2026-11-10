@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { AgentAvatar } from './AgentAvatar';
 import {
-  AGENTS, ROLES, SCENES, SCENE_CAPTIONS, DemoScene, InspectorTab,
+  AGENTS, ROLES, SCENE_CAPTIONS, DemoScene, InspectorTab,
   RoleId, StageState, nextScene, sceneIndex, stageFor, visibleEvents,
 } from './demo';
 
@@ -14,7 +15,7 @@ const accents: Record<RoleId, string> = {
 };
 
 function Symbol({ name, size = 18 }: { name: 'orb' | 'layers' | 'pulse' | 'book' | 'arrow' | 'chevron' | 'play' | 'pause' | 'reset' | 'shield'; size?: number }) {
-  const paths: Record<string, React.ReactNode> = {
+  const paths: Record<string, ReactNode> = {
     orb: <><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4 M12 19v4 M1 12h4 M19 12h4"/></>,
     layers: <><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5 M3 16l9 5 9-5"/></>,
     pulse: <><path d="M2 12h4l3-7 5 14 3-7h5"/></>,
@@ -40,7 +41,7 @@ function AgentNode({ role, state, selected, onClick }: {
   return (
     <button type="button"
       className={`agent-node agent-node--${role}${selected ? ' agent-node--selected' : ''}`}
-      data-state={state} style={{ '--agent-accent': accents[role] } as React.CSSProperties}
+      data-state={state} style={{ '--agent-accent': accents[role] } as CSSProperties}
       aria-pressed={selected} onClick={onClick}
       aria-label={`${agent.name}; ${stateNames[state]}. Show agent details.`}>
       <span className="agent-avatar-wrap">
@@ -63,7 +64,7 @@ function CommunicationLines({ scene }: { scene: DemoScene }) {
     return state === 'active' ? 'is-flowing' : state === 'accepted' ? 'is-accepted' : '';
   }
   return (
-    <svg className="connection-map" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet"
+    <svg className="connection-map" viewBox="0 0 960 600" preserveAspectRatio="none"
       aria-hidden="true">
       <defs>
         <linearGradient id="mc-cyan" x1="0" y1="0" x2="1" y2="1">
@@ -122,7 +123,7 @@ function AgentInspector({ scene, selected, tab, onTab }: {
   const agentEvents = visibleEvents(scene).filter(e => e.actor === selected);
   return (
     <section className="inspector" aria-labelledby="inspector-title"
-      style={{ '--agent-accent': accents[selected] } as React.CSSProperties}>
+      style={{ '--agent-accent': accents[selected] } as CSSProperties}>
       <div className="panel-heading">
         <div><span className="eyebrow">AGENT SPOTLIGHT</span><h3 id="inspector-title">Character dossier</h3></div>
         <span className="panel-icon"><Symbol name="orb" size={17}/></span>
