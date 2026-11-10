@@ -44,6 +44,22 @@ public sealed class InvestigationWorker(WorkspaceStore store,
 {
     private volatile InvestigationWorkerState _state = InvestigationWorkerState.Idle;
     private int _executions;
+    private readonly object _currentGate = new();
+    private (Guid AttemptId, CancellationTokenSource UserCancel)? _current;
+
+    /// <summary>
+    /// Notification half of cancellation: signal the in-flight attempt. The
+    /// durable intent is already committed by the caller; the heartbeat also
+    /// re-reads it, so a lost notification cannot lose the intent. This never
+    /// writes a terminal state or releases the slot.
+    /// </summary>
+    public void NotifyCancellation(Guid attemptId)
+    {
+        lock (_currentGate)
+            if (_current is { } current && current.AttemptId == attemptId)
+                current.UserCancel.Cancel();
+        signal.Notify(); // a queued attempt is finalized at the claim boundary
+    }
 
     public InvestigationWorkerState State => _state;
 
@@ -115,7 +131,14 @@ public sealed class InvestigationWorker(WorkspaceStore store,
         using var timer = new PeriodicTimer(options.HeartbeatInterval);
         while (await timer.WaitForNextTickAsync(stopOrLost))
         {
-            try { store.Heartbeat(fence); }
+            try
+            {
+                store.Heartbeat(fence);
+                Guid? active;
+                lock (_currentGate) active = _current?.AttemptId;
+                if (active is Guid id && store.IsCancellationRequested(id))
+                    NotifyCancellation(id);
+            }
             catch (ExecutionFenceException error)
             {
                 LoseOwnership(error.Diagnostic, ownershipLost);
@@ -144,8 +167,28 @@ public sealed class InvestigationWorker(WorkspaceStore store,
         using var deadline = new CancellationTokenSource();
         var remaining = claim.DeadlineAtUtc - DateTimeOffset.UtcNow;
         deadline.CancelAfter(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
+        using var userCancel = new CancellationTokenSource();
         using var attemptToken = CancellationTokenSource.CreateLinkedTokenSource(
-            stoppingToken, ownershipLost.Token, deadline.Token);
+            stoppingToken, ownershipLost.Token, deadline.Token, userCancel.Token);
+        lock (_currentGate) _current = (attemptId, userCancel);
+        try
+        {
+            await RunClaimedAsync(fence, claim, stoppingToken, ownershipLost, deadline,
+                userCancel, attemptToken.Token);
+        }
+        finally
+        {
+            lock (_currentGate) _current = null;
+        }
+    }
+
+    private async Task RunClaimedAsync(ExecutionFence fence, ClaimedAttempt claim,
+        CancellationToken stoppingToken, CancellationTokenSource ownershipLost,
+        CancellationTokenSource deadline, CancellationTokenSource userCancel,
+        CancellationToken attemptToken)
+    {
+        var run = claim.Run;
+        var attemptId = claim.Attempt.AttemptId;
 
         TerminalDecision decision;
         var snapshot = store.GetSnapshot(run.Scope.WorkspaceId,
@@ -165,7 +208,7 @@ public sealed class InvestigationWorker(WorkspaceStore store,
                 // cancellation was requested: the slot is not released while it runs.
                 outcome = await executor.ExecuteAsync(
                     new InvestigationExecutionContext(snapshot, run, claim.Attempt, fence),
-                    attemptToken.Token);
+                    attemptToken);
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
@@ -173,8 +216,13 @@ public sealed class InvestigationWorker(WorkspaceStore store,
                 if (error is ExecutionFenceException lost)
                     LoseOwnership(lost.Diagnostic, ownershipLost);
             }
+            // Durable intent is re-read: cancellation counts even if the
+            // in-memory notification never arrived.
+            var userCancelled = userCancel.IsCancellationRequested ||
+                SafeCancellationRead(attemptId);
             decision = Classify(outcome, fault, run, stoppingToken,
-                ownershipLost.IsCancellationRequested, deadline.IsCancellationRequested);
+                ownershipLost.IsCancellationRequested, deadline.IsCancellationRequested,
+                userCancelled);
         }
 
         if (decision.Kind == TerminalKind.Halt)
@@ -240,14 +288,22 @@ public sealed class InvestigationWorker(WorkspaceStore store,
     /// over what the (cancellation-aware) runner reported, so a shutdown or
     /// deadline is never mislabelled as user cancellation.
     /// </summary>
+    private bool SafeCancellationRead(Guid attemptId)
+    {
+        try { return store.IsCancellationRequested(attemptId); }
+        catch (Exception error) when (error is not OutOfMemoryException) { return false; }
+    }
+
     internal static TerminalDecision Classify(GateC4RunOutcome? outcome, Exception? fault,
         InvestigationSummary run, CancellationToken stopping, bool ownershipLost,
-        bool deadlineExpired)
+        bool deadlineExpired, bool userCancelled = false)
     {
         // A failed stage/checkpoint write is treated as a crash before commit.
         if (fault is StagePersistenceException) return new(TerminalKind.Halt, "host-failure");
         if (ownershipLost || fault is ExecutionFenceException)
             return new(TerminalKind.None, "ownership-lost");
+        // Explicit, durable user intent outranks coincident shutdown/deadline.
+        if (userCancelled) return TerminalDecision.Fail("host-cancelled", "user-cancelled");
         if (stopping.IsCancellationRequested)
             return new(TerminalKind.Interrupt, "application-shutdown");
         if (deadlineExpired) return new(TerminalKind.Interrupt, "attempt-deadline");

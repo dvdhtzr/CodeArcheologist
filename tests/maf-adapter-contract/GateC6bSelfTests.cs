@@ -30,7 +30,7 @@ internal static class GateC6bSelfTests
         await ScenarioAsync("failed terminal write is never retried as another outcome", WorkerTerminalWriteFailure);
         ClassificationIsHostObserved();
         await GateC6bCheckpointSelfTests.RunAsync();
-        Console.WriteLine("GREEN: C6b Phases 1-3 schema v6, OS lock, fenced epochs, cross-process ownership, reconciliation-after-ownership, stale-write rejection, managed worker lifecycle, fault injection, role checkpoints and explicit fail-closed continuation.");
+        Console.WriteLine("GREEN: C6b Phases 1-4 schema v6, OS lock, fenced epochs, cross-process ownership, reconciliation-after-ownership, stale-write rejection, managed worker lifecycle, fault injection, role checkpoints, explicit fail-closed continuation, durable cancellation and execution projection.");
     }
 
     // ---------------------------------------------------------------- helpers

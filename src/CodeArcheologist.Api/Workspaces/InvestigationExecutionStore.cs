@@ -242,19 +242,30 @@ public sealed partial class WorkspaceStore
         using var tx = db.BeginTransaction(deferred: false);
         RequireOwner(db, tx, fence);
         Guid attemptId;
-        using (var find = Command(db, tx, """
-            SELECT a.attempt_id FROM investigation_attempts a
-            JOIN investigation_execution_slot s ON s.active_attempt_id = a.attempt_id
-            WHERE a.status='queued' AND a.execution_owner_id=$owner
-              AND a.ownership_epoch=$epoch AND a.contract_version=$version
-            ORDER BY a.created_at_unix_ms LIMIT 1;
-            """))
+        while (true)
         {
-            find.Parameters.AddWithValue("$owner", fence.OwnerId.ToString("D"));
-            find.Parameters.AddWithValue("$epoch", fence.Epoch);
-            find.Parameters.AddWithValue("$version", GateC6ExecutionContract.AttemptVersion);
-            if (find.ExecuteScalar() is not string id) return null;
-            attemptId = Guid.Parse(id);
+            using (var find = Command(db, tx, """
+                SELECT a.attempt_id FROM investigation_attempts a
+                JOIN investigation_execution_slot s ON s.active_attempt_id = a.attempt_id
+                WHERE a.status='queued' AND a.execution_owner_id=$owner
+                  AND a.ownership_epoch=$epoch AND a.contract_version=$version
+                ORDER BY a.created_at_unix_ms LIMIT 1;
+                """))
+            {
+                find.Parameters.AddWithValue("$owner", fence.OwnerId.ToString("D"));
+                find.Parameters.AddWithValue("$epoch", fence.Epoch);
+                find.Parameters.AddWithValue("$version", GateC6ExecutionContract.AttemptVersion);
+                if (find.ExecuteScalar() is not string id)
+                {
+                    tx.Commit(); // persists any claim-boundary cancellations
+                    return null;
+                }
+                attemptId = Guid.Parse(id);
+            }
+            var queued = LoadAttempt(db, tx, attemptId)!;
+            if (queued.CancelRequestedAtUtc is null) break;
+            // Cancelled before any model work began: a safe terminal boundary.
+            CancelQueuedAttempt(db, tx, fence, queued);
         }
         var deadlineAt = DateTimeOffset.UtcNow + deadline;
         TransitionAttempt(db, tx, attemptId, "queued", "running",

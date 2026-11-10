@@ -18,13 +18,14 @@ internal static class GateC6bCheckpointSelfTests
         await ScenarioAsync("role timeout leaves run recoverable; continuation completes", RoleTimeoutRecoverable);
         await ScenarioAsync("three valid checkpoints complete the report without a model call", ModelFreeCompletion);
         await ScenarioAsync("continuation conflicts, busy, stale and stage-dependency guards", ContinuationGuards);
+        await GateC6bControlSelfTests.RunAsync();
         foreach (var (name, tamper, diagnostic) in TamperCases())
             await ScenarioAsync("fail closed: " + name, f => TamperedCheckpointRejected(f, tamper, diagnostic));
     }
 
     // ---------------------------------------------------------------- fixtures
 
-    private sealed class Evidence : IGateCEvidenceSessionFactory
+    internal sealed class Evidence : IGateCEvidenceSessionFactory
     {
         public string Analyzer = "graph-v8";
         public bool SnapshotChanged;
@@ -54,9 +55,9 @@ internal static class GateC6bCheckpointSelfTests
         }
     }
 
-    private enum Mode { Succeed, Forge, TimeOut, Block }
+    internal enum Mode { Succeed, Forge, TimeOut, Block, BlockIgnoringCancel }
 
-    private sealed class Roles : IGateCRoleStageRunner
+    internal sealed class Roles : IGateCRoleStageRunner
     {
         public Mode Investigator = Mode.Succeed, Skeptic = Mode.Succeed, Reviewer = Mode.Succeed;
         public int InvestigatorCalls, SkepticCalls, ReviewerCalls;
@@ -81,7 +82,16 @@ internal static class GateC6bCheckpointSelfTests
             if (mode == Mode.Block)
             {
                 Entered.TrySetResult();
-                await Gate.Task.WaitAsync(ct);
+                try { await Gate.Task.WaitAsync(ct); }
+                catch (OperationCanceledException)
+                {
+                    return new(role, GateCRoleStatus.Cancelled, "caller-cancelled", null, null, 0);
+                }
+            }
+            if (mode == Mode.BlockIgnoringCancel)
+            {
+                Entered.TrySetResult();
+                await Gate.Task; // like an uncooperative in-flight provider call
             }
             var view = session.Request(GateCEvidenceRegistry.Relationships, ct).Response!;
             var handle = mode == Mode.Forge ? "E9" : view.Items[0].Handle;
@@ -113,7 +123,7 @@ internal static class GateC6bCheckpointSelfTests
         }
     }
 
-    private sealed class Env(Fixture f) : IDisposable
+    internal sealed class Env(Fixture f) : IDisposable
     {
         public readonly WorkspaceStore Store = f.Store;
         public readonly Evidence Evidence = new();
@@ -121,14 +131,28 @@ internal static class GateC6bCheckpointSelfTests
         public GateCScope Scope = default!;
         public Host Host = default!;
         public InvestigationContinuationService Continuations = default!;
+        public InvestigationCancellationService Cancellations = default!;
+        public InvestigationExecutionProjectionService Projections = default!;
 
         public async Task StartAsync()
         {
             var revalidator = new GateC6CheckpointRevalidator(Evidence);
             Host = StartHost(Store, new GateC6StageCoordinator(Store, Evidence, Roles, revalidator));
             Continuations = new(Store, Host.Ownership, revalidator, Host.Signal);
-            await Host.Worker.StartAsync(CancellationToken.None);
+            Cancellations = new(Store, Host.Ownership, Host.Worker);
+            Projections = new(Store, Host.Ownership, Continuations);
+            if (StartWorker) await Host.Worker.StartAsync(CancellationToken.None);
         }
+
+        public bool StartWorker = true;
+
+        public CancellationResult Cancel(Guid run, int expected, Guid? key = null) =>
+            Cancellations.Cancel(Scope.WorkspaceId, Scope.RepositoryId, Scope.SnapshotId, run,
+                key ?? Guid.NewGuid(), expected);
+
+        public ExecutionProjection Project(Guid run) =>
+            Projections.Project(Scope.WorkspaceId, Scope.RepositoryId, Scope.SnapshotId, run,
+                CancellationToken.None)!;
 
         /// <summary>Explicit restart: stop worker, release the lock, start a new owner.</summary>
         public async Task RestartAsync()
@@ -150,6 +174,9 @@ internal static class GateC6bCheckpointSelfTests
 
         public void Dispose() => Host?.Dispose();
     }
+
+    internal static Task<(Env Env, Guid Run)> Begin(Fixture f) => BeginAsync(f);
+    internal static Task WaitTerminal(Env env, Guid run) => Terminal(env, run);
 
     private static async Task<(Env Env, Guid Run)> BeginAsync(Fixture f)
     {

@@ -40,6 +40,8 @@ builder.Services.AddSingleton<IGateCRoleStageRunner, MafRoleStageRunner>();
 builder.Services.AddSingleton<GateC6CheckpointRevalidator>();
 builder.Services.AddSingleton<IInvestigationExecutor, GateC6StageCoordinator>();
 builder.Services.AddSingleton<InvestigationContinuationService>();
+builder.Services.AddSingleton<InvestigationCancellationService>();
+builder.Services.AddSingleton<InvestigationExecutionProjectionService>();
 builder.Services.AddSingleton<InvestigationAdmissionService>();
 builder.Services.AddSingleton<InvestigationWorker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<InvestigationWorker>());
@@ -174,6 +176,44 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     if (store.GetInvestigation(workspaceId, repositoryId, snapshotId, runId) is null)
         return Results.NotFound();
     return Results.Ok(store.ListEvents(workspaceId, repositoryId, snapshotId, runId));
+}).RequireAuthorization();
+
+// C6b: versioned, read-only, scoped execution projection (attempts, host-observed
+// stages, checkpoint indicators, recovery eligibility, safe diagnostics).
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/execution",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     InvestigationExecutionProjectionService projections, CancellationToken cancellationToken) =>
+{
+    var projection = projections.Project(workspaceId, repositoryId, snapshotId, runId, cancellationToken);
+    return projection is null ? Results.NotFound() : Results.Ok(projection);
+}).RequireAuthorization();
+
+// C6b: records durable cancellation INTENT (authenticated, CSRF-guarded,
+// idempotent, optimistic on expectedAttemptNumber). The worker commits the
+// terminal cancellation only after the in-flight model call returns.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/cancel",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     GateC6ContinueRequest request, HttpContext context,
+     InvestigationCancellationService cancellations) =>
+{
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var idempotencyKey) || idempotencyKey == Guid.Empty)
+        return Results.BadRequest(new { error = "A nonempty UUID Idempotency-Key is required." });
+    if (request.ExpectedAttemptNumber is not int expected || expected < 1)
+        return Results.BadRequest(new { error = "expectedAttemptNumber is required." });
+    var result = cancellations.Cancel(workspaceId, repositoryId, snapshotId, runId,
+        idempotencyKey, expected);
+    var body = new { diagnostic = result.Diagnostic, attempt = result.Attempt };
+    return result.Outcome switch
+    {
+        CancellationOutcome.Requested => Results.Accepted(
+            $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{runId:D}/execution",
+            body),
+        CancellationOutcome.Replayed => Results.Ok(body),
+        CancellationOutcome.NotFound => Results.NotFound(),
+        CancellationOutcome.ExecutionUnavailable => Results.Json(body, statusCode: 503),
+        _ => Results.Conflict(body)
+    };
 }).RequireAuthorization();
 
 // C6b: explicit, authenticated, CSRF-protected (LocalRequestGuard) and

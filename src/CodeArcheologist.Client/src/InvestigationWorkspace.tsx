@@ -67,6 +67,32 @@ type EvidencePackage = {
   contractVersion: string; snapshotId: string; fingerprintSha256: string;
   entryPointId: string; references: EvidenceItem[]; relations: EvidenceItem[];
 };
+type ExecutionCheckpoint = {
+  checkpointId: string; contentSha256: string; acceptedAtUtc: string;
+  acceptedInAttemptNumber: number; reusedByCurrentAttempt: boolean;
+};
+type ExecutionStage = { role: string; status: string; checkpoint: ExecutionCheckpoint | null };
+type ExecutionAttempt = {
+  attemptId: string; number: number; status: string; terminalCause: string | null;
+  diagnostic: string; contractVersion: string; continuesAttemptId: string | null;
+  ownershipEpoch: number | null; deadlineAtUtc: string | null;
+  cancelRequestedAtUtc: string | null; legacy: boolean;
+};
+type Execution = {
+  projectionVersion: string; runId: string; runStatus: string; runDiagnostic: string;
+  legacy: boolean; currentAttempt: ExecutionAttempt | null; attempts: ExecutionAttempt[];
+  stages: ExecutionStage[];
+  recovery: { eligible: boolean; diagnostic: string; expectedAttemptNumber: number | null };
+  cancellable: boolean; executionOwner: boolean; ownershipDiagnostic: string; note: string;
+};
+const executionProjectionVersion = 'gate-c6b-execution-projection-v1';
+const stageLabels: Record<string, string> = {
+  'not-started': 'Not started', running: 'Running (host-observed)', accepted: 'Checkpoint accepted',
+  'accepted-earlier': 'Checkpoint from an earlier attempt', 'reused-checkpoint': 'Revalidated checkpoint reused',
+  rejected: 'Rejected by host validation', 'timed-out': 'Timed out', failed: 'Provider/adapter failure',
+  cancelled: 'Cancelled', abandoned: 'Abandoned (attempt ended)', 'legacy-unavailable': 'Not recorded (legacy run)',
+};
+
 type Verification = { state: 'verified'; match: EvidenceItem }
   | { state: 'unavailable'; reason: string };
 
@@ -86,6 +112,56 @@ async function requireOk(response: Response, fallback: string) {
   }
 }
 function isTerminal(status: string) { return status !== 'running'; }
+
+function ExecutionPanel({ execution, busy, onCancel, onContinue }: {
+  execution: Execution; busy: boolean; onCancel: () => void; onContinue: () => void;
+}) {
+  const current = execution.currentAttempt;
+  const accepted = execution.stages.filter(stage => stage.checkpoint).length;
+  return (
+    <section className="investigation-role investigation-execution" aria-label="Execution and recovery">
+      <h5>Execution <small>{execution.projectionVersion}</small></h5>
+      {execution.legacy
+        ? <p className="workspace-note">Legacy run recorded before C6b. Its history is preserved but it is not resumable.</p>
+        : current && (
+          <p>Attempt {current.number}: <strong>{current.status}</strong>
+            {current.terminalCause && <> · cause <code>{current.terminalCause}</code></>}
+            {current.cancelRequestedAtUtc && <> · cancellation requested {when(current.cancelRequestedAtUtc)}, waiting for the active call to stop</>}
+          </p>)}
+      <ol className="investigation-timeline">
+        {execution.stages.map(stage => (
+          <li key={stage.role}><strong>{stage.role}</strong>
+            <span>{stageLabels[stage.status] ?? stage.status}</span>
+            {stage.checkpoint && (
+              <small title={stage.checkpoint.contentSha256}>
+                Checkpoint SHA-256 {shortId(stage.checkpoint.contentSha256)} · attempt {stage.checkpoint.acceptedInAttemptNumber}
+              </small>)}
+          </li>
+        ))}
+      </ol>
+      <p role="status">
+        {execution.recovery.eligible
+          ? (accepted === 0
+            ? 'Eligible for explicit continuation: no accepted checkpoints yet, so every stage will run.'
+            : 'Eligible for explicit continuation: ' + accepted + ' accepted checkpoint(s) revalidated against the original snapshot; only unfinished stages will run.')
+          : 'Not eligible for continuation: ' + execution.recovery.diagnostic}
+      </p>
+      {!execution.executionOwner && <p role="alert">This process does not own investigation execution ({execution.ownershipDiagnostic}).</p>}
+      <div className="investigation-start">
+        {execution.cancellable && <button type="button" disabled={busy} onClick={onCancel}>Request cancellation</button>}
+        {execution.recovery.eligible && <button type="button" disabled={busy} onClick={onContinue}>Continue investigation (runs only unfinished stages)</button>}
+      </div>
+      {execution.attempts.length > 1 && (
+        <details><summary>Attempt history ({execution.attempts.length})</summary>
+          <ul>{execution.attempts.map(a => (
+            <li key={a.attemptId}>#{a.number} {a.status}{a.terminalCause ? ' · ' + a.terminalCause : ''}
+              {a.continuesAttemptId ? ' · continues #' + (execution.attempts.find(x => x.attemptId === a.continuesAttemptId)?.number ?? '?') : ''}</li>
+          ))}</ul>
+        </details>)}
+      <p className="workspace-note">{execution.note} Restart never resumes work automatically.</p>
+    </section>
+  );
+}
 
 function EvidenceReferences({ handles, role, links, verified, onVerify, onInspect }: {
   handles: string[]; role: number; links: EvidenceLink[];
@@ -146,13 +222,15 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
   const [notice, setNotice] = useState('');
   const [verification, setVerification] = useState<Record<string, Verification>>({});
   const [verifying, setVerifying] = useState('');
+  const [execution, setExecution] = useState<Execution | null>(null);
+  const actionKey = useRef<{ scope: string; key: string } | null>(null);
   const key = useRef<string | null>(null);
   const lastEntry = useRef('');
   const activeRun = detail?.summary.status === 'running' ? detail.summary.runId : null;
 
   useEffect(() => {
     const controller = new AbortController();
-    setError(''); setDetail(null); setVerification({}); setLoading(true);
+    setError(''); setDetail(null); setExecution(null); setVerification({}); setLoading(true);
     async function load() {
       try {
         const [graphResponse, runsResponse] = await Promise.all([
@@ -214,8 +292,53 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
           value.report.version !== value.summary.reportVersion ||
           value.report.progress.status !== runStates.findIndex(s => s.toLowerCase() === value.summary.status)))
       throw new Error('Investigation report has inconsistent provenance or status.');
-    if (!signal?.aborted) { setDetail(value); setVerification({}); }
+    const executionResponse = await fetch(api + '/' + encodeURIComponent(runId) + '/execution', {
+      credentials: 'same-origin', cache: 'no-store', signal,
+    });
+    await requireOk(executionResponse, 'Unable to load execution state');
+    const projection: Execution = await executionResponse.json();
+    if (projection.runId !== runId || projection.projectionVersion !== executionProjectionVersion)
+      throw new Error('Execution state does not match this investigation.');
+    // The two reads are separate; a transition between them is not an error.
+    // Show only a projection that agrees with the run record; the next poll catches up.
+    const consistent = projection.runStatus === value.summary.status;
+    if (!signal?.aborted) {
+      setDetail(value); setVerification({});
+      setExecution(current => consistent ? projection : (current?.runId === runId ? current : null));
+    }
     return value;
+  }
+
+  // One idempotency key per (action, run, expected attempt): a retry of the
+  // same click replays instead of creating a second continuation/cancellation.
+  async function executionAction(action: 'cancel' | 'continue') {
+    if (!detail || !execution || busy) return;
+    const expected = action === 'continue'
+      ? execution.recovery.expectedAttemptNumber : execution.currentAttempt?.number;
+    if (!expected) return;
+    const scopeKey = action + ':' + detail.summary.runId + ':' + expected;
+    if (actionKey.current?.scope !== scopeKey) actionKey.current = { scope: scopeKey, key: crypto.randomUUID() };
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const response = await fetch(api + '/' + encodeURIComponent(detail.summary.runId) + '/' + action, {
+        method: 'POST', credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json', 'X-CodeArcheologist-Request': '1',
+          'X-CodeArcheologist-Csrf': csrfToken, 'Idempotency-Key': actionKey.current.key,
+        },
+        body: JSON.stringify({ expectedAttemptNumber: expected }),
+      });
+      const result: { diagnostic?: string; error?: string } = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error((action === 'cancel' ? 'Cancellation' : 'Continuation') +
+        ' refused: ' + (result.diagnostic ?? result.error ?? 'HTTP ' + response.status));
+      actionKey.current = null;
+      setNotice(action === 'cancel'
+        ? 'Cancellation intent recorded. The run ends once the active local model call stops.'
+        : 'Continuation queued as a new attempt. Accepted checkpoints are reused; only unfinished stages run.');
+      await openRun(detail.summary.runId);
+      await refreshList();
+    } catch (cause) { setError(message(cause)); }
+    finally { setBusy(false); }
   }
 
   useEffect(() => {
@@ -266,7 +389,7 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
       await openRun(result.runId);
       await refreshList();
       setNotice(response.status === 202
-        ? 'Investigation queued locally. This browser can be closed; restart does not resume unfinished runs.'
+        ? 'Investigation queued locally. This browser can be closed. Restart never resumes work automatically; an interrupted run can be continued explicitly.'
         : 'Reopened an existing idempotent investigation.');
     } catch (cause) { setError(message(cause)); }
     finally { setBusy(false); }
@@ -311,7 +434,7 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
     <section className="investigation-workspace" aria-label="Evidence-linked investigation workspace">
       <header className="investigation-header">
         <div>
-          <span className="investigation-eyebrow">GATE C5 / LOCAL INVESTIGATION</span>
+          <span className="investigation-eyebrow">GATE C6B / LOCAL INVESTIGATION</span>
           <h4>Investigate a captured HTTP candidate</h4>
           <p className="workspace-note">Investigators propose unverified interpretations; the Skeptic challenges them; the Reviewer reconciles objections. No agent establishes runtime truth.</p>
         </div>
@@ -363,7 +486,10 @@ export function InvestigationWorkspace({ endpoint, workspaceId, repositoryId, sn
                       {detail.summary.finishedAtUtc && ' · Finished ' + when(detail.summary.finishedAtUtc)}</small>
                     {detail.summary.status === 'running' && <p role="status">Local agents are working. Status refreshes approximately every 2.5 seconds. This does not imply progress through all three roles.</p>}
                   </div>
-                  {!report && detail.summary.status !== 'running' &&
+                  {execution && <ExecutionPanel execution={execution} busy={busy}
+                    onCancel={() => void executionAction('cancel')}
+                    onContinue={() => void executionAction('continue')} />}
+                  {!report && detail.summary.status !== 'running' && detail.summary.status !== 'interrupted' &&
                     <p role="status">This run ended without a validated report. The ledger preserves its status and diagnostic; no missing assessment is invented.</p>}
                   {report && (
                     <>

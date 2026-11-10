@@ -38,4 +38,6 @@ if ($LASTEXITCODE -ne 0) { throw 'SQLite workspace integration tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Local repository registration integration tests failed.' }
 & node --test (Join-Path $root 'tests/snapshots/capture.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Read-only snapshot integration tests failed.' }
+& node --test (Join-Path $root 'tests/investigations/execution-control.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'C6b execution control HTTP integration tests failed.' }
 Write-Host 'GREEN: Local build, model-free Ollama, Gate B, C1, C5a and C6b (ownership/fencing/worker) contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'

@@ -12,6 +12,10 @@ public enum ContinuationOutcome
 public sealed record ContinuationResult(ContinuationOutcome Outcome, string Diagnostic,
     InvestigationAttempt? Attempt);
 
+/// <summary>Read-only recovery eligibility. Interrupted and eligible are separate facts.</summary>
+public sealed record ContinuationEligibility(bool Eligible, string Diagnostic,
+    int? ExpectedAttemptNumber);
+
 /// <summary>
 /// Explicit, user-authorized continuation (decision D2). The endpoint has
 /// already authenticated the user and checked CSRF and scope. This service:
@@ -24,6 +28,34 @@ public sealed class InvestigationContinuationService(WorkspaceStore store,
     ExecutionOwnershipState ownership, GateC6CheckpointRevalidator revalidator,
     InvestigationWorkSignal signal)
 {
+    /// <summary>
+    /// The same checks as <see cref="Continue"/> without admitting anything.
+    /// Revalidation (which re-reads saved snapshot bytes) runs only for runs
+    /// that are actually interrupted.
+    /// </summary>
+    public ContinuationEligibility Evaluate(InvestigationSummary summary, CancellationToken ct)
+    {
+        var latest = store.GetAttempt(summary.RunId);
+        if (summary.Status == "completed")
+            return new(false, "run-already-completed", null);
+        if (latest is null || latest.ContractVersion != GateC6ExecutionContract.AttemptVersion)
+            return new(false, "legacy-run-not-resumable", null);
+        if (!GateC6AttemptTransitions.IsTerminal(latest.Status))
+            return new(false, "another-execution-active", null);
+        if (summary.Status != "interrupted")
+            return new(false, "run-not-interrupted", null);
+        if (ownership.Fence is null)
+            return new(false, "execution-owner-unavailable", latest.Number);
+        var snapshot = store.GetSnapshot(summary.Scope.WorkspaceId, summary.Scope.RepositoryId,
+            summary.Scope.SnapshotId);
+        if (snapshot is null) return new(false, "snapshot-missing", latest.Number);
+        var revalidated = revalidator.Revalidate(snapshot, summary,
+            store.ListCheckpoints(summary.RunId), store.ListAcceptedCheckpointEventIds(summary.RunId), ct);
+        return revalidated.Accepted
+            ? new(true, "eligible-for-explicit-continuation", latest.Number)
+            : new(false, revalidated.Diagnostic, latest.Number);
+    }
+
     public ContinuationResult Continue(Guid workspaceId, Guid repositoryId, Guid snapshotId,
         Guid runId, Guid idempotencyKey, int expectedAttemptNumber, CancellationToken ct)
     {
