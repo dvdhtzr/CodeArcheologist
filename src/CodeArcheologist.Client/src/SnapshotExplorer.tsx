@@ -4,6 +4,7 @@ import { CSharpTypeLinksView } from './CSharpTypeLinksView';
 import { CSharpProjectsView } from './CSharpProjectsView';
 import { CSharpLinkContextView } from './CSharpLinkContextView';
 import { CSharpEvidenceGraphView } from './CSharpEvidenceGraphView';
+import { InvestigationWorkspace } from './InvestigationWorkspace';
 
 type Snapshot = {
   id: string;
@@ -78,6 +79,8 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
   const [projectsSnapshotId, setProjectsSnapshotId] = useState<string | null>(null);
   const [contextSnapshotId, setContextSnapshotId] = useState<string | null>(null);
   const [graphSnapshotId, setGraphSnapshotId] = useState<string | null>(null);
+  const [investigationSnapshotId, setInvestigationSnapshotId] = useState<string | null>(null);
+  const [graphFocusNodeId, setGraphFocusNodeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -98,6 +101,8 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
       setProjectsSnapshotId(null);
       setContextSnapshotId(null);
       setGraphSnapshotId(null);
+      setInvestigationSnapshotId(null);
+      setGraphFocusNodeId(null);
       try {
         const response = await fetch(endpoint, {
           credentials: 'same-origin',
@@ -320,6 +325,17 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
               >
                 Explore C# evidence graph
               </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setError('');
+                  setInvestigationSnapshotId(snapshot.id);
+                  setGraphFocusNodeId(null);
+                }}
+              >
+                Open AI investigation workspace
+              </button>
             </div>
             <span>
               {new Date(snapshot.capturedAtUtc).toLocaleString()} —
@@ -340,6 +356,22 @@ export function SnapshotExplorer({ workspaceId, repositoryId, csrfToken }: Props
           endpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/csharp-evidence-graph'}
           evidenceToolEndpoint={endpoint + '/' + encodeURIComponent(graphSnapshotId) + '/evidence-tools/entry-point'}
           csrfToken={csrfToken}
+          focusNodeId={graphFocusNodeId}
+        />
+      )}
+      {investigationSnapshotId && (
+        <InvestigationWorkspace
+          key={investigationSnapshotId}
+          endpoint={endpoint + '/' + encodeURIComponent(investigationSnapshotId)}
+          workspaceId={workspaceId}
+          repositoryId={repositoryId}
+          snapshotId={investigationSnapshotId}
+          fingerprintSha256={list?.items.find(item => item.id === investigationSnapshotId)?.fingerprintSha256 ?? ''}
+          csrfToken={csrfToken}
+          onInspectGraph={nodeId => {
+            setGraphFocusNodeId(nodeId);
+            setGraphSnapshotId(investigationSnapshotId);
+          }}
         />
       )}
       {contextSnapshotId && (
