@@ -1,12 +1,12 @@
 # Gate C6c — Hybrid evaluation laboratory
 
-Status: **C6c-1 is in implementation on a draft PR.** The decisions are approved (ADR 0020). No acceptance result exists yet. All 20 labels are assistant drafts awaiting owner sign-off, and the thresholds are still provisional.
+Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in the authoring container.** The decisions are approved (ADR 0020). No acceptance result exists yet. All 20 labels are assistant drafts awaiting owner sign-off, and the thresholds are still provisional.
 
 ## Slices
 
 | Slice | Scope | State |
 |---|---|---|
-| C6c-1 | Case and label schema, corpus validator, budget declaration, isolated harness, 3 comparators, deterministic metrics, 20 fixtures | implemented; Linux self-test passed; owner verification and label sign-off pending |
+| C6c-1 | Case and label schema, corpus validator, budget declaration, isolated harness, 3 comparators, deterministic metrics, 20 fixtures | owner GREEN (Windows `check.ps1`); Linux passed; label sign-off pending |
 | C6c-2 | 15 deliberate change experiments; 15 curated real repositories (owner-run acquisition, pinned SHA and fingerprint) | not started |
 | C6c-3 | Blinded owner A/B usefulness judging; 10 held-out cases (owner-authored, sealed); repeatability trials | not started |
 | C7 | Scored acceptance run, integrity audit, documented limitations, owner release decision | not started |
