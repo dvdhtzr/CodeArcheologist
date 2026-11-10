@@ -76,6 +76,26 @@ internal static class GateC3SelfTests
             Guid.Empty, scope, GateCRole.Investigator) is not null)
             throw new InvalidOperationException("Empty run identity was accepted.");
 
+        if (GateC3IndependentRunner.DiagnoseAssessmentShape(
+                "", GateCRole.Investigator) != "assessment-empty-response" ||
+            GateC3IndependentRunner.DiagnoseAssessmentShape(
+                investigator + " trailing", GateCRole.Investigator) !=
+                    "assessment-invalid-json" ||
+            GateC3IndependentRunner.DiagnoseAssessmentShape(
+                investigator.Replace("\"uncertainty\"", "\"confidence\"",
+                    StringComparison.Ordinal), GateCRole.Investigator) !=
+                    "assessment-hypothesis-fields-invalid" ||
+            GateC3IndependentRunner.DiagnoseAssessmentShape(
+                investigator.Replace("\"unknown\"", "\"missing\"",
+                    StringComparison.Ordinal), GateCRole.Investigator) !=
+                    "assessment-root-shape-invalid" ||
+            GateC3IndependentRunner.DiagnoseAssessmentShape(
+                skeptic.Replace("insufficient-evidence", "verified-runtime",
+                    StringComparison.Ordinal), GateCRole.Skeptic) !=
+                    "assessment-concern-value-invalid")
+            throw new InvalidOperationException(
+                "Safe malformed-assessment diagnostic categories regressed.");
+
         // Provider outputs omit canonical identities entirely; exact run/scope
         // are host-attached, and the existing C1/C2 gates validate handles.
         var empty = GateC3IndependentRunner.ParseAssessment(
