@@ -9,7 +9,8 @@ Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in th
 | C6c-1 | Case and label schema, corpus validator, budget declaration, isolated harness, 3 comparators, deterministic metrics, 20 fixtures | owner GREEN (Windows `check.ps1`); Linux passed; label sign-off pending |
 | C6c-2a | 15 curated real repositories: manifest, owner-run acquisition scripts, subtree scoping, expectation kinds, BOM analyzer fix, per-file manifests, case-collision rule | owner GREEN on Windows (`check.ps1`, `acquire-curated.ps1`, provisional baseline over all 35 cases); Linux passed; label sign-off pending |
 | C6c-2b | 15 deliberate change experiments: before/after fixtures, deterministic evidence delta and one-hop impact checks | owner GREEN on Windows (`check.ps1`); Linux passed; label sign-off pending |
-| C6c-3 | Blinded owner A/B usefulness judging; 10 held-out cases (owner-authored, sealed); repeatability trials | not started |
+| C6c-3a | Owner tools: guided label sign-off (`--review-labels`) and blinded pairwise judging (`--judge`) | Linux passed; awaiting owner `check.ps1` |
+| C6c-3b | 10 held-out cases (owner-authored, sealed); repeatability trials | not started |
 | C7 | Scored acceptance run, integrity audit, documented limitations, owner release decision | not started |
 
 ## Lab (`tests/evaluation-lab`)
@@ -20,6 +21,8 @@ Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in th
 | `--self-test` | none | 36 checks (below) |
 | `--describe <case-dir>` | none | Prints the citable evidence locations used when authoring labels |
 | `--run --out <dir> [--cases ...] [--comparators ...] [--provisional]` | genuine local Ollama for `gate-b` and `gate-c` | Runs and scores; writes per-evaluation report and score JSON plus `summary.json` |
+| `--review-labels [--curated-root <dir>]` | none | Interactive owner sign-off: shows each draft case, its source and draft labels; `a` marks it `owner-approved` (`assistant-draft-owner-reviewed`), `s` skips, `q` quits. Resumable; the owner commits the result |
+| `--judge --runs <dir> [--a gate-b] [--b gate-c] [--out <file>]` | none | Blinded pairwise judging of completed reports from an earlier run (see below) |
 
 ### Isolation
 For each case the lab:
@@ -114,3 +117,14 @@ Optional provisional real-model run (results go outside the repository; with 20 
 ```powershell
 dotnet run --project .\tests\evaluation-lab\EvaluationLab.csproj --configuration Release -- --run --out $env:TEMP\ca-lab-provisional --cases F01-attribute-private-helper,F10-prompt-injection-comment --provisional
 ```
+
+## Owner judgment tools (C6c-3a)
+
+**Label sign-off.** `--review-labels` never edits label content. It only changes `status` to `owner-approved` and `authoredBy` to `assistant-draft-owner-reviewed` for the cases the owner approves, and revalidates the corpus afterwards. To change a label, the owner skips it, edits `labels.json`, and reruns. Approved labels are never changed to turn a failing result GREEN (rule 57).
+
+**Blinded pairwise judging.** `--judge` reads the completed reports of a lab run. For each case it picks one random trial of each comparator, places them LEFT/RIGHT in random order, and shows only their claims, citations and unknowns, without comparator names. Claim prefixes that name a comparator's internal vocabulary (for example `source-observation:` or `H1 ContestedOrInsufficient:`) are removed. The owner picks the more useful report (or a tie) and marks each one as actionable or not. Judgments are saved after every answer (`c6c-blinded-judgments-v1`) and a later session skips judged cases. Comparator identity is revealed only in the final summary.
+
+Limitations, stated plainly:
+- Blinding is **partial**: Gate B and Gate C reports still differ in structure and length, so the owner may recognise them.
+- These judgments come from **provisional** runs whose labels may not yet be approved. They inform direction; they are not the metric of record. The scored usefulness metric (ADR 0020) needs a non-provisional run after label sign-off.
+- No LLM judge is used. Usefulness stays `pending-judgment` in lab scores; the judgment file is the owner's record.
