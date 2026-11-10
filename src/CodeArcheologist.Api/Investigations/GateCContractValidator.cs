@@ -29,7 +29,9 @@ public static class GateCContractValidator
             assessment.Hypotheses.Any(h =>
                 h is null || !ValidText(h.Text) || !ValidText(h.Uncertainty) ||
                 h.EvidenceHandles is null ||
-                !ValidHandles(h.EvidenceHandles, allowedHandles)))
+                !ValidHandles(h.EvidenceHandles, allowedHandles) ||
+                h.EvidenceHandles.Any(id =>
+                    !assessment.SelectedEvidenceHandles.Contains(id, StringComparer.Ordinal))))
             return GateCContractCheck.Fail("invalid-hypotheses");
         if (assessment.Concerns is null ||
             assessment.Concerns.Count > GateCContract.MaxConcerns ||
@@ -37,7 +39,9 @@ public static class GateCContractValidator
             assessment.Concerns.Any(c =>
                 c is null || !Enum.IsDefined(c.Kind) ||
                 !ValidText(c.Explanation) || c.EvidenceHandles is null ||
-                !ValidHandles(c.EvidenceHandles, allowedHandles)))
+                !ValidHandles(c.EvidenceHandles, allowedHandles) ||
+                c.EvidenceHandles.Any(id =>
+                    !assessment.SelectedEvidenceHandles.Contains(id, StringComparer.Ordinal))))
             return GateCContractCheck.Fail("invalid-independent-concerns");
         // A concern with no citations is allowed only as a declared evidence
         // gap/unsupported inference, not as a proven structural contradiction.
@@ -155,7 +159,7 @@ public static class GateCContractValidator
     private static bool ValidText(string? text) =>
         !string.IsNullOrWhiteSpace(text) &&
         text.Length <= GateCContract.MaxTextLength &&
-        !text.Any(ch => ch == '\0');
+        !text.Any(char.IsControl);
 
     private static bool ValidCatalog(IReadOnlyList<GateCEvidenceHandle>? catalog) =>
         catalog is not null && catalog.Count <= 64 &&
