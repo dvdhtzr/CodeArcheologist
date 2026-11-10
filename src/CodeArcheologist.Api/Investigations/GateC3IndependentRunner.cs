@@ -9,7 +9,8 @@ namespace CodeArcheologist.Api.Investigations;
 public sealed record GateC3RoleOutcome(GateCRole Role, GateCRoleStatus Status,
     string Diagnostic, GateCIndependentAssessment? Assessment,
     string? SelectedCapability, int ToolCallsUsed,
-    IReadOnlyList<GateC5EvidenceLink>? EvidenceLinks = null);
+    IReadOnlyList<GateC5EvidenceLink>? EvidenceLinks = null,
+    string? GraphAnalyzerVersion = null);
 
 public sealed record GateC3RunOutcome(Guid RunId, GateCScope Scope,
     GateCRunProgress Progress, GateC3RoleOutcome Investigator,
@@ -22,7 +23,8 @@ public sealed record GateC3RunOutcome(Guid RunId, GateCScope Scope,
 /// </summary>
 public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDiscovery)
 {
-    private const string Model = "qwen3.5:9b";
+    public const string ModelId = "qwen3.5:9b";
+    private const string Model = ModelId;
     private static readonly Uri LocalProvider = new("http://127.0.0.1:11434/");
     private const int MaxModelText = 8192;
     private const int MaxInputText = 16000;
@@ -218,7 +220,8 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 return Failure(check.Diagnostic);
             return new(role, GateCRoleStatus.CompletedValidated,
                 "valid-structured-assessment-not-semantic-proof",
-                parsed, capability, session.ToolCallsUsed, session.ReportLinks());
+                parsed, capability, session.ToolCallsUsed, session.ReportLinks(),
+                session.GraphAnalyzerVersion);
         }
         catch (OperationCanceledException)
         {
