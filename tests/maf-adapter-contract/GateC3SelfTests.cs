@@ -25,13 +25,13 @@ internal static class GateC3SelfTests
             throw new InvalidOperationException("Invalid discovery model output was accepted.");
 
         const string investigator = """
-            {"selectedHandles":["E1"],"hypotheses":[{
+            {"hypotheses":[{
               "text":"Possible HTTP mapping candidate.","handle":"E1",
               "uncertainty":"Effective runtime registration is not established."
             }],"unknown":"Actual handler binding is unknown."}
             """;
         const string skeptic = """
-            {"selectedHandles":["E1"],"concerns":[{
+            {"concerns":[{
               "kind":"insufficient-evidence",
               "explanation":"Source syntax does not confirm runtime registration.",
               "handle":"E1"
@@ -64,8 +64,8 @@ internal static class GateC3SelfTests
                 [new GateCEvidenceHandle("E1", "original",
                     GateCEvidenceKind.Candidate)]).Accepted)
             throw new InvalidOperationException("Foreign handle bypassed host validator.");
-        Reject(Replace(investigator, "\"selectedHandles\":[\"E1\"]",
-            "\"selectedHandles\":[]"));
+        Reject(investigator.Replace("\"hypotheses\"", "\"selectedHandles\"",
+            StringComparison.Ordinal));
         Reject(investigator.Replace("\"uncertainty\"", "\"confidence\"",
             StringComparison.Ordinal));
         Reject(investigator.Replace("\"unknown\"", "\"unknown\":\"override\",\"unknown\"",
@@ -79,7 +79,7 @@ internal static class GateC3SelfTests
         // Provider outputs omit canonical identities entirely; exact run/scope
         // are host-attached, and the existing C1/C2 gates validate handles.
         var empty = GateC3IndependentRunner.ParseAssessment(
-            """{"selectedHandles":[],"hypotheses":[],"unknown":"No supported evidence."}""",
+            """{"hypotheses":[],"unknown":"No supported evidence."}""",
             run, scope, GateCRole.Investigator);
         if (empty is null || empty.Hypotheses.Count != 0 ||
             empty.SelectedEvidenceHandles.Count != 0)
