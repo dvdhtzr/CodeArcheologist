@@ -25,7 +25,6 @@ internal static class GateC5SelfTests
             }
 
             var workspace = store.Create("C5 test", Guid.NewGuid()).Workspace;
-            var runId = Guid.NewGuid();
             var repositoryId = Guid.NewGuid();
             var snapshotId = Guid.NewGuid();
             var scope = new GateCScope(workspace.Id, repositoryId, snapshotId,
