@@ -100,6 +100,25 @@ public sealed class GateCEvidenceSession
         _role = role;
     }
 
+    /// <summary>
+    /// Bind C1 assessment validation to the exact role session that minted
+    /// the handles. Handle text alone is never cross-role authority.
+    /// </summary>
+    public GateCContractCheck ValidateAssessment(
+        GateCIndependentAssessment? assessment)
+    {
+        if (assessment is null || assessment.Role != _role ||
+            assessment.RunId != _runId || assessment.Scope != _scope)
+            return GateCContractCheck.Fail("foreign-role-evidence-session");
+        var catalog = HostCatalog();
+        var evidenceCheck = GateCContractValidator.ValidateHostCatalog(
+            _package, _scope, catalog);
+        if (!evidenceCheck.Accepted)
+            return evidenceCheck;
+        return GateCContractValidator.ValidateIndependent(
+            assessment, _runId, _scope, catalog);
+    }
+
     public int ToolCallsUsed => _calls;
 
     /// <summary>
