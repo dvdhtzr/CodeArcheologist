@@ -1,6 +1,6 @@
 # Gate C6b — Managed worker and explicit recovery
 
-Status: **in progress on a draft PR.** Architecture approved by the owner (decisions D1–D5). Phases 1–2: owner reported GREEN. Phase 3: implemented, owner verification pending. Phase 4: not started.
+Status: **in progress on a draft PR.** Architecture approved by the owner (decisions D1–D5). Phases 1–3: owner reported GREEN. Phase 4: implemented, owner verification pending. The milestone is not GREEN until Phase 4 and the cross-platform checks below have passed.
 
 ## Approved decisions (summary)
 
@@ -18,8 +18,8 @@ Status: **in progress on a draft PR.** Architecture approved by the owner (decis
 |---|---|---|
 | 1 | SQLite v6, OS lock, fenced ownership, startup reconciliation, ownership tests | owner reported GREEN |
 | 2 | Managed worker replaces `Task.Run`; single terminal write; shutdown/deadline semantics | owner reported GREEN |
-| 3 | Role checkpoints, evidence-handle reconstruction, compatibility checks, `POST .../continue` | implemented; Linux self-test passed; owner verification and genuine Ollama walkthrough pending |
-| 4 | Cancellation intent, `GET .../execution`, `POST .../cancel`, minimal UI, real Ollama walkthrough | not started |
+| 3 | Role checkpoints, evidence-handle reconstruction, compatibility checks, `POST .../continue` | owner reported GREEN (including `--gate-c6b-run`) |
+| 4 | Cancellation intent, `GET .../execution`, `POST .../cancel`, minimal UI | implemented; Linux checks and a UI walkthrough passed in the authoring container; owner verification pending |
 
 ## Responsibilities
 
@@ -173,6 +173,52 @@ The table rebuilds follow SQLite's documented procedure: foreign keys are suspen
 - Each trial: start → Investigator checkpoint → application shutdown during the Skeptic stage → restart (must call no model) → explicit continuation (must not re-run the Investigator) → completed report.
 - Exits 0 only if at least one trial is fully GREEN. Host-rejected model output is reported as `RED-model`.
 
+## Phase 4 — cancellation, execution projection, minimal UI
+
+### Cancellation
+- `POST .../investigations/{runId}/cancel` is authenticated and CSRF/Origin-guarded, and requires an `Idempotency-Key` and `{ "expectedAttemptNumber": n }`.
+- The request:
+  1. records durable **intent** (`cancel_requested_at_unix_ms` and a `cancellation-requested` event) in one fenced transaction;
+  2. notifies the worker;
+  3. returns `202`.
+
+  It never finalizes the attempt and never releases the slot.
+- **Running attempt:** the worker cancels the attempt token. Once the executor actually returns, its single terminal write records attempt `cancelled`, cause `user-cancelled`, run `cancelled`, and releases the slot. An uncooperative call keeps the slot held until it returns.
+- **Queued attempt:** it is cancelled at the claim boundary, inside the claim transaction, before any model work begins.
+- The heartbeat re-reads the durable intent, so a lost in-memory notification cannot lose a cancellation.
+- Precedence of host-observed causes: stage-persistence halt > ownership loss > **user cancellation** > shutdown > deadline > checkpoint rejection > outcome.
+- A cancelled run is terminal and is not continuable. A fresh investigation is a separate action.
+
+### `GET .../investigations/{runId}/execution` (`gate-c6b-execution-projection-v1`)
+Read-only and snapshot-scoped. It is derived only from host-recorded attempts, events, checkpoints and lineage; C5 report rows are never rewritten. It returns:
+- run status and diagnostic, and a legacy flag;
+- the current attempt and full attempt history (number, status, terminal cause, continuation link, epoch, deadline, cancel intent);
+- the host-observed status of each stage: `not-started`, `running`, `accepted`, `accepted-earlier`, `reused-checkpoint`, `rejected`, `timed-out`, `failed`, `cancelled`, `abandoned` or `legacy-unavailable`, each with a checkpoint indicator (ID, SHA-256, acceptance attempt);
+- **recovery eligibility**, which is separate from being interrupted. It runs the same checks as continuation, including full checkpoint revalidation, but only when the run is interrupted;
+- `cancellable`, and whether this process owns execution.
+
+### UI (minimal; no redesign)
+- The investigation workspace shows an Execution panel with the stage cards, checkpoint SHA-256 indicators, the cause, eligibility with its reason, **Request cancellation**, **Continue investigation**, and the attempt history.
+- Actions reuse one idempotency key per (action, run, expected attempt), so retrying a click replays rather than duplicating.
+- The panel refreshes with the existing 2.5 s polling while a run is active.
+- The investigation layout now stacks when it is rendered in a narrow panel.
+
+### Coverage
+`--gate-c6b-self-test` now runs 32 scenarios. The Phase 4 scenarios:
+- an uncooperative call keeps the slot and blocks admission after cancellation; intent is idempotent and stale requests are refused; afterwards the attempt is `cancelled/user-cancelled`;
+- cooperative cancellation is recorded as `user-cancelled` and leaves no checkpoint;
+- a queued attempt is cancelled at the claim boundary with zero evidence opens or model calls;
+- durable intent is honored without the notification;
+- projection stages, checkpoints, eligibility and ineligibility (changed snapshot), the completed view, and scope isolation.
+
+`tests/investigations/execution-control.test.mjs` exercises the real HTTP boundary:
+- 401 without a session;
+- 403 for missing or invalid CSRF and for a forged Origin;
+- 400 without an idempotency key or with a missing or invalid expected attempt;
+- 404 for foreign or unknown scope;
+- a second API process on the same data directory reports `execution-lock-held-by-another-process` while the first stays healthy;
+- restart on the same isolated directory reacquires ownership.
+
 ## Legacy compatibility
 
 - C5 report rows and JSON are copied byte-for-byte, and their read endpoints are unchanged.
@@ -225,4 +271,24 @@ dotnet run --project .\tests\maf-adapter-contract\MafAdapterContractProbe.csproj
 if ($LASTEXITCODE -ne 0) { throw "C6b genuine shutdown/restart/continuation walkthrough RED" }
 ```
 
-On macOS or Linux, use `./scripts/check.sh`.
+### Manual restart-and-continuation walkthrough (B5)
+
+Use a disposable data directory, never your real one:
+
+```powershell
+$env:CODE_ARCHEOLOGIST_DATA_DIR = Join-Path $env:TEMP ("ca-c6b-" + [guid]::NewGuid())
+.\scripts\start.ps1
+```
+
+1. Pair the browser. Create a workspace, register a small trusted C# folder, capture a snapshot, open the AI investigation workspace and start an investigation.
+2. Watch the Execution panel. Once the Investigator card shows **Checkpoint accepted** and the Skeptic card shows **Running**, stop the app (Ctrl+C).
+3. Run `.\scripts\start.ps1` again with the same `$env:CODE_ARCHEOLOGIST_DATA_DIR`. Re-pair. The run should be **interrupted**, the cause `application-shutdown`, the panel **eligible**, and Ollama should show no new request.
+4. Click **Continue investigation**. Expected:
+   - attempt 2 appears;
+   - the Investigator card shows **Revalidated checkpoint reused**;
+   - the Skeptic and Reviewer run;
+   - the run ends **completed** with the report.
+5. Start another investigation and click **Request cancellation** while a role is running. The panel should show the cancellation as pending until the local call stops, then the run becomes **cancelled** (`user-cancelled`).
+6. Afterwards, remove the variable and the temporary folder: `Remove-Item Env:CODE_ARCHEOLOGIST_DATA_DIR`.
+
+On macOS or Linux, use `./scripts/check.sh`. Cross-platform lock verification needs `check.sh` on Linux **and** macOS. Linux has passed in the authoring container; macOS has not been run.
