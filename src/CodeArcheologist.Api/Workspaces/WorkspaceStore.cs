@@ -30,7 +30,7 @@ public sealed record CreateWorkspaceResult(
 /// </summary>
 public sealed partial class WorkspaceStore
 {
-    private const int CurrentSchemaVersion = 4;
+    private const int CurrentSchemaVersion = 5;
     private readonly string _connectionString;
 
     public WorkspaceStore()
@@ -187,6 +187,100 @@ public sealed partial class WorkspaceStore
             migration.ExecuteNonQuery();
         }
 
+
+        if (current < 5)
+        {
+            using var migration = connection.CreateCommand();
+            migration.Transaction = transaction;
+            migration.CommandText = """
+                CREATE TABLE investigation_attempts (
+                    attempt_id TEXT NOT NULL PRIMARY KEY,
+                    run_id TEXT NOT NULL REFERENCES investigation_reports(run_id),
+                    attempt_number INTEGER NOT NULL CHECK(attempt_number >= 1),
+                    contract_version TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN
+                        ('queued','running','completed','incomplete','interrupted',
+                         'cancelled','rejected','failed')),
+                    diagnostic TEXT NOT NULL,
+                    created_at_unix_ms INTEGER NOT NULL,
+                    started_at_unix_ms INTEGER,
+                    finished_at_unix_ms INTEGER,
+                    last_event_sequence INTEGER NOT NULL DEFAULT 0
+                        CHECK(last_event_sequence >= 0),
+                    state_version INTEGER NOT NULL DEFAULT 1
+                        CHECK(state_version >= 1),
+                    execution_owner_id TEXT,
+                    ownership_epoch INTEGER,
+                    UNIQUE(run_id, attempt_number)
+                );
+                CREATE UNIQUE INDEX ux_attempts_active_per_run
+                    ON investigation_attempts(run_id)
+                    WHERE status IN ('queued','running');
+                CREATE INDEX ix_attempts_by_run
+                    ON investigation_attempts(run_id, attempt_number DESC);
+
+                CREATE TABLE investigation_events (
+                    event_id TEXT NOT NULL PRIMARY KEY,
+                    attempt_id TEXT NOT NULL REFERENCES investigation_attempts(attempt_id),
+                    sequence_number INTEGER NOT NULL CHECK(sequence_number >= 1),
+                    event_contract_version TEXT NOT NULL,
+                    occurred_at_unix_ms INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    diagnostic TEXT NOT NULL,
+                    stage TEXT,
+                    from_status TEXT,
+                    to_status TEXT,
+                    checkpoint_id TEXT,
+                    payload_json TEXT NOT NULL CHECK(length(payload_json) <= 16384),
+                    UNIQUE(attempt_id, sequence_number)
+                );
+                CREATE INDEX ix_events_by_attempt
+                    ON investigation_events(attempt_id, sequence_number);
+                CREATE TRIGGER investigation_events_no_update
+                    BEFORE UPDATE ON investigation_events BEGIN
+                    SELECT RAISE(ABORT, 'events are immutable');
+                END;
+                CREATE TRIGGER investigation_events_no_delete
+                    BEFORE DELETE ON investigation_events BEGIN
+                    SELECT RAISE(ABORT, 'events are immutable');
+                END;
+
+                CREATE TABLE investigation_checkpoints (
+                    checkpoint_id TEXT NOT NULL PRIMARY KEY,
+                    attempt_id TEXT NOT NULL REFERENCES investigation_attempts(attempt_id),
+                    role TEXT NOT NULL CHECK(role IN ('investigator','skeptic','reviewer')),
+                    contract_version TEXT NOT NULL,
+                    evidence_contract_version TEXT NOT NULL,
+                    analyzer_provenance_json TEXT NOT NULL,
+                    model_provenance_json TEXT NOT NULL,
+                    scope_json TEXT NOT NULL,
+                    assessment_json TEXT NOT NULL,
+                    evidence_links_json TEXT NOT NULL,
+                    validation_json TEXT NOT NULL,
+                    content_sha256 TEXT NOT NULL,
+                    accepted_at_unix_ms INTEGER NOT NULL,
+                    UNIQUE(attempt_id, role)
+                );
+                CREATE TRIGGER investigation_checkpoints_no_update
+                    BEFORE UPDATE ON investigation_checkpoints BEGIN
+                    SELECT RAISE(ABORT, 'checkpoints are immutable');
+                END;
+                CREATE TRIGGER investigation_checkpoints_no_delete
+                    BEFORE DELETE ON investigation_checkpoints BEGIN
+                    SELECT RAISE(ABORT, 'checkpoints are immutable');
+                END;
+
+                CREATE TABLE investigation_execution_slot (
+                    slot_id INTEGER NOT NULL PRIMARY KEY CHECK(slot_id = 1),
+                    active_attempt_id TEXT REFERENCES investigation_attempts(attempt_id)
+                );
+                INSERT INTO investigation_execution_slot(slot_id,active_attempt_id)
+                    VALUES (1,NULL);
+                PRAGMA user_version = 5;
+                """;
+            migration.ExecuteNonQuery();
+        }
+
         // A process restart never resumes a previous in-process MAF workflow.
         // Preserve the record and explicitly mark its incomplete state.
         using (var interrupted = connection.CreateCommand())
@@ -196,13 +290,16 @@ public sealed partial class WorkspaceStore
                 UPDATE investigation_reports SET status='incomplete',
                     diagnostic='host-restarted-before-completion',
                     finished_at_unix_ms=$now
-                WHERE status='running';
+                WHERE status='running' AND NOT EXISTS (
+                    SELECT 1 FROM investigation_attempts a WHERE a.run_id=investigation_reports.run_id
+                );
                 """;
             interrupted.Parameters.AddWithValue("$now",
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             interrupted.ExecuteNonQuery();
         }
 
+        RecoverC6Attempts(connection, transaction);
         transaction.Commit();
     }
 
