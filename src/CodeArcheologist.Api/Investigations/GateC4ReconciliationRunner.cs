@@ -153,25 +153,55 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
             {
                 ResponseFormat = format
             };
-            var response = await reviewer.RunAsync(
+            // The host already knows the complete identity sets. Supply the
+            // model with exact IDs without granting authority over their meaning.
+            var hypothesisIds = investigator.Hypotheses.Select(x => x.Id).ToArray();
+            var concernIds = skeptic.Concerns.Select(x => x.Id).ToArray();
+            var basePrompt =
                 "Reconcile these independently validated source-only " +
-                "assessments. Use exact H and S IDs; return exactly one decision " +
-                "per Investigator hypothesis and account for each Skeptic " +
-                "concern exactly once. Prefer contested-or-insufficient when " +
-                "meaningful questions remain. No new evidence and no external " +
-                "tools are available.\n<untrusted-assessments-json>\n" + input +
-                "\n</untrusted-assessments-json>",
-                options: options, cancellationToken: timeout.Token);
-            var text = response.Text ?? "";
-            var parsed = ParseReview(text, runId, scope);
-            if (parsed is null)
-                return Invalid(DiagnoseReviewShape(text));
-            var checkedReview = GateCContractValidator.ValidateReview(
-                parsed, runId, scope, investigator, skeptic);
-            if (!checkedReview.Check.Accepted)
-                return Invalid(checkedReview.Check.Diagnostic);
-            return new(GateCRoleStatus.CompletedValidated,
-                "review-validated-not-semantic-proof", parsed, checkedReview);
+                "assessments. EXACT hypothesis IDs: " +
+                JsonSerializer.Serialize(hypothesisIds) +
+                ". EXACT concern IDs: " + JsonSerializer.Serialize(concernIds) +
+                ". Return exactly ONE decision for EACH hypothesis ID (no others). " +
+                "Each concern ID must occur EXACTLY ONCE across ALL " +
+                "addressedConcernIds and unresolvedGlobalConcernIds, " +
+                "never both. If uncertain whether a concern maps to a hypothesis, " +
+                "put it in unresolvedGlobalConcernIds. If there are no hypotheses, " +
+                "decisions must be empty and all concerns unresolved global. " +
+                "Use contested-or-insufficient for unsupported claims. " +
+                "You must not invent, renumber, omit, or duplicate IDs. " +
+                "No new evidence and no external tools are available." +
+                "\n<untrusted-assessments-json>\n" + input +
+                "\n</untrusted-assessments-json>";
+            // A single correction attempt must pass the same strict host gate.
+            // Neither the model nor the host may silently fill missing coverage.
+            var prompt = basePrompt;
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                var response = await reviewer.RunAsync(prompt,
+                    options: options, cancellationToken: timeout.Token);
+                var text = response.Text ?? "";
+                var parsed = ParseReview(text, runId, scope);
+                var diagnostic = parsed is null
+                    ? DiagnoseReviewShape(text)
+                    : GateCContractValidator.ValidateReview(parsed, runId, scope,
+                        investigator, skeptic).Check.Diagnostic;
+                if (parsed is not null)
+                {
+                    var checkedReview = GateCContractValidator.ValidateReview(
+                        parsed, runId, scope, investigator, skeptic);
+                    if (checkedReview.Check.Accepted)
+                        return new(GateCRoleStatus.CompletedValidated,
+                            "review-validated-not-semantic-proof", parsed, checkedReview);
+                }
+                if (attempt == 1) return Invalid(diagnostic);
+                prompt = basePrompt + "\nYour previous response was rejected " +
+                    "by the host validator: " + diagnostic +
+                    ". Return a NEW complete JSON response with exactly the " +
+                    "required hypothesis decisions and concern coverage. " +
+                    "No host rules are relaxed.";
+            }
+            return Invalid("review-attempt-budget-exhausted");
         }
         catch (OperationCanceledException)
         {
