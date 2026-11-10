@@ -119,6 +119,8 @@ public sealed class GateCEvidenceSession
             assessment, _runId, _scope, catalog);
     }
 
+    public string GraphAnalyzerVersion => _package.GraphAnalyzerVersion;
+
     public int ToolCallsUsed => _calls;
 
     /// <summary>Host-only links for persisted, role-scoped references.
