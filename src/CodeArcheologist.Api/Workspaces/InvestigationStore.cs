@@ -48,7 +48,6 @@ public sealed partial class WorkspaceStore
                 var existing = ReadInvestigation(reader);
                 var conflict = !string.Equals(reader.GetString(12), digest,
                     StringComparison.Ordinal);
-                tx.Commit();
                 return new(existing, false, conflict);
             }
         }
@@ -62,7 +61,6 @@ public sealed partial class WorkspaceStore
         {
             if (slot.ExecuteScalar() is string)
             {
-                tx.Commit();
                 return new(null, false, false, true);
             }
         }
