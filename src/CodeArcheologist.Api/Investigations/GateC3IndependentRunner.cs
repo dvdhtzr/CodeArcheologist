@@ -39,8 +39,6 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
         {
           "type":"object","additionalProperties":false,
           "properties":{
-            "selectedHandles":{"type":"array","maxItems":8,
-              "items":{"type":"string","minLength":2,"maxLength":8}},
             "hypotheses":{"type":"array","maxItems":2,"items":{
               "type":"object","additionalProperties":false,
               "properties":{
@@ -50,15 +48,13 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
               },"required":["text","handle","uncertainty"]}},
             "unknown":{"type":"string","minLength":1,"maxLength":600}
           },
-          "required":["selectedHandles","hypotheses","unknown"]
+          "required":["hypotheses","unknown"]
         }
         """;
     private const string SkepticSchema = """
         {
           "type":"object","additionalProperties":false,
           "properties":{
-            "selectedHandles":{"type":"array","maxItems":8,
-              "items":{"type":"string","minLength":2,"maxLength":8}},
             "concerns":{"type":"array","maxItems":2,"items":{
               "type":"object","additionalProperties":false,
               "properties":{
@@ -71,7 +67,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
               },"required":["kind","explanation","handle"]}},
             "unknown":{"type":"string","minLength":1,"maxLength":600}
           },
-          "required":["selectedHandles","concerns","unknown"]
+          "required":["concerns","unknown"]
         }
         """;
 
@@ -202,7 +198,6 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 ? "From this source-only evidence view, propose at most two " +
                   "UNVERIFIED hypotheses, each with an existing handle or an empty " +
                   "handle for an evidence gap. Explicitly state uncertainty. " +
-                  "selectedHandles must list each cited nonempty handle exactly once. " +
                   "If no evidence items exist, return empty arrays and a concrete unknown."
                 : "Independently identify at most two specific source-evidence " +
                   "limitations or competing hypotheses. Do not refer to any " +
@@ -299,12 +294,11 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
         {
             using var json = JsonDocument.Parse(modelText);
             var root = json.RootElement;
-            if (!HasExactProperties(root, "selectedHandles",
+            if (!HasExactProperties(root,
                     role == GateCRole.Investigator ? "hypotheses" : "concerns", "unknown"))
                 return null;
-            var handles = ReadStrings(root.GetProperty("selectedHandles"), 8);
             var unknown = ReadText(root.GetProperty("unknown"), 600);
-            if (handles is null || unknown is null)
+            if (unknown is null)
                 return null;
             var hypotheses = new List<GateCHypothesis>();
             var concerns = new List<GateCConcern>();
@@ -348,13 +342,12 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                         handle.Length == 0 ? [] : [handle]));
                 }
             }
-            // The model cannot smuggle extra claims through the selection list.
-            var used = hypotheses.SelectMany(x => x.EvidenceHandles)
+            // Handles are derived from the actual cited claims, not a
+            // redundant model-authored selection list. The host still
+            // checks each handle against the issuing role's evidence ledger.
+            var handles = hypotheses.SelectMany(x => x.EvidenceHandles)
                 .Concat(concerns.SelectMany(x => x.EvidenceHandles))
                 .Distinct(StringComparer.Ordinal).ToArray();
-            if (used.Length != handles.Length ||
-                used.Any(h => !handles.Contains(h, StringComparer.Ordinal)))
-                return null;
             return new(GateCContract.Version, runId, scope, role,
                 handles, hypotheses, concerns, [unknown]);
         }
