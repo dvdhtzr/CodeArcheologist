@@ -154,8 +154,9 @@ public static class LabOwnerTools
     /// Pairs not asked are reported as not judged, never as ties. Resumable.
     /// </summary>
     public static int Checklist(string evalRoot, string runsDirectory, string a, string b, string checksPath,
-        TextReader input, TextWriter output, int maxPairs = 5, int? seed = null)
+        TextReader input, TextWriter output, int maxPairs = 5, int? seed = null, bool everyProblem = false)
     {
+        if (everyProblem) maxPairs = int.MaxValue;
         var random = seed is { } s ? new Random(s) : new Random(RandomNumberGenerator.GetInt32(int.MaxValue));
         var corpus = CorpusValidator.Validate(evalRoot);
         if (!corpus.Valid) { output.WriteLine("Corpus is invalid; run --validate-corpus."); return 1; }
@@ -179,11 +180,13 @@ public static class LabOwnerTools
             foreach (var issue in set.MaterialIssues)
             {
                 var gap = Math.Abs(LexicalOverlap(issue.Description, first) - LexicalOverlap(issue.Description, second));
-                if (gap > 0) eligible.Add((caseId, issue, first, second, gap)); else notEligible++;
+                if (gap > 0 || everyProblem) eligible.Add((caseId, issue, first, second, gap)); else notEligible++;
             }
         }
-        var queue = eligible.Where(e => done.All(d => d.CaseId != e.CaseId || d.IssueId != e.Issue.Id))
-            .OrderByDescending(e => e.Gap).ThenBy(e => e.CaseId, StringComparer.Ordinal).ThenBy(e => e.Issue.Id, StringComparer.Ordinal)
+        var pending = eligible.Where(e => done.All(d => d.CaseId != e.CaseId || d.IssueId != e.Issue.Id));
+        var queue = everyProblem
+            ? pending.OrderBy(_ => random.Next()).ToList() // every problem, in random order: no selection bias
+            : pending.OrderByDescending(e => e.Gap).ThenBy(e => e.CaseId, StringComparer.Ordinal).ThenBy(e => e.Issue.Id, StringComparer.Ordinal)
             .Take(Math.Max(0, maxPairs - done.Count)).ToList();
 
         var total = done.Count + queue.Count;
@@ -212,9 +215,19 @@ public static class LabOwnerTools
         output.WriteLine("=== CHECKLIST REVEAL (fixed denominator: every judged problem counts) ===");
         output.WriteLine($"Problems judged: {done.Count}");
         output.WriteLine($"Mentioned: {a} {Mentioned(a)}/{done.Count}   {b} {Mentioned(b)}/{done.Count}");
-        output.WriteLine($"Not judged: {eligible.Count + notEligible - done.Count} problem(s) " +
-            $"({notEligible} where the two reports looked alike to a word-match screen, the rest beyond the {maxPairs}-question cap).");
-        output.WriteLine("Note: a word-match screen chose which problems to ask about; it scored nothing. Small sample, one judge.");
+        var notJudged = eligible.Count + notEligible - done.Count(d => eligible.Any(e => e.CaseId == d.CaseId && e.Issue.Id == d.IssueId));
+        if (everyProblem)
+        {
+            output.WriteLine($"Coverage: {done.Count} of {eligible.Count} problem(s) in this run judged" +
+                (notJudged > 0 ? $"; {notJudged} not judged yet (run again to continue)." : " (complete: every problem, no selection)."));
+            output.WriteLine("Note: one judge; the shown report for repeated cases is one random trial.");
+        }
+        else
+        {
+            output.WriteLine($"Not judged: {notJudged} problem(s) " +
+                $"({notEligible} where the two reports looked alike to a word-match screen, the rest beyond the {maxPairs}-question cap).");
+            output.WriteLine("Note: a word-match screen chose which problems to ask about; it scored nothing. Small sample, one judge.");
+        }
         return 0;
     }
 
