@@ -79,4 +79,25 @@ Owner run on Windows, contract v3.
 
 ## Run 4 — after E3b
 
-Pending the owner's run.
+Owner run on Windows, contract v4.
+
+| Comparator | Completed | Integrity breaches | Anchor recall | Objection coverage | Review flags |
+|---|---|---|---|---|---|
+| deterministic-baseline | 12/12 | 0 | 94% | — | 0 |
+| gate-b | 12/12 | 0 | 35% | — | 0 |
+| gate-c | **36/36** | **0** | **57%** | 100% | 17 |
+
+**Trial-to-trial spread** is the per-case gap between the best and worst of the three Gate C trials, in anchor recall.
+- Average before (run 1): **0.79**. Average after (run 4): **0.46**.
+- Improved: C01, C07, C12, F01 and R06 (each to 0.00), and F10 (1.00 → 0.50).
+- Unchanged: C03, C06, F05, F09 and R02.
+- **Worse:** C11 (0.00 → 1.00).
+
+**Verdict: E1 + E3b meet all three pre-set criteria.**
+- zero integrity breaches;
+- recall 57%, above run 1's 35% and above Gate B;
+- lower average spread.
+
+**Caveats:**
+- This is a provisional, small sample: 12 cases, 3 trials each, draft labels.
+- Review flags rose from 5 to 17. These come from more concrete but hedged statements, such as "likely acts as an HTTP GET endpoint… unverified". They are review aids, not breaches. Usefulness and overclaiming need the owner's blinded judgment (C6c-3).
