@@ -26,7 +26,7 @@ public sealed partial class WorkspaceStore
         GateCScope scope, Guid idempotencyKey)
     {
         var digest = Convert.ToHexString(SHA256.HashData(
-            Encoding.UTF8.GetBytes(string.Join("\\n",
+            Encoding.UTF8.GetBytes(string.Join("\n",
                 "gate-c5-request-v1", scope.WorkspaceId.ToString("D"),
                 scope.RepositoryId.ToString("D"), scope.SnapshotId.ToString("D"),
                 scope.FingerprintSha256, scope.EntryPointId,
