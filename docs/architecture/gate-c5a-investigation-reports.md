@@ -17,6 +17,15 @@ The host validates snapshot ownership and immutable evidence before admitting an
 
 The existing workspace SQLite database migrates from schema 3 to schema 4, adding a report ledger with run/workspace/repository/snapshot/fingerprint/entry-point IDs, report version, start/finish timestamps, safe status diagnostics, idempotency key/digest and bounded structured JSON for completed or incomplete terminal outcomes. On startup, orphaned `running` records become `incomplete` with the explicit diagnostic `host-restarted-before-completion`, and their absent report remains absent. Historical completed reports are retained.
 
+C4/C3 provider reliability handling remains bounded: an invalid model
+assessment or Reviewer reconciliation receives at most **one** corrective model
+attempt within its existing 90-second per-role timeout. The correction names
+exact allowed role-local handles, hypothesis IDs, and concern IDs, and includes
+a host-generated validation diagnostic. Both attempts pass the **same**
+validation gates. No host-generated replacement assessment or synthesized
+Reviewer reconciliation is permitted. A second invalid result stays
+`incomplete` and is never counted as success.
+
 The host constructs a `gate-c5-investigation-report-v1` report only from the C4 runner results. It checks role/run/snapshot scope and completed Reviewer reconciliation. A completed orchestration means **validated workflow**, not verified semantic/runtime behavior. Incomplete runs retain their real role statuses and no invented final review.
 
 Each independently validated role carries a host-resolved canonical evidence ledger. A handle such as `E1` belongs to a specific role/run/session; `Investigator/E1` and `Skeptic/E1` may identify different source facts. Persisted links retain the original evidence kind/status and source file/hash/line/column. Model-generated handles do not establish correctness without the host catalog.
