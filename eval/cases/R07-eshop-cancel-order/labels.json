@@ -6,7 +6,7 @@
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "api.MapPut(\u0022/cancel\u0022, CancelOrderAsync) is a written Minimal API candidate with a method-group handler.",
+      "description": "api.MapPut(\"/cancel\", CancelOrderAsync) is a written Minimal API candidate with a method-group handler.",
       "anchor": {
         "filePath": "Apis/OrdersApi.cs",
         "line": 11

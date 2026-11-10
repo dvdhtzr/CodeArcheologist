@@ -20,7 +20,7 @@
     },
     {
       "id": "U2",
-      "description": "The lambda handler\u0027s call to HealthReport.Create is not attributed to Map as a method-level invocation."
+      "description": "The lambda handler's call to HealthReport.Create is not attributed to Map as a method-level invocation."
     }
   ],
   "forbiddenClaims": [

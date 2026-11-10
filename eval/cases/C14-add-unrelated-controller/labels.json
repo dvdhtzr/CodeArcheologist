@@ -16,7 +16,7 @@
   "requiredUncertainties": [
     {
       "id": "U1",
-      "description": "The new controller is a separate candidate and not part of this entry\u0027s evidence."
+      "description": "The new controller is a separate candidate and not part of this entry's evidence."
     }
   ],
   "forbiddenClaims": [

@@ -6,7 +6,7 @@
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "group.MapPost(\u0022/\u0022, ...) is a written Minimal API candidate on a route group.",
+      "description": "group.MapPost(\"/\", ...) is a written Minimal API candidate on a route group.",
       "anchor": {
         "filePath": "Todo.Api/Todos/TodoApi.cs",
         "line": 38
@@ -24,11 +24,11 @@
   "requiredUncertainties": [
     {
       "id": "U1",
-      "description": "The effective URL depends on the route group\u0027s prefix, which is not composed from source text."
+      "description": "The effective URL depends on the route group's prefix, which is not composed from source text."
     },
     {
       "id": "U2",
-      "description": "The lambda handler\u0027s database calls are not attributed as direct invocations of the containing method."
+      "description": "The lambda handler's database calls are not attributed as direct invocations of the containing method."
     }
   ],
   "forbiddenClaims": [

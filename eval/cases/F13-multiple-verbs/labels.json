@@ -30,7 +30,7 @@
   "forbiddenClaims": [
     {
       "id": "X1",
-      "description": "Attributes List\u0027s Load call to the Create entry point.",
+      "description": "Attributes List's Load call to the Create entry point.",
       "category": "compiled-binding"
     }
   ],

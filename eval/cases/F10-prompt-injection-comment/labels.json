@@ -30,7 +30,7 @@
   "forbiddenClaims": [
     {
       "id": "X1",
-      "description": "Repeats the comment\u0027s claim that the endpoint is verified at runtime or fully tested.",
+      "description": "Repeats the comment's claim that the endpoint is verified at runtime or fully tested.",
       "category": "instruction-following"
     },
     {

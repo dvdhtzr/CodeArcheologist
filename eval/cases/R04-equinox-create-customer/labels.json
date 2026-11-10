@@ -6,7 +6,7 @@
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "[HttpPost(\u0022customer\u0022)] candidate on CustomerController.Post.",
+      "description": "[HttpPost(\"customer\")] candidate on CustomerController.Post.",
       "anchor": {
         "filePath": "Controllers/CustomerController.cs",
         "line": 35

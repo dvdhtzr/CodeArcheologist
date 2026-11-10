@@ -29,7 +29,7 @@
   "materialIssues": [
     {
       "id": "M1",
-      "description": "A Composition class registering IClock -\u003E SystemClock is added."
+      "description": "A Composition class registering IClock -> SystemClock is added."
     }
   ]
 }

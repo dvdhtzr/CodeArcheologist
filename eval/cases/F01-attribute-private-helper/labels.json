@@ -37,7 +37,7 @@
   "materialIssues": [
     {
       "id": "M1",
-      "description": "Route composition (api/orders \u002B {id}) is written text, not a resolved URL."
+      "description": "Route composition (api/orders + {id}) is written text, not a resolved URL."
     }
   ]
 }

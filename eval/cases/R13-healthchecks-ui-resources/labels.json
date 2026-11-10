@@ -6,7 +6,7 @@
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "builder.MapGet($\u0022{options.ResourcesPath}/...\u0022, ...) is a candidate with a nonliteral route.",
+      "description": "builder.MapGet($\"{options.ResourcesPath}/...\", ...) is a candidate with a nonliteral route.",
       "anchor": {
         "filePath": "Core/UIEndpointsResourceMapper.cs",
         "line": 27

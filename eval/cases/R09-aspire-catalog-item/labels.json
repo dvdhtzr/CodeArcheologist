@@ -6,7 +6,7 @@
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "group.MapGet(\u0022items/{catalogItemId:int}\u0022, ...) is a written Minimal API candidate.",
+      "description": "group.MapGet(\"items/{catalogItemId:int}\", ...) is a written Minimal API candidate.",
       "anchor": {
         "filePath": "samples/aspire-shop/AspireShop.CatalogService/CatalogApi.cs",
         "line": 48
@@ -24,7 +24,7 @@
   "requiredUncertainties": [
     {
       "id": "U1",
-      "description": "The lambda\u0027s EF Core query is not a direct invocation of the containing method and is not runtime-verified."
+      "description": "The lambda's EF Core query is not a direct invocation of the containing method and is not runtime-verified."
     },
     {
       "id": "U2",

@@ -29,7 +29,7 @@
   "materialIssues": [
     {
       "id": "M1",
-      "description": "[HttpGet(\u0022{id}\u0022)] becomes [HttpGet(Routes.ById)]."
+      "description": "[HttpGet(\"{id}\")] becomes [HttpGet(Routes.ById)]."
     }
   ]
 }

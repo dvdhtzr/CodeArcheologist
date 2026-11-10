@@ -145,6 +145,11 @@ internal static class LabSelfTests
             {
                 Copy(evalRoot, Path.Combine(temp, "eval"));
                 var copy = Path.Combine(temp, "eval");
+                // Start from all-draft labels so the review path is exercised whatever the corpus state.
+                static string Unsign(string t) => t.Replace("\"status\": \"owner-approved\"", "\"status\": \"draft\"")
+                    .Replace("\"authoredBy\": \"assistant-draft-owner-reviewed\"", "\"authoredBy\": \"assistant-draft\"");
+                foreach (var f in Directory.GetFiles(Path.Combine(copy, "cases"), "labels.json", SearchOption.AllDirectories))
+                    File.WriteAllText(f, Unsign(File.ReadAllText(f)));
                 var output = new StringWriter();
                 Expect(LabOwnerTools.ReviewLabels(copy, null, new StringReader("x\na\ns\nq\n"), output) == 0, "review failed: " + output);
                 var after = CorpusValidator.Validate(copy);
@@ -153,6 +158,19 @@ internal static class LabSelfTests
                 var first = after.Cases.OrderBy(c => c.Case.Id, StringComparer.Ordinal)
                     .First(c => c.Labels.Status == LabelStatus.OwnerApproved);
                 Expect(first.Labels.AuthoredBy == "assistant-draft-owner-reviewed", "approval provenance missing");
+                var originalText = Unsign(File.ReadAllText(Path.Combine(evalRoot, "cases", Path.GetFileName(first.Directory), "labels.json")));
+                var signedText = File.ReadAllText(Path.Combine(first.Directory, "labels.json"));
+                Expect(signedText == originalText
+                        .Replace("\"status\": \"draft\"", "\"status\": \"owner-approved\"")
+                        .Replace("\"authoredBy\": \"assistant-draft\"", "\"authoredBy\": \"assistant-draft-owner-reviewed\""),
+                    "sign-off must change only the status and provenance values");
+                // Line endings and escaping are preserved byte for byte (no CRLF or \u002B rewrite).
+                var crlf = originalText.Replace("\n", "\r\n").Replace("\"description\": \"", "\"description\": \"a + b ");
+                var signedLabels = JsonSerializer.Deserialize<LabLabels>(crlf, LabSchema.Json)! with
+                    { Status = LabelStatus.OwnerApproved, AuthoredBy = "assistant-draft-owner-reviewed" };
+                Expect(LabOwnerTools.TrySign(crlf, signedLabels, out var crlfSigned) && crlfSigned.Contains("a + b") &&
+                       crlfSigned.Count(ch => ch == '\r') == crlf.Count(ch => ch == '\r'), "sign-off rewrote line endings or escaping");
+                Expect(!LabOwnerTools.TrySign(originalText + originalText, signedLabels, out _), "ambiguous files must be refused");
 
                 var runs = Path.Combine(temp, "runs");
                 Directory.CreateDirectory(runs);
@@ -430,7 +448,7 @@ internal static class LabSelfTests
             n => n["provisionalThresholds"]!["allowedIntegrityBreaches"] = 1), "zero-tolerance");
         Mutate("labels of another case", t => Json(t, first + "/labels.json", n => n["caseId"] = "F02-minimal-api-lambda-static"),
             "labels belong to another case");
-        Mutate("approval without owner review", t => Json(t, first + "/labels.json", n => n["status"] = "owner-approved"),
+        Mutate("approval without owner review", t => Json(t, first + "/labels.json", n => { n["status"] = "owner-approved"; n["authoredBy"] = "assistant-draft"; }),
             "approved labels must record owner review");
         Mutate("anchor outside pinned files", t => Json(t, first + "/labels.json",
             n => n["requiredObservations"]![0]!["anchor"]!["filePath"] = "../secrets.cs"), "anchor is not in a pinned fixture file");

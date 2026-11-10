@@ -34,7 +34,7 @@
   "forbiddenClaims": [
     {
       "id": "X1",
-      "description": "Describes the module\u0027s command handling as verified behavior.",
+      "description": "Describes the module's command handling as verified behavior.",
       "category": "runtime-verified"
     },
     {

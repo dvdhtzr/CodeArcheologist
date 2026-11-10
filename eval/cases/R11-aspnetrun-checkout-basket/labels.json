@@ -6,7 +6,7 @@
   "requiredObservations": [
     {
       "id": "O1",
-      "description": "app.MapPost(\u0022/basket/checkout\u0022, ...) inside a Carter module is a written Minimal API candidate.",
+      "description": "app.MapPost(\"/basket/checkout\", ...) inside a Carter module is a written Minimal API candidate.",
       "anchor": {
         "filePath": "src/Services/Basket/Basket.API/Basket/CheckoutBasket/CheckoutBasketEndpoints.cs",
         "line": 10

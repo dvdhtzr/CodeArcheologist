@@ -46,8 +46,13 @@ public static class LabOwnerTools
                 if (answer == "s") break;
                 if (answer != "a") continue;
                 var signed = loaded.Labels with { Status = LabelStatus.OwnerApproved, AuthoredBy = "assistant-draft-owner-reviewed" };
-                File.WriteAllText(Path.Combine(loaded.Directory, "labels.json"),
-                    JsonSerializer.Serialize(signed, LabSchema.Json) + "\n");
+                var path = Path.Combine(loaded.Directory, "labels.json");
+                if (!TrySign(File.ReadAllText(path), signed, out var text))
+                {
+                    output.WriteLine("Cannot sign this file safely (unexpected layout); it was left unchanged.");
+                    break;
+                }
+                File.WriteAllText(path, text);
                 approved++;
                 break;
             }
@@ -187,6 +192,27 @@ public static class LabOwnerTools
 
     /// <summary>Removes comparator-revealing claim prefixes (blinding is still only partial).</summary>
     public static string Neutral(string text) => IdentityPrefix.Replace(text, "");
+
+    /// <summary>
+    /// Changes only the status and provenance values in the original text, so the
+    /// label content, line endings and escaping stay byte-identical. Refuses unless
+    /// each value occurs exactly once and the result parses to exactly the signed labels.
+    /// </summary>
+    public static bool TrySign(string original, LabLabels signed, out string text)
+    {
+        text = original;
+        foreach (var (from, to) in new[] {
+            ("\"status\": \"draft\"", "\"status\": \"owner-approved\""),
+            ("\"authoredBy\": \"assistant-draft\"", "\"authoredBy\": \"assistant-draft-owner-reviewed\"") })
+        {
+            var at = text.IndexOf(from, StringComparison.Ordinal);
+            if (at < 0 || text.IndexOf(from, at + 1, StringComparison.Ordinal) >= 0) return false;
+            text = text[..at] + to + text[(at + from.Length)..];
+        }
+        var reparsed = JsonSerializer.Deserialize<LabLabels>(text, LabSchema.Json);
+        return reparsed is not null &&
+               JsonSerializer.Serialize(reparsed, LabSchema.Json) == JsonSerializer.Serialize(signed, LabSchema.Json);
+    }
 
     private static string? Ask(TextReader input, TextWriter output, string prompt, params string[] allowed)
     {
