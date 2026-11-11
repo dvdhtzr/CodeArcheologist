@@ -177,6 +177,11 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
   const [selectedId, setSelectedId] = useState('');
   const [selectedEdgeId, setSelectedEdgeId] = useState('');
   const [history, setHistory] = useState<AtlasCursor[]>([]);
+  const viewportRef = useRef<AtlasViewport | null>(null);
+  const commandSerialRef = useRef(0);
+  const [viewportCommand, setViewportCommand] = useState<AtlasViewportCommand | null>(null);
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [inspectorWidth, setInspectorWidth] = useState(360);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const epoch = useRef(0);
@@ -188,6 +193,8 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
     setLoaded(null); setLoading(false); setError('');
     setMode('overview'); setCenterId(''); setExpandedIds([]);
     setSelectedId(''); setSelectedEdgeId(''); setHistory([]); setQuery(''); setKind('all');
+    viewportRef.current = null; setViewportCommand(null); commandSerialRef.current = 0;
+    setNavigationCollapsed(false); setInspectorWidth(360);
   }, [selection?.api, key]);
 
   const graph = loaded && loaded.api === selection?.api && loaded.key === key ? loaded.graph : null;
@@ -202,7 +209,7 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
   const shownResults = useMemo(() => query.trim() || kind !== 'all'
     ? found.matches : found.matches.slice(0, 30), [found, query, kind]);
   const selectedNode = index?.nodeById.get(selectedId);
-  const selectedEdge = graph?.edges.find(e => e.id === selectedEdgeId);
+  const selectedEdge = index?.edgeById.get(selectedEdgeId);
   const visibleIds = useMemo(() => new Set(projection?.nodes.map(n => n.id) ?? []), [projection]);
 
   async function load() {
@@ -227,8 +234,13 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
     }
   }
 
+  function requestViewport(command: Omit<AtlasViewportCommand, 'serial'>) {
+    setViewportCommand({ ...command, serial: ++commandSerialRef.current });
+  }
+
   function currentCursor(): AtlasCursor {
-    return { mode, centerId, expandedIds, selectedId, selectedEdgeId };
+    return { mode, centerId, expandedIds, selectedId, selectedEdgeId,
+      ...(isAtlasViewport(viewportRef.current) ? { viewport: { ...viewportRef.current } } : {}) };
   }
 
   function restore(cursor: AtlasCursor) {
@@ -244,6 +256,7 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
     const step = navigateToAtlasNode(index, currentCursor(), history, id);
     setHistory(step.history);
     restore(step.current);
+    requestViewport({ action: 'focus', nodeId: id });
   }
 
   function goBack() {
@@ -251,11 +264,14 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
     if (!step) return;
     setHistory(step.history);
     restore(step.current);
+    if (isAtlasViewport(step.current.viewport))
+      requestViewport({ action: 'restore', viewport: step.current.viewport });
   }
 
   function resetOverview() {
     setHistory([]);
     restore({ mode: 'overview', centerId: '', expandedIds: [], selectedId: '', selectedEdgeId: '' });
+    requestViewport({ action: 'fit' });
   }
 
   function expandSelected() {
@@ -294,8 +310,20 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
         {projection.limited && <strong className="atlas-limited">Display bounds active — some eligible evidence is not drawn</strong>}
       </div>
       <p className="atlas-provenance">Analyzer: {graph.analyzerVersion} · Fingerprint: <code>{graph.fingerprintSha256}</code></p>
-      <div className="atlas-workspace">
-        <aside className="atlas-navigation" aria-label="Atlas search and navigation">
+      <div className="atlas-display-controls" aria-label="Atlas display controls">
+        <button type="button" aria-expanded={!navigationCollapsed} aria-controls="atlas-search-panel"
+          onClick={() => setNavigationCollapsed(value => !value)}>
+          {navigationCollapsed ? 'Show search panel' : 'Hide search panel'}
+        </button>
+        <label htmlFor="atlas-inspector-width">Evidence panel width: <output>{inspectorWidth}px</output></label>
+        <input id="atlas-inspector-width" aria-label="Evidence panel width" type="range"
+          min={280} max={540} step={20} value={inspectorWidth}
+          onChange={event => setInspectorWidth(Number(event.target.value))}/>
+      </div>
+      <div className={navigationCollapsed ? 'atlas-workspace atlas-workspace--search-hidden' : 'atlas-workspace'}
+        style={{ '--atlas-inspector-width': inspectorWidth + 'px' } as CSSProperties}>
+        <aside id="atlas-search-panel" className="atlas-navigation"
+          aria-label="Atlas search and navigation" hidden={navigationCollapsed}>
           <h3>Explore saved evidence</h3>
           <div className="atlas-mode-controls">
             <button type="button" disabled={history.length === 0} onClick={goBack}
@@ -329,7 +357,10 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
               No project/file evidence nodes were recorded for this view. This is not proof that the repository has no architecture, APIs, or dependencies. Try another snapshot or inspect Snapshot Coverage.
             </div>
           : <ReactFlowProvider>
-              <AtlasCanvas projected={projection} selectedId={selectedId} selectedEdgeId={selectedEdgeId}
+              <AtlasCanvas projected={projection} centerId={centerId}
+                selectedId={selectedId} selectedEdgeId={selectedEdgeId}
+                command={viewportCommand}
+                onViewport={viewport => { if (isAtlasViewport(viewport)) viewportRef.current = { ...viewport }; }}
                 onNode={chooseNode} onEdge={chooseEdge}/>
             </ReactFlowProvider>}
         <aside className="atlas-details" aria-label="Atlas selection and evidence summary">
