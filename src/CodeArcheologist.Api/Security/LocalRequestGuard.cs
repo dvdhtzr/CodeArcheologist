@@ -28,7 +28,9 @@ public sealed class LocalRequestGuard(RequestDelegate next)
     private static readonly HashSet<string> DeveloperOrigins = new(StringComparer.OrdinalIgnoreCase)
     {
         "http://localhost:5174",
-        "http://127.0.0.1:5174"
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175"
     };
 
     public async Task InvokeAsync(HttpContext context, ClientOriginPolicy clientOrigins)

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { ApiClient, ApiError } from './api.ts';
 import type { EntryPoint, Repository, RunSummary, Scope, Snapshot, Workspace } from './api.ts';
 import { LiveRun } from './realtime.ts';
+import type { ExplorerSelection } from './DeterministicExplorer.tsx';
 import type { LiveSnapshot } from './realtime.ts';
 
 export type LiveView = { api: ApiClient; scope: Scope; runId: string; entryPoint: string; snapshot: LiveSnapshot };
@@ -11,10 +12,11 @@ export type LiveView = { api: ApiClient; scope: Scope; runId: string; entryPoint
  * MC3 connection and command panel. Every command is an explicit button
  * press sent over REST; the live view is fed by LiveRun (SignalR + REST).
  */
-export function LiveConsole({ onView, onConnected, onFindings }: {
+export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
   onView: (view: LiveView | null) => void;
   onConnected: (connected: boolean) => void;
   onFindings: () => void;
+  onSelection: (selection: ExplorerSelection) => void;
 }) {
   const [address, setAddress] = useState('http://127.0.0.1:5127');
   const [code, setCode] = useState('');
@@ -40,6 +42,11 @@ export function LiveConsole({ onView, onConnected, onFindings }: {
   const liveRun = useRef<LiveRun | null>(null);
 
   const scope: Scope | null = workspaceId && repositoryId && snapshotId ? { workspaceId, repositoryId, snapshotId } : null;
+  // One shared explicit scope for investigations and deterministic exploration.
+  useEffect(() => {
+    onSelection(api && scope ? { api, scope } : null);
+  }, [api, workspaceId, repositoryId, snapshotId, onSelection]);
+
   const entryLabel = entryPoints.find(e => e.id === entryPointId);
 
   async function attempt<T>(work: () => Promise<T>): Promise<T | undefined> {

@@ -7,11 +7,13 @@ import {
 import type { DemoScene, RoleId, StageState } from './demo';
 import { LiveConsole } from './live/LiveConsole.tsx';
 import { Findings } from './live/Findings.tsx';
+import { DeterministicExplorer } from './live/DeterministicExplorer.tsx';
+import type { ExplorerSelection } from './live/DeterministicExplorer.tsx';
 import type { LiveView } from './live/LiveConsole.tsx';
 import { displayEvent, liveStages } from './live/ledger.ts';
 import type { DisplayEvent, LiveStage } from './live/ledger.ts';
 
-type Page = 'observatory' | 'activity' | 'findings' | 'design';
+type Page = 'observatory' | 'explorer' | 'activity' | 'findings' | 'design';
 type Mode = 'live' | 'demo';
 const stateNames: Record<StageState, string> = {
   queued: 'Standing by', active: 'Working', accepted: 'Accepted', halted: 'Stopped',
@@ -159,6 +161,7 @@ export function App() {
   const [mode, setMode] = useState<Mode>('live');
   const [connected, setConnected] = useState(false);
   const [liveView, setLiveView] = useState<LiveView | null>(null);
+  const [explorerSelection, setExplorerSelection] = useState<ExplorerSelection>(null);
 
   useEffect(() => {
     if (!playing) return;
@@ -203,6 +206,9 @@ export function App() {
             <button type="button" className={`nav-link ${page === 'observatory' ? 'active' : ''}`}
               aria-current={page === 'observatory' ? 'page' : undefined}
               onClick={() => setPage('observatory')}><Symbol name="orb"/> Agent Observatory <Symbol name="chevron" size={15}/></button>
+            <button type="button" className={`nav-link ${page === 'explorer' ? 'active' : ''}`}
+              aria-current={page === 'explorer' ? 'page' : undefined}
+              onClick={() => setPage('explorer')}><Symbol name="layers"/> Architecture Explorer <Symbol name="chevron" size={15}/></button>
             <button type="button" className={`nav-link ${page === 'activity' ? 'active' : ''}`}
               aria-current={page === 'activity' ? 'page' : undefined}
               onClick={() => setPage('activity')}><Symbol name="pulse"/> Activity Timeline <Symbol name="chevron" size={15}/></button>
@@ -239,7 +245,7 @@ export function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumb"><span>CODE ARCHEOLOGIST</span><Symbol name="chevron" size={14}/><strong>{page === 'observatory' ? 'Agent Observatory' : page === 'activity' ? 'Activity Timeline' : page === 'findings' ? 'Findings' : 'Design Principles'}</strong></div>
+          <div className="breadcrumb"><span>CODE ARCHEOLOGIST</span><Symbol name="chevron" size={14}/><strong>{page === 'observatory' ? 'Agent Observatory' : page === 'explorer' ? 'Architecture Explorer' : page === 'activity' ? 'Activity Timeline' : page === 'findings' ? 'Findings' : 'Design Principles'}</strong></div>
           <div className="topbar-status">
             {page === 'observatory' && <span className="topbar-metrics" aria-label="Run status">
               <span>Accepted <strong>{acceptedCount}/3</strong></span>
@@ -266,7 +272,7 @@ export function App() {
                     onClick={() => setMode('demo')}>Demo walkthrough</button>
                 </div>
                 <div className="control-body">
-                  <div hidden={mode !== 'live'}><LiveConsole onView={setLiveView} onConnected={setConnected} onFindings={() => setPage('findings')} /></div>
+                  <div hidden={mode !== 'live'}><LiveConsole onView={setLiveView} onConnected={setConnected} onSelection={setExplorerSelection} onFindings={() => setPage('findings')} /></div>
                   {mode === 'demo' && <>
                     <div className="step-header"><span>PREVIEW PHASE</span><strong>{String(walkthroughStep).padStart(2, '0')} / 04</strong></div>
                     <div className="progress-track" role="progressbar" aria-label="Visual walkthrough step"
@@ -333,6 +339,7 @@ export function App() {
             </div>
           )}
 
+          {page === 'explorer' && <DeterministicExplorer selection={explorerSelection} />}
           {page === 'activity' && (
             <section className="secondary-page">
               <span className="eyebrow eyebrow--accent">PREVIEW EVENT JOURNAL</span>

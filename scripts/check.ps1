@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $apiProject = Join-Path $root 'src/CodeArcheologist.Api/CodeArcheologist.Api.csproj'
 $client = Join-Path $root 'src/CodeArcheologist.Client'
+$mission = Join-Path $root 'src/CodeArcheologist.MissionControl'
 $lockfile = Join-Path $client 'package-lock.json'
 if (-not (Test-Path -LiteralPath $lockfile -PathType Leaf)) {
   throw "Frontend lockfile is missing: $lockfile. From the repository root, check 'git status --short' and restore the tracked file with 'git restore -- src/CodeArcheologist.Client/package-lock.json'."
@@ -35,6 +36,14 @@ if ($LASTEXITCODE -ne 0) { throw 'Reproducible frontend dependency installation 
 if ($LASTEXITCODE -ne 0) { throw 'TypeScript typecheck failed.' }
 & npm --prefix $client run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend production bundle build failed.' }
+& npm ci --prefix $mission --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'Mission Control dependency installation failed.' }
+& npm --prefix $mission run typecheck
+if ($LASTEXITCODE -ne 0) { throw 'Mission Control TypeScript typecheck failed.' }
+& npm --prefix $mission run build
+if ($LASTEXITCODE -ne 0) { throw 'Mission Control build failed.' }
+& npm --prefix $mission run test
+if ($LASTEXITCODE -ne 0) { throw 'Mission Control unit tests failed.' }
 & node --test (Join-Path $root 'tests/security/local-access.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'Local security integration tests failed.' }
 & node --test (Join-Path $root 'tests/workspaces/workspaces.test.mjs')
@@ -51,4 +60,6 @@ if ($LASTEXITCODE -ne 0) { throw 'W1 white-label API and SignalR integration tes
 if ($LASTEXITCODE -ne 0) { throw 'W2 capability resource integration tests failed.' }
 & node --test (Join-Path $root 'tests/api/source.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'MC4 snapshot source-lines integration tests failed.' }
+& npm --prefix $mission run test:live
+if ($LASTEXITCODE -ne 0) { throw 'Mission Control live API integration tests failed.' }
 Write-Host 'GREEN: Local build, model-free Ollama, Gate B, C1, C5a and C6b (ownership/fencing/worker) contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'

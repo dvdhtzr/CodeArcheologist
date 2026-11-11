@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $apiProject = Join-Path $root 'src/CodeArcheologist.Api/CodeArcheologist.Api.csproj'
-$client = Join-Path $root 'src/CodeArcheologist.Client'
+$client = Join-Path $root 'src/CodeArcheologist.MissionControl'
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw '.NET 10 SDK is required.' }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Node.js and npm are required.' }
 # Use the exact Release build validated by scripts/check.ps1. Plain 'dotnet
@@ -37,7 +37,8 @@ finally {
 }
 Write-Host "Local browser pairing code: $code"
 try {
-  Write-Host 'Developer UI: http://127.0.0.1:5174/'
+  Write-Host 'Mission Control (primary UI): http://127.0.0.1:5175/'
+  Write-Host 'Legacy explorer remains available separately via npm --prefix src/CodeArcheologist.Client run dev'
   Write-Host 'API: http://127.0.0.1:5127/api/v1/health'
   & npm --prefix $client run dev -- --host 127.0.0.1
   if ($LASTEXITCODE -ne 0) { throw 'Frontend developer server failed.' }

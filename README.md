@@ -1,12 +1,14 @@
 # Code Archeologist
 
-**Status: Early local-first development. Saved snapshots, Roslyn structural analysis, provisional C# method relationships, and a bounded evidence graph are available. The explorer has one-hop candidate impact review, controller HTTP attribute candidates, Minimal API mapping candidates and written DI registration candidates. No source-derived candidate is a compiler-verified call, registered endpoint, complete functionality map or breakage prediction. Typed read-only agent evidence tool contracts are available; actual agents and full impact investigations are not yet implemented.**
+**Status: R1 product-completion integration in progress.** The application includes working local source snapshots, deterministic C# evidence analysis, one-hop provisional change-impact candidates, a genuine local MAF/Ollama multi-agent workflow, durable reports, host-written cautions, and a separate Mission Control frontend with live REST/SignalR. Agent assessments are not verified semantic facts. Mission Control is becoming the primary application while the original developer explorer remains a fallback. **This is not a packaged, hardened, or production-ready release.**
 
 Code Archeologist aims to be a local-first, cross-platform software intelligence platform that analyzes one or more source repositories, constructs evidence-backed architecture and dependency models, supports adaptive multi-agent investigation, and preserves institutionally reviewed knowledge in an Obsidian-compatible vault.
 
 The approved architectural baseline consists of [v0.1](docs/architecture/Code-Archeologist-v0.1.md), the [v0.2 technical design](docs/architecture/Code-Archeologist-v0.2.md), and the [subsequent owner-approval record](docs/decisions/0001-architecture-approval.md). Historical status wording in the original documents is preserved intentionally.
 
-## Current developer milestones
+## Implemented capability history (some descriptions predate MAF)
+
+The following list documents individual implementation slices. Later milestones supersede historical statements such as “no agents running yet.” For current user-facing operation, use Mission Control and the current API contracts.
 
 - ASP.NET Core .NET 10 API bound only to loopback, exposing a public health endpoint and a protected local browser session.
 - React + TypeScript development client with real API health, local browser pairing and a persistent workspace explorer.
@@ -27,7 +29,7 @@ The approved architectural baseline consists of [v0.1](docs/architecture/Code-Ar
 - Local Windows PowerShell and Unix shell startup/build scripts with disposable security and workspace persistence tests.
 - Safety, contribution, acceptance and architecture documentation.
 
-**Not yet implemented:** immutable Git commit resolution, full safe hostile-source ingestion, complete workspaces (vault mapping, backup/restore), production-grade hosted authentication, agents/MAF, quality engine, plugins, source sandbox, durable graph persistence, vector retrieval, vault reconciliation, production packaging, or complete Mission Control. Snapshot capture is available only by explicit user action and is not suitable for highly sensitive or adversarial repositories without further hardening.
+**Remaining release scope:** unified visual architecture navigation, full functionality maps, cross-repository dependency analysis, complete vault/backup/restore workflow, plugins, sandboxed execution, vector retrieval, vault reconciliation, and packaged distribution. Production-grade hosted authentication and hostile-source ingestion are out of scope. The current MAF/Ollama worker and reports are implemented, but evaluations do not establish reliable semantic understanding. Source snapshots are user-authorized and must not be used for sensitive or adversarial repositories without additional hardening.
 
 ## Development
 
@@ -36,8 +38,10 @@ Requires a .NET 10 SDK and Node.js 22.12+ with npm **for working on the source**
 Windows: run scripts/check.ps1 then scripts/start.ps1.
 macOS/Linux: run bash scripts/check.sh then bash scripts/start.sh.
 
+**Primary UI:** Mission Control at http://127.0.0.1:5175/. Pair using the code printed by the startup script. Under **Live API**, choose or create a workspace, register a local folder, and capture or select a snapshot; then use **Architecture Explorer** for deterministic HTTP candidates, method declarations, direct impact candidates and saved-source excerpts. The same scope is used for optional AI investigations. This R1 explorer is an initial capability integration, not the complete visual graph experience planned for R2. To use the legacy developer explorer, start its Vite app separately with `npm --prefix src/CodeArcheologist.Client run dev` on port 5174 while the API is running.
+
 **Local pairing:** the start script prints a new 32-character pairing code. Enter it in the browser to unlock the current process-scoped local session. The API uses an HttpOnly SameSite=Strict cookie, a server-side revocation list and a CSRF header for state-changing requests. Sessions expire after 30 minutes and are invalid after restarting the API. The code is shown only in local terminal output and must not be shared. The pairing code can be retried until the API stops, with temporary lockouts after repeated failures. Pairing is for localhost-only development, **not remote or multi-user access**.
-Open http://127.0.0.1:5174/ ; the API is on http://127.0.0.1:5127/ and supports GET /api/v1/health.
+Open http://127.0.0.1:5175/ ; the API is on http://127.0.0.1:5127/ and supports GET /api/v1/health.
 
 The committed `package-lock.json` pins the frontend dependency graph; local verification uses `npm ci` to reproduce it. Previously successful Windows developer verification does not establish cross-platform packaging. GitHub CI is intentionally absent. The check scripts also run security and workspace integration tests against the trusted API with isolated, temporary SQLite databases. Stop the development server before running the check script because both use API port 5127. All verification outcomes must be documented.
 
