@@ -24,9 +24,6 @@ type AtlasRecord = { key: string; api: NonNullable<ExplorerSelection>['api']; gr
 const NODE_W = 216;
 const NODE_H = 74;
 const MAX_EXPANSIONS = 12;
-const isMethod = (n: GraphNode) =>
-  n.kind === 'syntax-declaration' && n.detail?.startsWith('method syntax declaration');
-const canInspect = (item: EvidenceLocation) => Boolean(item.filePath && item.fileSha256 && item.line);
 const clip = (value: string, max = 68) => value.length > max ? value.slice(0, max - 1) + '…' : value;
 
 function nodeStyle(kind: string) {
