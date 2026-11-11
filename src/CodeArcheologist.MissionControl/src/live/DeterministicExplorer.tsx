@@ -117,8 +117,8 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
         <h2>Choose a snapshot</h2>
         <p>Open Agent Observatory → Live API, connect, and select a workspace, repository and saved snapshot. The same selection powers this explorer and your investigations.</p>
       </div>}
-      {loading && <p role="status">Loading verified snapshot capabilities…</p>}
-      {error && <p className="live-error" role="alert">{error}</p>}
+      {view !== 'coverage' && loading && <p role="status">Loading verified snapshot capabilities…</p>}
+      {view !== 'coverage' && error && <p className="live-error" role="alert">{error}</p>}
       {view === 'coverage' && <SnapshotCoverage selection={selection} />}
       {view === 'graph' && <EvidenceGraphExplorer selection={selection}
         fingerprint={entries?.fingerprintSha256 ?? null}
