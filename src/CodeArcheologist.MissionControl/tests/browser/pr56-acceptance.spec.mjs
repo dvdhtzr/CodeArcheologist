@@ -129,8 +129,8 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await page.getByRole('button', { name: 'Back to previous Atlas view' }).click();
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('declared-in');
     await expect(page.locator('.atlas-endpoints')).toContainText('Go to target node');
-    await expect(page.locator('.atlas-inline-source')).toHaveCount(0,
-      'source from a different selection must never remain under the restored edge');
+    // Returning to the prior selection must not resurrect its old source panel.
+    await expect(page.locator('.atlas-inline-source')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Project / file overview' }).click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Project / file overview');
