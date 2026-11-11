@@ -63,6 +63,14 @@ Open **http://127.0.0.1:5175/**. Stop with Ctrl+C. The original developer fronte
 
 No Ollama, .NET process, database, pairing code or secrets are required for the preview.
 
+## Atlas Visual Polish & Performance — R2 PR3
+
+The Architecture Atlas uses a wider desktop canvas; **Hide/Show search panel** toggles its navigation controls and **Evidence panel width** is a native, keyboard-accessible range input (280–540px). Search, graph and evidence stack responsively on narrower screens. Graph selection/expansion no longer auto-fits the camera. Explicit navigation centers the selected saved node; **Back** restores the prior viewport, selection and expansion when available. **Fit visible graph** remains explicit. Motion is disabled for reduced-motion preferences.
+
+The graph now indexes lowercase search text and exact edge IDs only once per selected snapshot; duplicate edge IDs fail closed. The default model-free tests include 10,000 nodes and 16,000 edges while preserving the 80/150/250 display caps. Run `npm run benchmark:atlas` from the Mission Control project to record a **synthetic only** JSON timing report. Optional pinned real-repository browser acceptance is documented at `docs/architecture/r2-atlas-polish-performance.md`; it requires the owner's existing C6c curated checkouts, never downloads or executes their code and is skipped in default runs.
+
+PR3 requires both the full GREEN suite and a human visual/keyboard walkthrough before merge. No graph evidence contract, source data or agent runtime is changed.
+
 ## Evidence Navigation — R2 PR2
 
 Within the Atlas, select an actual recorded edge (or select it in the accessible relationship list) to inspect original from/to IDs, evidence status, origin path/SHA-256/line, explanation and separately labeled source/target/shared project candidate lists. Click **Inspect edge source** (or **Inspect saved source** for a node with a line anchor) to open a bounded, line-numbered saved source excerpt **inside the right inspector**. The API re-verifies copied snapshot bytes and the client validates its exact snapshot ID, fingerprint, file hash and focus line; malformed or mismatched responses are rejected, not displayed as verified. Source text is inert and is not executed.
