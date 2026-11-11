@@ -1,12 +1,12 @@
 # Code Archeologist — Mission Control (MC3)
 
-**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. The richer graphical architecture canvas is planned for R2.
+**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. R1 now adds a bounded, searchable and source-drillable graph neighborhood. The repository-wide, interactive architectural canvas remains planned for R2.
 
 ## Live mode (MC3)
 
 1. **Start the application.** From the repository root, use `scripts/start.ps1` (Windows) or `bash scripts/start.sh` (macOS/Linux). The trusted developer startup permits the bundled local 5175 origin; no manual allowlist editing is needed. When launching Mission Control independently without the scripts, explicitly allowlist its origin in `client-origins.json` (see `docs/api/README.md`).
 2. **Connect.** Open http://127.0.0.1:5175/, use the current API pairing code under **Live API**, and select or create a workspace, repository, and saved snapshot.
-3. **Explore deterministic evidence.** Open **Architecture Explorer** to inspect source-written HTTP candidates, C# method declarations, provisional one-hop impact candidates, and hash-verified saved source. No model is needed.
+3. **Explore deterministic evidence.** Open **Architecture Explorer**. **Candidates & direct impact** shows source-written HTTP candidates, C# method declarations and one-hop provisional caller candidates. Select **Evidence graph** and click **Load saved evidence graph** for searchable C# nodes, grouped node kinds, an eight-neighbor diagram, direct evidence relationships and hash-verified source drill-down. This graph is not a compiled dependency graph or proof of runtime behavior. No model is needed.
 4. **Optionally investigate.** Return to **Agent Observatory**, choose a candidate entry point, and start or review a local MAF/Ollama investigation.
 
 **What drives the screen:**
@@ -31,9 +31,11 @@ All AI-written text is shown as plain text and labelled. Clicking a citation sho
 
 ## R1 integration boundaries
 
-The primary UI now exposes the existing deterministic `entry-points`, `methods`, `impact`, and `source` resources. No new analyzer, project-resolution engine, graph persistence, or runtime inference is introduced. The legacy port-5174 explorer retains the richer low-level evidence graph until its visual capabilities are migrated in R2. Both features share one selected workspace/repository/snapshot in Mission Control.
+The primary UI exposes the existing deterministic `entry-points`, `methods`, `impact`, `csharp-evidence-graph`, and `source` resources. The graph is fetched only when the user asks; results must match the selected workspace, repository, snapshot and fingerprint. The navigation is a **bounded one-hop neighborhood** (at most eight distinct neighbors in the diagram, first 100 relationships in the accessible list) with exact source-defined edge/status labels, including provisional project-context hints. A matching source record can be opened from the captured snapshot; no live folder code is run or read.
 
-## MC1 visual foundation
+This is not a repository-wide architectural graph layout, confirmed project dependency graph, transitive impact analysis or compiler symbol graph. No new analyzer, project-resolution engine, graph persistence, or runtime inference is introduced. The legacy port-5174 explorer remains available for low-level evidence-tool and citation-contract diagnostics until those interfaces have product-level replacements. Both Mission Control views share one selected workspace/repository/snapshot.
+
+## Historical MC1 visual foundation
 
 All stage events in the demo walkthrough are synthetic and prominently labelled as such.
 
@@ -66,10 +68,10 @@ No Ollama, .NET process, database, pairing code or secrets are required for the 
 - **Design Principles** — independent evidence sessions, host-owned truth, future transport and replaceable clients.
 - **Accessibility** — keyboard-native buttons, visible focus, explicit text status, reduced-motion preference, narrow/mobile layout.
 
-## Architecture and trust boundary
+## Historical design notes and current trust boundary
 
 ```text
-CodeArcheologist.Api  <---- future versioned REST + SignalR ---->  MissionControl
+CodeArcheologist.Api  <-------- versioned REST + SignalR --------->  MissionControl
   C6 + MAF + SQLite                                            React + TypeScript
   authoritative event ledger                                  presentational projection
   authentication + scope                                      original avatar vectors
@@ -78,7 +80,7 @@ CodeArcheologist.Api  <---- future versioned REST + SignalR ---->  MissionContro
 
 MC1 uses `src/demo.ts` for all placeholder activity. The demonstration sequence is faithful to today's **sequential** Gate C execution: verified scope → Investigator → independent Skeptic → Reviewer. The Investigator and Skeptic do **not** exchange conclusions; their accepted assessments are separately delivered to the Reviewer. There is no invented agent conversation.
 
-The backend remains the source of truth. In MC3 the new client will consume the **versioned public API contract** (ADR 0021 / W1 when merged), including authenticated REST operations, SignalR `eventAppended` and `executionUpdated` messages, deduplication by event ID, reconnection and state reconciliation. Visual effects must be triggered by committed host events, not invented model thoughts, timers or speculation. No backend transport is added here.
+The backend remains the source of truth. The MC3+ client consumes the **versioned public API contract** (ADR 0021 / W1), including authenticated REST operations, SignalR `eventAppended` and `executionUpdated` messages, deduplication by event ID, reconnection and state reconciliation. Visual effects must be triggered by committed host events, not invented model thoughts, timers or speculation. No backend transport is added here.
 
 **Security:** the new preview binds to 127.0.0.1. It does not store credentials. MC3 must coordinate allowlisted loopback origins, bearer-token lifecycle and local application authorization with the API design, rather than bypass the existing guard.
 
@@ -86,7 +88,7 @@ The backend remains the source of truth. In MC3 the new client will consume the 
 
 `npm run test` uses the Node.js type-stripping flag for a dependency-free check of the demo's stage semantics, event ordering, backend isolation, and accessibility markers. `npm run typecheck` and `npm run build` validate the separate frontend itself. A human browser pass is still required to judge rendering, focus behavior, motion, responsive layout and original character quality.
 
-This PR deliberately **does not modify**:
+The historical MC1 visual-only PR deliberately **did not modify**:
 
 - `src/CodeArcheologist.Api/**`
 - `src/CodeArcheologist.Client/**`
