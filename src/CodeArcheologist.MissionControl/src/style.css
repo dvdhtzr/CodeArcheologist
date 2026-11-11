@@ -446,3 +446,27 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 .setup-summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: #9fb3c8; border: 1px dashed var(--outline); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
 .setup-summary .text-button { white-space: nowrap; flex-shrink: 0; }
 .cockpit .live-run .control-actions, .live-run .control-actions { margin: 6px 0 0; }
+
+/* R1: deterministic exploration shares the Mission Control workspace and evidence language. */
+.deterministic-explorer { max-width: 1140px; margin: 0 auto; }
+.deterministic-explorer h1 { margin: 12px 0; }
+.deterministic-explorer .secondary-panel { margin-top: 20px; }
+.deterministic-explorer h2 { font-size: 19px; margin: 24px 0 10px; }
+.deterministic-summary { display: flex; flex-wrap: wrap; gap: 12px; }
+.deterministic-summary > div { min-width: 145px; flex: 1; padding: 17px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--outline); }
+.deterministic-summary strong { display: block; font-size: 25px; color: var(--bright); }
+.deterministic-summary span, .deterministic-list small { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; }
+.deterministic-list { list-style: none; padding: 0; margin: 12px 0; max-width: 100%; }
+.deterministic-list > li { padding: 13px 0; border-bottom: 1px solid var(--outline); overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.deterministic-list > li > div { flex: 1 1 230px; }
+.deterministic-list > li > span { color: var(--muted); font-size: 12px; flex: 1 1 230px; }
+.deterministic-list button, .deterministic-impact > button { background: #162a3e; border: 1px solid #35546e; border-radius: 7px; padding: 8px 11px; color: #bce8ff; text-align: left; }
+.deterministic-list button[aria-pressed="true"] { outline: 2px solid var(--cyan); }
+.deterministic-search { display: grid; gap: 7px; max-width: 550px; }
+.deterministic-search input { border-radius: 7px; padding: 11px; background: #091523; color: var(--bright); border: 1px solid #41546b; }
+.deterministic-methods { max-height: 360px; overflow: auto; }
+.deterministic-methods li { display: block; }
+.deterministic-methods li button { width: 100%; overflow-wrap: anywhere; }
+.deterministic-impact { margin-top: 24px; border-top: 1px solid var(--outline); }
+.deterministic-source pre { overflow: auto; white-space: pre; max-height: 440px; background: #070d18; padding: 15px; border-radius: 8px; font-size: 12px; }
+.deterministic-source p { overflow-wrap: anywhere; }
