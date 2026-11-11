@@ -134,6 +134,14 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     // Returning to the prior selection must not resurrect its old source panel.
     await expect(page.locator('.atlas-inline-source')).toHaveCount(0);
 
+    await page.getByRole('button', { name: /Go to source node/ }).click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
+    await page.getByRole('button', { name: 'Inspect saved source' }).click();
+    await expect(page.getByRole('region', { name: 'Atlas verified saved source' }))
+      .toContainText('private int Helper()');
+    await page.getByRole('button', { name: 'Back to previous Atlas view' }).click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('declared-in');
+
     await page.getByRole('button', { name: 'Project / file overview' }).click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Project / file overview');
     await page.getByRole('button', { name: 'Agent Observatory' }).click();
