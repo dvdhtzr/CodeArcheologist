@@ -19,6 +19,22 @@ export type Snapshot = {
   id: string; workspaceId: string; repositoryId: string; fingerprintSha256: string; manifestSha256: string;
   capturedAtUtc: string; fileCount: number; totalBytes: number; exclusionCount: number; policyVersion: string;
 };
+export type SnapshotFile = { path: string; sizeBytes: number; sha256: string };
+export type SnapshotExclusion = { path: string; reason: string };
+export type SnapshotManifest = {
+  formatVersion: number; policyVersion: string; workspaceId: string; repositoryId: string; snapshotId: string;
+  sourceKind: string; sourceLocator: string; revisionKind: string; fingerprintSha256: string;
+  capturedAtUtc: string; files: SnapshotFile[]; exclusions: SnapshotExclusion[];
+};
+export type SourceInventory = {
+  workspaceId: string; repositoryId: string; snapshotId: string; fingerprintSha256: string;
+  analyzerVersion: string; detectionMethod: string; includedFileCount: number; includedBytes: number;
+  excludedEntryCount: number; languages: Array<{ name: string; fileCount: number; totalBytes: number }>;
+  roles: Array<{ name: string; fileCount: number; totalBytes: number }>;
+  files: Array<{ path: string; sha256: string; sizeBytes: number; language: string; role: string }>;
+  exclusions: SnapshotExclusion[]; limitations: string[];
+};
+
 export type Anchor = { filePath: string; fileSha256: string; line: number; column: number };
 export type EntryPoint = { id: string; kind: string; evidenceStatus: string; label: string; detail: string; anchor: Anchor };
 export type EntryPointList = {
@@ -35,11 +51,20 @@ export type LedgerEvent = {
 };
 export type ExecutionStage = { role: string; status: string; checkpoint: { checkpointId: string; contentSha256: string } | null };
 export type ExecutionAttempt = { attemptId: string; number: number; status: string; terminalCause: string | null; diagnostic: string };
+export type RecoveryEligibility = { eligible: boolean; diagnostic: string; expectedAttemptNumber: number | null };
 export type Execution = {
   projectionVersion: string; runId: string; runStatus: string; runDiagnostic: string; legacy: boolean;
   currentAttempt: ExecutionAttempt | null; attempts: ExecutionAttempt[]; stages: ExecutionStage[];
-  cancellable: boolean; note: string;
+  recovery: RecoveryEligibility; cancellable: boolean; executionOwner: boolean; ownershipDiagnostic: string; note: string;
 };
+/** Recovery is a host-readiness decision, not inferred from the run's status. */
+export function eligibleContinuation(execution: Execution | null): number | null {
+  const recovery = execution?.recovery;
+  return execution?.projectionVersion === 'gate-c6b-execution-projection-v1' &&
+    execution.legacy === false && recovery?.eligible === true &&
+    Number.isInteger(recovery.expectedAttemptNumber) && (recovery.expectedAttemptNumber ?? 0) > 0
+    ? recovery.expectedAttemptNumber : null;
+}
 export type Scope = { workspaceId: string; repositoryId: string; snapshotId: string };
 export type SourceView = {
   contractVersion: string; filePath: string; fileSha256: string; totalLines: number; focusLine: number;
@@ -74,6 +99,7 @@ export class ApiClient {
   readonly #extraHeaders: Record<string, string>;
   #token: string | null = null;
   #expiresAtUtc: string | null = null;
+  readonly #sessionLostListeners = new Set<() => void>();
 
   /** extraHeaders exist for non-browser tests (a browser sets Origin itself). */
   constructor(baseUrl: string, fetchImpl: Fetch = globalThis.fetch.bind(globalThis), extraHeaders: Record<string, string> = {}) {
@@ -110,6 +136,19 @@ export class ApiClient {
     try { await this.#send('POST', '/api/v1/auth/token/revoke', {}, false); } finally { this.forget(); }
   }
 
+  /** Called once on loss of the authenticated session (401 or host-declared expiry). */
+  onSessionLost(listener: () => void): () => void {
+    this.#sessionLostListeners.add(listener);
+    return () => { this.#sessionLostListeners.delete(listener); };
+  }
+  expireSession(): void { this.#sessionLost(); }
+  #sessionLost(): void {
+    if (!this.#token) return;
+    this.forget();
+    for (const listener of [...this.#sessionLostListeners]) {
+      try { listener(); } catch { /* never hide the original authentication failure */ }
+    }
+  }
   forget(): void { this.#token = null; this.#expiresAtUtc = null; }
 
   listWorkspaces() { return this.#send<Page<Workspace>>('GET', '/api/v1/workspaces'); }
@@ -129,6 +168,10 @@ export class ApiClient {
   }
   /** Existing snapshot-scoped, verified graph API; response status labels are not semantic proof. */
   evidenceGraph(scope: Scope) { return this.#send<EvidenceGraph>('GET', scopePath(scope) + '/csharp-evidence-graph'); }
+  /** Snapshot completeness is independent of the C# graph and agent inference. */
+  getSnapshot(scope: Scope) { return this.#send<Snapshot>('GET', scopePath(scope)); }
+  manifest(scope: Scope) { return this.#send<SnapshotManifest>('GET', scopePath(scope) + '/manifest'); }
+  inventory(scope: Scope) { return this.#send<SourceInventory>('GET', scopePath(scope) + '/inventory'); }
   listEntryPoints(scope: Scope) { return this.#send<EntryPointList>('GET', scopePath(scope) + '/entry-points'); }
   listMethods(scope: Scope) { return this.#send<{ contractVersion: string; snapshotId: string; fingerprintSha256: string; count: number; truncated: boolean; items: Array<{ id: string; label: string; detail: string | null; anchor: { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null }; inboundProvisionalCandidates: number }>; caveat: string }>('GET', scopePath(scope) + '/methods'); }
   impact(scope: Scope, methodId: string) {
@@ -146,21 +189,30 @@ export class ApiClient {
     const query = new URLSearchParams({ path, sha256, line: String(line), context: String(context) });
     return this.#send<SourceView>('GET', scopePath(scope) + '/source?' + query.toString());
   }
+  continueInvestigation(scope: Scope, runId: string, expectedAttemptNumber: number, idempotencyKey: string) {
+    if (!Number.isInteger(expectedAttemptNumber) || expectedAttemptNumber < 1)
+      throw new Error('Expected attempt number must be positive.');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idempotencyKey))
+      throw new Error('A stable UUID idempotency key is required for explicit continuation.');
+    return this.#send<{ diagnostic: string; attempt: ExecutionAttempt | null }>(
+      'POST', scopePath(scope) + `/investigations/${id(runId)}/continue`,
+      { expectedAttemptNumber }, true, idempotencyKey);
+  }
   cancel(scope: Scope, runId: string, expectedAttemptNumber: number) {
     return this.#send<unknown>('POST', scopePath(scope) + `/investigations/${id(runId)}/cancel`, { expectedAttemptNumber });
   }
 
-  async #send<T>(method: 'GET' | 'POST', path: string, body?: unknown, parse = true): Promise<T> {
+  async #send<T>(method: 'GET' | 'POST', path: string, body?: unknown, parse = true, idempotencyKey?: string): Promise<T> {
     const headers: Record<string, string> = { Authorization: 'Bearer ' + this.token(), ...this.#extraHeaders };
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
-      headers['Idempotency-Key'] = crypto.randomUUID();
+      headers['Idempotency-Key'] = idempotencyKey ?? crypto.randomUUID();
     }
     const response = await this.#fetch(this.baseUrl + path, {
       method, headers, body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
     });
     const data = parse || !response.ok ? await readBody(response) : null;
-    if (response.status === 401) this.forget();
+    if (response.status === 401) this.#sessionLost();
     if (!response.ok) throw new ApiError(response.status, describeFailure(response.status, data), data);
     return data as T;
   }

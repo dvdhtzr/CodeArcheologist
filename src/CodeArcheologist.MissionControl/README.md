@@ -7,13 +7,17 @@
 1. **Start the application.** From the repository root, use `scripts/start.ps1` (Windows) or `bash scripts/start.sh` (macOS/Linux). The trusted developer startup permits the bundled local 5175 origin; no manual allowlist editing is needed. When launching Mission Control independently without the scripts, explicitly allowlist its origin in `client-origins.json` (see `docs/api/README.md`).
 2. **Connect.** Open http://127.0.0.1:5175/, use the current API pairing code under **Live API**, and select or create a workspace, repository, and saved snapshot.
 3. **Explore deterministic evidence.** Open **Architecture Explorer**. **Candidates & direct impact** shows source-written HTTP candidates, C# method declarations and one-hop provisional caller candidates. Select **Evidence graph** and click **Load saved evidence graph** for searchable C# nodes, grouped node kinds, an eight-neighbor diagram, direct evidence relationships and hash-verified source drill-down. This graph is not a compiled dependency graph or proof of runtime behavior. No model is needed.
-4. **Optionally investigate.** Return to **Agent Observatory**, choose a candidate entry point, and start or review a local MAF/Ollama investigation.
+4. **Inspect scope coverage before conclusions.** Select **Architecture Explorer → Snapshot coverage** and **Load snapshot coverage** to inspect the verified manifest, filename-classified file inventory, excluded subtrees/paths, and limitations. This resource is independent of graph analysis and works when no entry points are found or graph construction exceeds its limits.
+5. **Optionally investigate.** Return to **Agent Observatory**, choose a candidate entry point, and start or review a local MAF/Ollama investigation.
+6. **Recover interrupted investigations manually.** For a selected saved run, Mission Control shows the host's recovery diagnostic. **Continue interrupted run** appears only when the host reports eligibility and an expected attempt number. It sends an idempotent, explicit request; the host revalidates saved checkpoints and never automatically resumes interrupted work. An admitted continuation is not a completed investigation.
 
 **What drives the screen:**
 - **Agents** take their states only from the host execution projection (`gate-c6b-execution-projection-v1`). Each one shows the exact host status code (`running`, `accepted`, `failed` …).
 - **The timeline** shows only committed ledger events.
 - **Delivery:** the events arrive over SignalR. On subscribe, on every reconnect, on any sequence gap, and after a terminal attempt event, the full ledger and projection are re-read over REST. Nothing is missed or shown twice (rule 59).
 - **Commands** (create, register, capture, start, cancel) go only over REST, each with an `Idempotency-Key`. Cancel sends `expectedAttemptNumber`. SignalR is used only to subscribe.
+
+**Session expiry:** An unauthorized response from any tab clears the shared local connection, including any displayed run and explorer scope. Mission Control also clears the UI when the host-issued token expiry time is reached. The user must pair again using the current API process code; the token is never persisted. A reconnect action is shown from non-Observatory pages.
 
 **Security:**
 - The bearer token lives only in memory. It is never stored in browser storage or cookies, and it ends when the tab closes or the 30-minute lifetime ends.
@@ -72,7 +76,9 @@ npm --prefix .\src\CodeArcheologist.MissionControl run browser:install
 npm --prefix .\src\CodeArcheologist.MissionControl run test:browser
 ```
 
-The browser acceptance uses a disposable local API data directory and a temporary C# source folder, automatically creates a workspace/repository and two snapshots, and deletes them afterward. It tests real UI pairing, deterministic graph loading, kind filtering and searching, neighbor navigation, saved node/edge source verification, method-to-impact navigation, and snapshot isolation. **No Ollama, personal repository, persistent workspace, cloud CI, or browser-side mock API is needed.** A browser failure makes the existing GREEN script RED; trace and screenshot artifacts are written only under the ignored `test-results/browser` folder.
+The browser acceptance uses a disposable local API data directory and a temporary C# source folder, automatically creates a workspace/repository and two snapshots, and deletes them afterward. It also checks that a real ignored directory appears in snapshot exclusions, that snapshot coverage clears when scope changes, and that revoking an actual bearer token forces re-pairing from another page. It tests real UI pairing, deterministic graph loading, kind filtering and searching, neighbor navigation, saved node/edge source verification, method-to-impact navigation, and snapshot isolation. **No Ollama, personal repository, persistent workspace, cloud CI, or browser-side mock API is needed.** A browser failure makes the existing GREEN script RED; trace and screenshot artifacts are written only under the ignored `test-results/browser` folder.
+
+Unit tests additionally check strict manifest/inventory scope and count consistency, recovery eligibility and stable continuation request keys. The existing C6b host tests remain responsible for actual checkpoint revalidation; the Playwright suite does not fabricate an eligible interrupted run or execute Ollama.
 
 This suite validates the tested workflow in Chromium. It does **not** prove every browser, visual responsiveness or accessibility, all source patterns, or runtime/semantic correctness.
 

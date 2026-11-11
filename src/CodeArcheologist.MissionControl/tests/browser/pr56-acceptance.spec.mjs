@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, stopApi, bootstrap } from '../../../../tests/api/harness.mjs';
@@ -30,6 +31,9 @@ test.beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'code-archeologist-browser-'));
   source = join(directory, 'repository');
   await mkdir(source);
+  // A real policy exclusion must be visible in snapshot coverage, not invented by the UI.
+  await mkdir(join(source, 'node_modules'));
+  await writeFile(join(source, 'node_modules', 'ignored.js'), 'do not analyze');
   await writeFile(join(source, 'SampleController.cs'), fixture('LegacyOnly'));
   api = await startApi(join(directory, 'api-data'), browserOrigin);
 });
@@ -148,4 +152,71 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await page.getByRole('button', { name: 'Architecture Explorer' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the code you captured.' })).toBeVisible();
   });
+
+  await test.step('Snapshot coverage reveals actual captured files and policy exclusions', async () => {
+    await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+    await page.getByRole('button', { name: 'Load snapshot coverage' }).click();
+    await expect(page.getByRole('heading', { name: 'What was actually captured?' })).toBeVisible();
+    await expect(page.locator('.snapshot-coverage .deterministic-summary')).toContainText('Captured files');
+    await expect(page.locator('.snapshot-coverage')).toContainText('path-and-extension-only');
+    await expect(page.locator('.snapshot-coverage')).toContainText('SampleController.cs');
+    await page.locator('.snapshot-coverage details').filter({ hasText: 'Excluded entries' }).locator('summary').click();
+    await expect(page.locator('.snapshot-coverage')).toContainText('node_modules');
+    await expect(page.locator('.snapshot-coverage')).toContainText('ignored-directory');
+    await expect(page.locator('.snapshot-coverage')).toContainText('Classification method');
+    const visibleHash = await page.locator('.snapshot-coverage').textContent();
+    expect(visibleHash).toMatch(/Saved fingerprint:.*[0-9a-f]{64}/);
+
+    await page.getByRole('button', { name: 'Agent Observatory' }).click();
+    const snapshotSelect = select(page, 'Snapshot');
+    const selectedSnapshot = await snapshotSelect.inputValue();
+    const alternative = await snapshotSelect.locator('option').evaluateAll(
+      (options, current) => options.map(o => o.value).find(v => v && v !== current), selectedSnapshot);
+    expect(alternative).toBeTruthy();
+    await snapshotSelect.selectOption(alternative);
+    await page.getByRole('button', { name: 'Architecture Explorer' }).click();
+    await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+    await expect(page.getByRole('button', { name: 'Load snapshot coverage' })).toBeVisible();
+    await expect(page.locator('.coverage-files')).toHaveCount(0);
+  });
+});
+
+test('PR3: revoked token disconnects every tab and offers re-pairing', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/');
+  const paired = page.waitForResponse(response =>
+    response.url().endsWith('/api/v1/auth/token') && response.request().method() === 'POST');
+  await page.getByLabel('Pairing code (shown in the API window)').fill(bootstrap);
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  const pairing = await paired;
+  expect(pairing.ok()).toBeTruthy();
+  const { accessToken } = await pairing.json();
+  expect(accessToken).toMatch(/^[0-9a-f]{64}$/);
+
+  await page.getByPlaceholder('New workspace name').fill('Revocation browser test');
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(select(page, 'Workspace')).not.toHaveValue('');
+  await page.getByPlaceholder('Local folder path to register').fill(source);
+  await page.getByRole('button', { name: 'Register', exact: true }).click();
+  await expect(select(page, 'Repository')).not.toHaveValue('');
+  await page.getByRole('button', { name: 'Capture new snapshot' }).click();
+  await expect(select(page, 'Snapshot')).not.toHaveValue('');
+  await page.getByRole('button', { name: 'Architecture Explorer' }).click();
+  await expect(page.getByRole('heading', { name: 'Explore the code you captured.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+
+  // Actual API revocation, not a mocked 401. The next snapshot request must
+  // cause one client-wide disconnected state even though Observatory is hidden.
+  const revoked = await page.request.post('http://127.0.0.1:5127/api/v1/auth/token/revoke', {
+    headers: { Origin: 'http://127.0.0.1:5175', Authorization: 'Bearer ' + accessToken,
+      'Idempotency-Key': randomUUID() }, data: {},
+  });
+  expect(revoked.status()).toBe(204);
+  await page.getByRole('button', { name: 'Load snapshot coverage' }).click();
+  await expect(page.getByText('API not connected')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect to local API' })).toBeVisible();
+  await expect(page.locator('.snapshot-coverage .deterministic-summary')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Connect to local API' }).click();
+  await expect(page.getByLabel('Pairing code (shown in the API window)')).toBeVisible();
+  await expect(page.locator('.live-form .live-error')).toContainText(/Session expired|not authorized|revoked/i);
 });

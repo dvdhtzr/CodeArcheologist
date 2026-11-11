@@ -258,6 +258,12 @@ export function App() {
         </header>
 
         <div className={'page-content' + (page === 'observatory' ? ' page-content--fit' : '')}>
+          {!connected && page !== 'observatory' &&
+            <div className="session-reconnect" role="status">
+              <span>No local API session is connected. Saved evidence and run actions require pairing.</span>
+              <button type="button" className="secondary-action"
+                onClick={() => { setMode('live'); setPage('observatory'); }}>Connect to local API</button>
+            </div>}
           {/* Always mounted (hidden on other pages) so the live connection and selections survive navigation. */}
           {(
             <div className="cockpit" hidden={page !== 'observatory'}>

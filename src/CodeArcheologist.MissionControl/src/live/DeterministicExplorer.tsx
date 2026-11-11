@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiClient, Scope, SourceView } from './api.ts';
 import { EvidenceGraphExplorer } from './EvidenceGraphExplorer.tsx';
+import { SnapshotCoverage } from './SnapshotCoverage.tsx';
 
 export type ExplorerSelection = { api: ApiClient; scope: Scope } | null;
 type Anchor = { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null };
@@ -22,7 +23,7 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
   const [entries, setEntries] = useState<List<Entry> | null>(null);
   const [methods, setMethods] = useState<List<Method> | null>(null);
   const [selectedMethod, setSelectedMethod] = useState('');
-  const [view, setView] = useState<'inventory' | 'graph'>('inventory');
+  const [view, setView] = useState<'inventory' | 'graph' | 'coverage'>('inventory');
   const impactFocus = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [impact, setImpact] = useState<Impact | null>(null);
@@ -110,13 +111,15 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
       <div className="graph-tabs" role="group" aria-label="Architecture explorer views">
         <button type="button" aria-pressed={view === 'inventory'} onClick={() => setView('inventory')}>Candidates &amp; direct impact</button>
         <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>Evidence graph</button>
+        <button type="button" aria-pressed={view === 'coverage'} onClick={() => setView('coverage')}>Snapshot coverage</button>
       </div>
       {!selection && <div className="secondary-panel">
         <h2>Choose a snapshot</h2>
         <p>Open Agent Observatory → Live API, connect, and select a workspace, repository and saved snapshot. The same selection powers this explorer and your investigations.</p>
       </div>}
-      {loading && <p role="status">Loading verified snapshot capabilities…</p>}
-      {error && <p className="live-error" role="alert">{error}</p>}
+      {view !== 'coverage' && loading && <p role="status">Loading verified snapshot capabilities…</p>}
+      {view !== 'coverage' && error && <p className="live-error" role="alert">{error}</p>}
+      {view === 'coverage' && <SnapshotCoverage selection={selection} />}
       {view === 'graph' && <EvidenceGraphExplorer selection={selection}
         fingerprint={entries?.fingerprintSha256 ?? null}
         onInspect={anchor => void inspect(anchor)}
