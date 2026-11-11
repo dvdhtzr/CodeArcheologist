@@ -86,7 +86,7 @@ function AtlasCanvas({ projected, selectedId, selectedEdgeId, onNode, onEdge }: 
   onNode: (id: string) => void;
   onEdge: (id: string) => void;
 }) {
-  const flow = useReactFlow();
+  const { fitView } = useReactFlow();
   const layout = useMemo(() => layoutAtlas(projected), [projected]);
   const visibleNodes = useMemo(() => layout.nodes.map(node => ({
     ...node, selected: node.id === selectedId,
@@ -97,15 +97,15 @@ function AtlasCanvas({ projected, selectedId, selectedEdgeId, onNode, onEdge }: 
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      void flow.fitView({ padding: 0.2, duration: 260, maxZoom: 1.1 });
+      void fitView({ padding: 0.2, duration: 260, maxZoom: 1.1 });
     });
     return () => cancelAnimationFrame(frame);
-  }, [flow, layout]);
+  }, [fitView, layout]);
 
   return <div className="atlas-viewport" aria-label="Interactive saved-source architecture canvas">
     <div className="atlas-canvas-toolbar">
       <span>{projected.mode === 'overview' ? 'Project / file overview' : 'Focused evidence neighborhood'}</span>
-      <button type="button" onClick={() => void flow.fitView({ padding: 0.2, duration: 250, maxZoom: 1.1 })}>Fit visible graph</button>
+      <button type="button" onClick={() => void fitView({ padding: 0.2, duration: 250, maxZoom: 1.1 })}>Fit visible graph</button>
     </div>
     <ReactFlow
       nodes={visibleNodes} edges={visibleEdges}
