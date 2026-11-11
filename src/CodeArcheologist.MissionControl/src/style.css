@@ -470,3 +470,55 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 .deterministic-impact { margin-top: 24px; border-top: 1px solid var(--outline); }
 .deterministic-source pre { overflow: auto; white-space: pre; max-height: 440px; background: #070d18; padding: 15px; border-radius: 8px; font-size: 12px; }
 .deterministic-source p { overflow-wrap: anywhere; }
+
+/* R1: saved evidence graph. Diagram is a bounded visual aid; the list remains keyboard navigable. */
+.graph-tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 22px 0 10px; }
+.graph-tabs button, .graph-kind-overview button {
+  border: 1px solid #30465e; color: #afc4d7; background: #111f31;
+  border-radius: 8px; padding: 10px 15px; font: inherit; cursor: pointer;
+}
+.graph-tabs button[aria-pressed="true"], .graph-kind-overview button[aria-pressed="true"] {
+  border-color: #67d9f8; background: #15384b; color: #d5f5ff;
+}
+.graph-explorer { min-width: 0; }
+.graph-explorer code { overflow-wrap: anywhere; }
+.graph-kind-overview { display: flex; flex-wrap: wrap; gap: 9px; margin: 16px 0 22px; }
+.graph-kind-overview button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; font-size: 12px; }
+.graph-kind-overview strong { font-size: 18px; color: var(--bright); }
+.graph-kind-overview span { color: var(--muted); }
+.graph-picker { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.graph-picker label { display: grid; gap: 7px; font-size: 12px; color: #adc6da; flex: 1 1 210px; }
+.graph-picker input, .graph-picker select { width: 100%; padding: 10px; border: 1px solid #39516c; border-radius: 7px; background: #0a1625; color: var(--bright); }
+.graph-node-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 8px; max-height: 280px; overflow: auto; }
+.graph-node-choice { display: grid; gap: 4px; padding: 11px; border: 1px solid var(--outline); border-radius: 9px; background: #0c1727; color: var(--bright); text-align: left; overflow-wrap: anywhere; }
+.graph-node-choice.is-selected { border-color: #67d9f8; background: #122b3d; }
+.graph-node-choice span { font-size: 11px; color: var(--muted); }
+.graph-focus { margin: 24px 0 0; padding-top: 15px; border-top: 1px solid var(--outline); }
+.graph-focus h3 { font-size: 16px; margin: 15px 0 10px; overflow-wrap: anywhere; }
+.graph-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.graph-actions code { color: #9bafc7; font-size: 11px; flex: 1 1 190px; }
+.graph-orbit { display: block; width: 100%; max-height: 430px; margin: 13px auto 24px; border: 1px solid var(--outline); border-radius: 12px; background: radial-gradient(ellipse at center, #13243a, #08111f 70%); }
+.graph-center { fill: #19445a; stroke: #6ddaf7; stroke-width: 2; }
+.graph-neighbor { fill: #17283a; stroke: #506b84; stroke-width: 1.5; }
+.graph-observed-edge { stroke: #87b5ce; stroke-width: 2; }
+.graph-provisional-edge { stroke: #caab79; stroke-width: 2; stroke-dasharray: 6 5; }
+.graph-svg-title { fill: #f2f7ff; font-size: 13px; font-weight: 650; }
+.graph-svg-caption { fill: #bbd3e6; font-size: 11px; }
+.graph-relation-list { padding: 0; list-style: none; max-height: 600px; overflow: auto; }
+.graph-relation-list > li { padding: 13px; margin: 10px 0; border: 1px solid var(--outline); border-radius: 10px; background: #0b1726; overflow-wrap: anywhere; }
+.graph-relation-heading { display: flex; flex-wrap: wrap; gap: 6px 13px; font-size: 11px; color: #b5c9dc; }
+.graph-status { color: #d7c5a4; }
+.graph-direction { color: var(--muted); }
+.graph-relation-list > li > button { background: transparent; border: none; padding: 11px 0 4px; color: #a8e5fa; font-weight: 700; text-align: left; font-size: 14px; }
+.graph-relation-list > li > button span { font-weight: 400; color: var(--muted); }
+.graph-relation-list p { margin: 7px 0 12px; font-size: 12px; color: #afc1d5; }
+.graph-relation-list details { margin-top: 11px; color: #b5c7d9; font-size: 12px; }
+.graph-relation-list summary, .graph-limitations summary { cursor: pointer; color: #c0e8fa; }
+.graph-project-evidence { padding: 4px 0; }
+.graph-project-evidence ul { padding-left: 21px; }
+.graph-limitations { margin: 22px 0; padding: 14px; border: 1px solid var(--outline); border-radius: 9px; }
+.graph-limitations li { font-size: 12px; color: var(--muted); padding: 4px 0; }
+@media (max-width: 650px) {
+  .graph-orbit { min-width: 0; }
+  .graph-node-results { grid-template-columns: 1fr; }
+}
