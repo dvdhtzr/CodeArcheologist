@@ -67,7 +67,7 @@ public static class InvestigationQuestionContract
             context.BudgetProfileVersion != BudgetProfileVersion ||
             !Supports(context.QuestionKind, context.SubjectNodeKind) ||
             !ValidScope(context.Scope) ||
-            context.ContextDigest.Length != 64)
+            context.ContextDigest is not { Length: 64 })
             return false;
         return string.Equals(context.ContextDigest, Digest(context), StringComparison.Ordinal);
     }
@@ -81,7 +81,7 @@ public static class InvestigationQuestionContract
     private static bool ValidScope(GateCScope? scope) =>
         scope is not null && scope.WorkspaceId != Guid.Empty &&
         scope.RepositoryId != Guid.Empty && scope.SnapshotId != Guid.Empty &&
-        scope.FingerprintSha256.Length == 64 &&
+        scope.FingerprintSha256 is { Length: 64 } &&
         scope.FingerprintSha256.All(char.IsAsciiHexDigit) &&
         scope.EntryPointId is { Length: > 0 and <= 1024 } &&
         !scope.EntryPointId.Any(char.IsControl) &&
