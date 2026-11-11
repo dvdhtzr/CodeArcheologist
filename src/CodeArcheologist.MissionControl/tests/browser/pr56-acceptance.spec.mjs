@@ -98,6 +98,9 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await declaration.click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Focused evidence neighborhood');
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
+    const focusedMethodId = await page.locator('.atlas-viewport .react-flow__node.selected')
+      .first().getAttribute('data-id');
+    expect(focusedMethodId).toBeTruthy();
     // SVG <g> wrappers can fail Playwright's element-visibility check even
     // when a valid edge path exists. Assert the actual rendered path data,
     // the nonzero host-projected relationship count, and accessible selection.
@@ -120,8 +123,7 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
 
     // Keyboard Enter activates the exact focused saved graph node, without
     // an aggregate selection callback overriding it with a previous node.
-    const helperNode = page.locator('.atlas-viewport .react-flow__node')
-      .filter({ hasText: 'Helper' }).first();
+    const helperNode = page.getByTestId('rf__node-' + focusedMethodId);
     await expect(helperNode).toBeVisible();
     await helperNode.focus();
     await helperNode.press('Enter');
