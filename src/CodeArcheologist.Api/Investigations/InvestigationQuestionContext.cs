@@ -56,7 +56,7 @@ public static class InvestigationQuestionContract
         var created = DateTimeOffset.FromUnixTimeMilliseconds(timestamp.ToUnixTimeMilliseconds());
         var draft = new InvestigationQuestionContext(
             Version, Guid.NewGuid(), runId, scope, scope.EntryPointId, subjectKind,
-            ExplainHttpEntryPoint, TemplateVersion, GateCEvidenceRegistry.Version,
+            ExplainHttpEntryPoint, TemplateVersion, CapabilityPolicyVersion,
             BudgetProfileVersion, created, "");
         return draft with { ContextDigest = Digest(draft) };
     }
