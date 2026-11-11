@@ -36,7 +36,9 @@ export function verifySnapshotCoverage(
     return !saved || f.sha256 !== saved.sha256 || f.sizeBytes !== saved.sizeBytes;
   })) throw new Error('Snapshot inventory does not agree with verified saved files.');
   const exclusions = new Map(manifest.exclusions.map(x => [x.path + '\u0000' + x.reason, x]));
+  const inventoryExclusions = new Set(inventory.exclusions.map(e => e.path + '\u0000' + e.reason));
   if (exclusions.size !== manifest.exclusions.length ||
+      inventoryExclusions.size !== inventory.exclusions.length ||
       inventory.exclusions.some(e => !exclusions.has(e.path + '\u0000' + e.reason)))
     throw new Error('Snapshot exclusions disagree.');
   if (inventory.languages.reduce((n, x) => n + x.fileCount, 0) !== snapshot.fileCount ||
