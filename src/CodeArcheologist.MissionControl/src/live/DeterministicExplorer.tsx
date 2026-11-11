@@ -20,7 +20,12 @@ type Impact = {
 };
 const VERSION = 'code-archeologist-capabilities-v1';
 
-export function DeterministicExplorer({ selection }: { selection: ExplorerSelection }) {
+export function DeterministicExplorer({ selection, onInvestigate, investigationBusy, investigationError }: {
+  selection: ExplorerSelection;
+  onInvestigate: (nodeId: string, label: string, fingerprintSha256: string) => void;
+  investigationBusy: boolean;
+  investigationError: string;
+}) {
   const [entries, setEntries] = useState<List<Entry> | null>(null);
   const [methods, setMethods] = useState<List<Method> | null>(null);
   const [selectedMethod, setSelectedMethod] = useState('');
@@ -123,7 +128,9 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
       {view !== 'coverage' && view !== 'atlas' && loading && <p role="status">Loading verified snapshot capabilities…</p>}
       {view !== 'coverage' && view !== 'atlas' && error && <p className="live-error" role="alert">{error}</p>}
       {view === 'atlas' && <ArchitectureAtlas selection={selection}
-        onMethod={id => { setSelectedMethod(id); setView('inventory'); }} />}
+        onMethod={id => { setSelectedMethod(id); setView('inventory'); }}
+        onInvestigate={onInvestigate} investigationBusy={investigationBusy}
+        investigationError={investigationError} />}
       {view === 'coverage' && <SnapshotCoverage selection={selection} />}
       {view === 'graph' && <EvidenceGraphExplorer selection={selection}
         fingerprint={entries?.fingerprintSha256 ?? null}
