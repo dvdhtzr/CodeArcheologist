@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { anchorAtlasLayout } from '../src/live/atlasLayout.ts';
 import { isAtlasViewport } from '../src/live/atlasEvidence.ts';
+import dagre from '@dagrejs/dagre';
 
 test('Dagre presentation reflow aligns a surviving center without adding nodes or edges', () => {
   const previous = new Map([
@@ -32,4 +33,17 @@ test('Saved viewport restoration accepts finite positive zoom only', () => {
   assert.equal(isAtlasViewport({ x: 0, y: NaN, zoom: 1 }), false);
   assert.equal(isAtlasViewport({ x: 0, y: 0, zoom: 20 }), false);
   assert.equal(isAtlasViewport(null), false);
+});
+
+test('Node native ESM imports CommonJS Dagre with callable layout API', () => {
+  assert.equal(typeof dagre.layout, 'function');
+  const graph = new dagre.graphlib.Graph({ multigraph: true });
+  graph.setGraph({ rankdir: 'LR' });
+  graph.setDefaultEdgeLabel(() => ({}));
+  graph.setNode('source', { width: 216, height: 74 });
+  graph.setNode('target', { width: 216, height: 74 });
+  graph.setEdge('source', 'target', {}, 'recorded-edge');
+  dagre.layout(graph);
+  assert.ok(Number.isFinite(graph.node('source').x));
+  assert.ok(Number.isFinite(graph.node('target').x));
 });
