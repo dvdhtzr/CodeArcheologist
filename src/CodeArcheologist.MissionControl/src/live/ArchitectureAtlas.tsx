@@ -113,7 +113,7 @@ function AtlasCanvas({ projected, selectedId, selectedEdgeId, onNode, onEdge }: 
       onEdgeClick={(_event: MouseEvent, edge: FlowEdge) => onEdge(edge.id)}
       nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
       panOnDrag zoomOnScroll zoomOnPinch zoomOnDoubleClick={false}
-      elementsSelectable fitView minZoom={0.15} maxZoom={2}
+      elementsSelectable fitView minZoom={0.03} maxZoom={2}
       proOptions={{ hideAttribution: false }}
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="#2c4561"/>
