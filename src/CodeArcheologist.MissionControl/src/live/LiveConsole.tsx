@@ -11,9 +11,10 @@ export type LiveView = { api: ApiClient; scope: Scope; runId: string; entryPoint
  * MC3 connection and command panel. Every command is an explicit button
  * press sent over REST; the live view is fed by LiveRun (SignalR + REST).
  */
-export function LiveConsole({ onView, onConnected }: {
+export function LiveConsole({ onView, onConnected, onFindings }: {
   onView: (view: LiveView | null) => void;
   onConnected: (connected: boolean) => void;
+  onFindings: () => void;
 }) {
   const [address, setAddress] = useState('http://127.0.0.1:5127');
   const [code, setCode] = useState('');
@@ -35,6 +36,7 @@ export function LiveConsole({ onView, onConnected }: {
   const [newFolder, setNewFolder] = useState('');
   const [runId, setRunId] = useState('');
   const [live, setLive] = useState<LiveSnapshot | null>(null);
+  const [editing, setEditing] = useState(false);
   const liveRun = useRef<LiveRun | null>(null);
 
   const scope: Scope | null = workspaceId && repositoryId && snapshotId ? { workspaceId, repositoryId, snapshotId } : null;
@@ -102,6 +104,7 @@ export function LiveConsole({ onView, onConnected }: {
     void liveRun.current?.stop();
     liveRun.current = null;
     setLive(null);
+    setEditing(false);
     if (!api || !scope || !runId) { onView(null); return; }
     const feed = new LiveRun(api, scope, runId, state => setLive(state));
     liveRun.current = feed;
@@ -167,9 +170,11 @@ export function LiveConsole({ onView, onConnected }: {
   if (!api) {
     return (
       <form className="live-form" onSubmit={connect}>
-        <p className="live-help">Start the Code Archeologist API. Its window shows a pairing code. The session token is kept in memory only and ends when you close this tab.</p>
-        <label>API address<input value={address} onChange={e => setAddress(e.target.value)} spellCheck={false} /></label>
-        <label>Pairing code<input type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} spellCheck={false} /></label>
+        <label>Pairing code (shown in the API window)<input type="password" autoComplete="off" value={code} onChange={e => setCode(e.target.value)} spellCheck={false} /></label>
+        <details className="live-advanced"><summary>API address</summary>
+          <input aria-label="API address" value={address} onChange={e => setAddress(e.target.value)} spellCheck={false} />
+        </details>
+        <p className="live-help">The session lives in memory only and ends when you close this tab.</p>
         <button type="submit" className="primary-action" disabled={busy || !code.trim()}>Connect</button>
         {error && <p className="live-error" role="alert">{error}</p>}
       </form>
@@ -177,9 +182,28 @@ export function LiveConsole({ onView, onConnected }: {
   }
 
   const execution = live?.execution;
+  const workspaceName = workspaces.find(w => w.id === workspaceId)?.name ?? '';
+  const folderName = repositories.find(r => r.id === repositoryId)?.localPath.split(/[\\/]/).filter(Boolean).pop() ?? '';
   return (
     <div className="live-form">
-      <label>Workspace
+      {runId && <div className="live-run" aria-live="polite">
+        <span className="detail-label">RUN</span>
+        <p>Feed: <strong>{live?.connection ?? 'connecting'}</strong>{execution && <> · run <strong>{execution.runStatus}</strong> ({execution.runDiagnostic})</>}</p>
+        {execution?.currentAttempt && <p>Attempt {execution.currentAttempt.number}: {execution.currentAttempt.status} · {execution.currentAttempt.diagnostic}</p>}
+        {live?.error && <p className="live-error">{live.error}</p>}
+        <div className="control-actions">
+          <button type="button" className="primary-action" onClick={onFindings}>View findings</button>
+          <button type="button" className="secondary-action" disabled={busy || !execution?.cancellable} onClick={cancel}>Cancel</button>
+          <button type="button" className="secondary-action" onClick={() => setRunId('')}>Close</button>
+        </div>
+      </div>}
+      {runId && !editing
+        ? <div className="setup-summary">
+            <span>{workspaceName} › {folderName} › {entryLabel ? `${entryLabel.label} (${entryLabel.anchor.filePath}:${entryLabel.anchor.line})` : 'earlier run'}</span>
+            <button type="button" className="text-button" onClick={() => setEditing(true)}>Change</button>
+          </div>
+        : <>
+      <label><span className="step-title"><span className="step-no">1</span>Workspace</span>
         <select value={workspaceId} onChange={e => setWorkspaceId(e.target.value)}>
           <option value="">Choose…</option>
           {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -191,7 +215,7 @@ export function LiveConsole({ onView, onConnected }: {
       </div>
 
       {workspaceId && <>
-        <label>Repository (registered local folder)
+        <label><span className="step-title"><span className="step-no">2</span>Repository (local folder)</span>
           <select value={repositoryId} onChange={e => setRepositoryId(e.target.value)}>
             <option value="">Choose…</option>
             {repositories.map(r => <option key={r.id} value={r.id}>{r.localPath}</option>)}
@@ -204,7 +228,7 @@ export function LiveConsole({ onView, onConnected }: {
       </>}
 
       {repositoryId && <>
-        <label>Snapshot (read-only saved copy)
+        <label><span className="step-title"><span className="step-no">3</span>Snapshot (saved read-only copy)</span>
           <select value={snapshotId} onChange={e => setSnapshotId(e.target.value)}>
             <option value="">Choose…</option>
             {snapshots.map(s => <option key={s.id} value={s.id}>{new Date(s.capturedAtUtc).toLocaleString()} · {s.fileCount} files</option>)}
@@ -214,14 +238,16 @@ export function LiveConsole({ onView, onConnected }: {
       </>}
 
       {scope && <>
-        <label>Entry point (written HTTP candidate)
+        <label><span className="step-title"><span className="step-no">4</span>Entry point</span>
           <select value={entryPointId} onChange={e => setEntryPointId(e.target.value)}>
             <option value="">{entryPoints.length ? 'Choose…' : 'No supported candidates (unknown, not proof of none)'}</option>
             {entryPoints.map(e => <option key={e.id} value={e.id}>{e.label} · {e.anchor.filePath}:{e.anchor.line}</option>)}
           </select>
         </label>
-        {entryLabel && <p className="live-help">{entryLabel.detail}</p>}
-        {entryCaveat && <p className="live-help">{entryCaveat}</p>}
+        {(entryLabel || entryCaveat) && <details className="live-advanced"><summary>About this entry point</summary>
+          {entryLabel && <p className="live-help">{entryLabel.detail}</p>}
+          {entryCaveat && <p className="live-help">{entryCaveat}</p>}
+        </details>}
         <button type="button" className="primary-action" disabled={busy || !entryPointId} onClick={start}>Start investigation</button>
         {runs.length > 0 && <label>Or watch an earlier run
           <select value={runId} onChange={e => setRunId(e.target.value)}>
@@ -230,17 +256,7 @@ export function LiveConsole({ onView, onConnected }: {
           </select>
         </label>}
       </>}
-
-      {runId && <div className="live-run" aria-live="polite">
-        <span className="detail-label">RUN</span>
-        <p>Feed: <strong>{live?.connection ?? 'connecting'}</strong>{execution && <> · run <strong>{execution.runStatus}</strong> ({execution.runDiagnostic})</>}</p>
-        {execution?.currentAttempt && <p>Attempt {execution.currentAttempt.number}: {execution.currentAttempt.status} · {execution.currentAttempt.diagnostic}</p>}
-        {live?.error && <p className="live-error">{live.error}</p>}
-        <div className="control-actions">
-          <button type="button" className="secondary-action" disabled={busy || !execution?.cancellable} onClick={cancel}>Cancel investigation</button>
-          <button type="button" className="secondary-action" onClick={() => setRunId('')}>Close run view</button>
-        </div>
-      </div>}
+        </>}
 
       {error && <p className="live-error" role="alert">{error}</p>}
       <button type="button" className="text-button" onClick={disconnect}>Disconnect</button>

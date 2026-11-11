@@ -354,3 +354,73 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 .source-line.is-focus { background: rgba(103,217,248,.12); color: #fff; }
 .source-number { color: #5d7088; user-select: none; }
 .findings-empty p { margin: 0 0 6px; color: #c0d6e9; font-size: 13px; }
+
+/* MC5 layout: the Observatory fits one screen (cockpit of three columns) */
+.topbar { min-height: 56px; padding: 10px 24px; }
+.topbar-metrics { display: inline-flex; gap: 14px; margin-right: 14px; color: #8fa4ba; }
+.topbar-metrics strong { color: #e6f2ff; font-variant-numeric: tabular-nums; }
+.sidebar { padding-top: 22px; }
+.cockpit[hidden] { display: none; }
+@media (min-width: 1081px) {
+  .main-content { display: flex; flex-direction: column; height: 100vh; }
+  .page-content--fit { flex: 1; min-height: 0; width: 100%; box-sizing: border-box; padding: 14px 18px; }
+  .page-content--fit .cockpit { height: 100%; }
+}
+.cockpit {
+  display: grid; gap: 14px;
+  grid-template-columns: minmax(290px, 340px) minmax(0, 1fr) minmax(270px, 340px);
+}
+.cockpit > section { display: flex; flex-direction: column; min-height: 0; }
+.cockpit .panel-heading { min-height: 0; padding: 12px 16px 8px; }
+.cockpit .panel-heading h2, .cockpit .panel-heading h3 { font-size: 15px; margin-top: 3px; }
+.cockpit .segmented { margin: 4px 16px 0; }
+.control-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-color: #31465f transparent; }
+.cockpit .live-form { margin: 12px 16px 14px; gap: 9px; }
+.cockpit .step-header, .cockpit .progress-track, .cockpit .control-actions { margin-left: 16px; margin-right: 16px; }
+.cockpit .scene-caption { margin: 12px 16px; min-height: 0; }
+.cockpit .control-disclaimer { margin: 12px 16px 14px; }
+.step-no { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; margin-right: 4px; font-size: 10px; font-weight: 800; color: #07111c; background: #67d9f8; }
+.live-advanced summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+.live-advanced[open] { display: grid; gap: 6px; }
+.cockpit .observatory-stage { flex: 1; height: auto; min-height: 330px; margin: 0 10px; }
+.cockpit .agent-avatar-wrap { width: 84px; height: 84px; margin-bottom: 5px; }
+.cockpit .agent-node { width: 168px; padding: 6px 6px 8px; }
+.cockpit .agent-node--investigator, .cockpit .agent-node--skeptic { top: 45%; }
+.cockpit .agent-node--reviewer { top: 79%; }
+.cockpit .evidence-node { top: 12%; padding: 8px 12px; }
+.agent-strip { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: start; padding: 10px 16px 12px; border-top: 1px solid var(--outline); font-size: 12px; color: #c0d6e9; }
+.agent-strip .crew-indicator { margin-top: 5px; }
+.agent-strip strong { color: var(--bright); }
+.agent-strip code { font-size: 10px; color: var(--muted); }
+.agent-strip p { margin: 3px 0 0; color: #93a7bd; font-size: 11px; line-height: 1.5; }
+.agent-strip-note { grid-column: 2; display: flex; gap: 6px; align-items: center; color: #7e97af; font-size: 10px; }
+.agent-strip-note svg { flex-shrink: 0; color: #9db5c9; }
+.heading-actions { display: inline-flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 8px; border-bottom: 1px solid var(--outline); }
+.chip { border: 1px solid var(--outline); background: transparent; color: #9fb3c8; border-radius: 999px; padding: 4px 10px; font-size: 11px; }
+.chip.is-selected { color: #07111c; background: #9fdef1; border-color: #9fdef1; }
+.chip--skeptic.is-selected { background: #ffc17e; border-color: #ffc17e; }
+.chip--reviewer.is-selected { background: #cbb2ff; border-color: #cbb2ff; }
+.cockpit .activity-scroll { flex: 1; min-height: 0; max-height: none; }
+.cockpit .event-list { padding: 10px 14px 12px 18px; }
+.cockpit .event-body { padding-bottom: 14px; }
+.cockpit .event-body p { margin: 4px 0 3px; }
+@media (max-width: 1280px) {
+  .cockpit { grid-template-columns: minmax(270px, 300px) minmax(0, 1fr) minmax(250px, 290px); }
+  .cockpit .agent-node { width: 150px; }
+  .cockpit .agent-avatar-wrap { width: 72px; height: 72px; }
+}
+@media (max-width: 1080px) {
+  .cockpit { grid-template-columns: 1fr; }
+  .cockpit .observatory-stage { height: 440px; flex: none; }
+  .cockpit .activity-scroll { max-height: 420px; }
+}
+@media (max-width: 570px) {
+  .cockpit .observatory-stage { height: auto; }
+  .topbar-metrics { display: none; }
+}
+.step-title { display: flex; align-items: center; gap: 6px; }
+.step-title .step-no { margin-right: 0; }
+.setup-summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: #9fb3c8; border: 1px dashed var(--outline); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+.setup-summary .text-button { white-space: nowrap; flex-shrink: 0; }
+.cockpit .live-run .control-actions, .live-run .control-actions { margin: 6px 0 0; }

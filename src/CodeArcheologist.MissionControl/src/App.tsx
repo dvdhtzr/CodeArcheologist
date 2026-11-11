@@ -4,7 +4,7 @@ import { AgentAvatar } from './AgentAvatar';
 import {
   AGENTS, ROLES, SCENE_CAPTIONS, nextScene, sceneIndex, stageFor, visibleEvents,
 } from './demo';
-import type { DemoScene, InspectorTab, RoleId, StageState } from './demo';
+import type { DemoScene, RoleId, StageState } from './demo';
 import { LiveConsole } from './live/LiveConsole.tsx';
 import { Findings } from './live/Findings.tsx';
 import type { LiveView } from './live/LiveConsole.tsx';
@@ -136,59 +136,17 @@ function EventLog({ events, onAgent }: { events: DisplayEvent[]; onAgent: (role:
   );
 }
 
-function AgentInspector({ stages, events, live, selected, tab, onTab }: {
-  stages: Record<RoleId, LiveStage>; events: DisplayEvent[]; live: boolean;
-  selected: RoleId; tab: InspectorTab; onTab: (tab: InspectorTab) => void;
-}) {
-  const profile = AGENTS[selected];
-  const state = stages[selected].state;
-  const agentEvents = events.filter(e => e.actor === selected);
+function AgentStrip({ role, stage }: { role: RoleId; stage: LiveStage }) {
+  const agent = AGENTS[role];
   return (
-    <section className="inspector" aria-labelledby="inspector-title"
-      style={{ '--agent-accent': accents[selected] } as CSSProperties}>
-      <div className="panel-heading">
-        <div><span className="eyebrow">AGENT SPOTLIGHT</span><h3 id="inspector-title">Character dossier</h3></div>
-        <span className="panel-icon"><Symbol name="orb" size={17}/></span>
+    <div className="agent-strip" style={{ '--agent-accent': accents[role] } as CSSProperties} aria-live="polite">
+      <span className={'crew-indicator crew-indicator--' + role} aria-hidden="true" />
+      <div>
+        <strong>{agent.name}</strong> · {stateNames[stage.state]}{stage.hostStatus !== 'demo' && <> <code>{stage.hostStatus}</code></>}
+        <p>{agent.description}</p>
       </div>
-      <div className="inspector-profile">
-        <div className="inspector-portrait"><AgentAvatar role={selected}/></div>
-        <div>
-          <span className="profile-signature">{profile.signature}</span>
-          <h4>{profile.name}</h4>
-          <p>{profile.title}</p>
-          <span className={'status-chip status-chip--' + state}>{stateNames[state]}</span>
-        </div>
-      </div>
-      <div className="segmented" role="group" aria-label="Agent dossier section">
-        <button type="button" className={tab === 'profile' ? 'is-selected' : ''}
-          aria-pressed={tab === 'profile'} onClick={() => onTab('profile')}>Profile</button>
-        <button type="button" className={tab === 'activity' ? 'is-selected' : ''}
-          aria-pressed={tab === 'activity'} onClick={() => onTab('activity')}>Activity</button>
-      </div>
-      {tab === 'profile' ? (
-        <div className="inspector-copy">
-          <span className="detail-label">ASSIGNMENT</span>
-          <p className="detail-strong">{profile.assignment}</p>
-          <span className="detail-label">OPERATING ROLE</span>
-          <p>{profile.description}</p>
-          <div className="integrity-note"><Symbol name="shield" size={18}/><span>{profile.principle}</span></div>
-        </div>
-      ) : (
-        <div className="inspector-copy">
-          <span className="detail-label">{live ? 'RECORDED HOST EVENTS' : 'DEMONSTRATION ACTIVITY'}</span>
-          {live && <p>Host status: <strong>{stages[selected].hostStatus}</strong></p>}
-          {agentEvents.length === 0
-            ? <p>{live ? 'No events recorded for this role yet.' : 'No stage events yet in this visual walkthrough.'}</p>
-            : <ul className="agent-activity">{agentEvents.map(event => (
-                <li key={event.id}><strong>{event.label}</strong><span>{event.type}</span></li>
-              ))}</ul>}
-          <div className="integrity-note"><Symbol name="shield" size={18}/><span>{live
-            ? 'Committed host events. An accepted assessment passed the host\u2019s contract checks; it is not proof that its claims are true.'
-            : 'These are visual fixtures, not actual model calls or persisted host events.'}</span></div>
-        </div>
-      )}
-      <div className="inspector-footer"><span className="tiny-led"/> COMPONENT / AGENT CARD V1</div>
-    </section>
+      <span className="agent-strip-note"><Symbol name="shield" size={14}/>{agent.principle}</span>
+    </div>
   );
 }
 
@@ -196,7 +154,7 @@ export function App() {
   const [page, setPage] = useState<Page>('observatory');
   const [scene, setScene] = useState<DemoScene>('ready');
   const [selected, setSelected] = useState<RoleId>('investigator');
-  const [tab, setTab] = useState<InspectorTab>('profile');
+  const [filter, setFilter] = useState<RoleId | 'all'>('all');
   const [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState<Mode>('live');
   const [connected, setConnected] = useState(false);
@@ -211,7 +169,7 @@ export function App() {
 
   function chooseAgent(role: RoleId) {
     setSelected(role);
-    setTab('profile');
+    setFilter(current => current === role ? 'all' : role);
   }
 
   function reset() {
@@ -282,101 +240,97 @@ export function App() {
       <main className="main-content">
         <header className="topbar">
           <div className="breadcrumb"><span>CODE ARCHEOLOGIST</span><Symbol name="chevron" size={14}/><strong>{page === 'observatory' ? 'Agent Observatory' : page === 'activity' ? 'Activity Timeline' : page === 'findings' ? 'Findings' : 'Design Principles'}</strong></div>
-          <div className="topbar-status">{connected
+          <div className="topbar-status">
+            {page === 'observatory' && <span className="topbar-metrics" aria-label="Run status">
+              <span>Accepted <strong>{acceptedCount}/3</strong></span>
+              <span>Events <strong>{showingLive ? liveEventCount : events.length}</strong></span>
+            </span>}
+            {connected
             ? <><span className="online-dot" /> API connected <span className="topbar-separator"/> <span className={showingLive ? 'live-label' : 'preview-label'}>{showingLive ? 'LIVE' : mode === 'demo' ? 'DEMO MODE' : 'NO RUN SELECTED'}</span></>
-            : <><span className="offline-dot" /> API not connected <span className="topbar-separator"/> <span className="preview-label">{mode === 'demo' ? 'DEMO MODE' : 'NOT LIVE'}</span></>}</div>
+            : <><span className="offline-dot" /> API not connected <span className="topbar-separator"/> <span className="preview-label">{mode === 'demo' ? 'DEMO MODE' : 'NOT LIVE'}</span></>}
+          </div>
         </header>
 
-        <div className="page-content">
-          {page === 'observatory' && (
-            <>
-              <div className="hero">
-                <div><span className="eyebrow eyebrow--accent">THE INTELLIGENCE WORKSPACE / 001</span>
-                  <h1>Where intelligence <em>takes shape.</em></h1>
-                  <p>Watch a disciplined team of agents examine evidence, challenge conclusions, and reconcile findings.</p>
+        <div className={'page-content' + (page === 'observatory' ? ' page-content--fit' : '')}>
+          {/* Always mounted (hidden on other pages) so the live connection and selections survive navigation. */}
+          {(
+            <div className="cockpit" hidden={page !== 'observatory'}>
+              <section className="control-card" aria-labelledby="walkthrough-heading">
+                <div className="panel-heading"><div><span className="eyebrow">{mode === 'live' ? 'LIVE API' : 'VISUAL WALKTHROUGH'}</span><h3 id="walkthrough-heading">{mode === 'live' ? 'Run an investigation' : 'Explore the sequence'}</h3></div>
+                  <span className="demo-pill small">{showingLive ? 'LIVE' : 'NOT LIVE'}</span>
                 </div>
-                <span className="hero-seal"><Symbol name="orb" size={34}/></span>
-              </div>
-
-              <div className="stat-row" aria-label="Demo status">
-                <div className="stat-card"><span className="stat-label">CREW MEMBERS</span><strong>03 <small>agents</small></strong><span className="stat-foot">Distinct, evidence-bounded roles</span></div>
-                <div className="stat-card"><span className="stat-label">ACCEPTED STAGES</span><strong>{String(acceptedCount).padStart(2, '0')} <small>/ 03</small></strong><span className="stat-foot">{showingLive ? 'From the host execution projection' : 'Demonstration state only'}</span></div>
-                <div className="stat-card"><span className="stat-label">LIVE API EVENTS</span><strong>{String(liveEventCount).padStart(2, '0')} <small>events</small></strong><span className="stat-foot">{showingLive ? `Committed ledger events · feed ${liveView.snapshot.connection}` : 'No live run shown'}</span></div>
-              </div>
-
-              <div className="mission-grid">
-                <section className="observatory-card" aria-labelledby="observatory-heading">
-                  <div className="panel-heading observatory-heading">
-                    <div><span className="eyebrow">COLLABORATION MAP</span><h2 id="observatory-heading">Agent Observatory</h2></div>
-                    <span className="demo-pill"><span className="mini-orbit"/> {showingLive ? 'LIVE HOST STATES' : 'ILLUSTRATIVE FLOW'}</span>
-                  </div>
-                  <div className="observatory-explainer"><Symbol name="shield" size={15}/><span>Independent Investigator and Skeptic paths converge only at the Reviewer.</span></div>
-                  <div className="observatory-stage" aria-label="Click an agent to inspect its simulated stage">
-                    <div className="stage-grain" aria-hidden="true" />
-                    <CommunicationLines stages={stages} />
-                    <div className="evidence-node">
-                      <span className="evidence-glyph"><Symbol name="layers" size={22}/></span>
-                      <div><strong>VERIFIED SCOPE</strong><small>{showingLive ? 'Saved, hash-verified snapshot' : 'Illustrative evidence source'}</small></div>
-                    </div>
-                    {ROLES.map(role => (
-                      <AgentNode role={role} key={role} state={stages[role].state} hostStatus={stages[role].hostStatus}
-                        selected={selected === role} onClick={() => chooseAgent(role)} />
-                    ))}
-                    <span className="graph-watermark">{showingLive ? 'HOST-OBSERVED STATES • LIVE API' : 'HOST-OBSERVED STATES • DEMO REPRESENTATION'}</span>
-                  </div>
-                  <div className="observatory-bottom">
-                    <div className="legend"><span><i className="legend-line cyan" /> Evidence access</span><span><i className="legend-line amber" /> Independent access</span><span><i className="legend-line violet" /> Reconciliation</span></div>
-                  </div>
-                </section>
-
-                <AgentInspector stages={stages} events={events} live={showingLive} selected={selected} tab={tab} onTab={setTab}/>
-              </div>
-
-              <div className="lower-grid">
-                <section className="activity-card" aria-labelledby="recent-heading">
-                  <div className="panel-heading"><div><span className="eyebrow">{showingLive ? 'EVENT JOURNAL / LIVE LEDGER' : 'EVENT JOURNAL / PREVIEW'}</span><h3 id="recent-heading">Activity signal</h3></div>
-                    <span>
-                      {showingLive && <button className="text-button" type="button" onClick={() => setPage('findings')}>View findings <Symbol name="arrow" size={15}/></button>}
-                      <button className="text-button" type="button" onClick={() => setPage('activity')}>View all <Symbol name="arrow" size={15}/></button>
-                    </span>
-                  </div>
-                  <div className="activity-scroll"><EventLog events={events} onAgent={chooseAgent}/></div>
-                </section>
-                <section className="control-card" aria-labelledby="walkthrough-heading">
-                  <div className="panel-heading"><div><span className="eyebrow">{mode === 'live' ? 'LIVE API' : 'VISUAL WALKTHROUGH'}</span><h3 id="walkthrough-heading">{mode === 'live' ? 'Run an investigation' : 'Explore the sequence'}</h3></div>
-                    <span className="demo-pill small">{showingLive ? 'LIVE' : 'NOT LIVE'}</span>
-                  </div>
-                  <div className="segmented" role="group" aria-label="Data source">
-                    <button type="button" className={mode === 'live' ? 'is-selected' : ''} aria-pressed={mode === 'live'}
-                      onClick={() => { setMode('live'); setPlaying(false); }}>Live API</button>
-                    <button type="button" className={mode === 'demo' ? 'is-selected' : ''} aria-pressed={mode === 'demo'}
-                      onClick={() => setMode('demo')}>Demo walkthrough</button>
-                  </div>
-                  <div hidden={mode !== 'live'}><LiveConsole onView={setLiveView} onConnected={setConnected} /></div>
+                <div className="segmented" role="group" aria-label="Data source">
+                  <button type="button" className={mode === 'live' ? 'is-selected' : ''} aria-pressed={mode === 'live'}
+                    onClick={() => { setMode('live'); setPlaying(false); }}>Live API</button>
+                  <button type="button" className={mode === 'demo' ? 'is-selected' : ''} aria-pressed={mode === 'demo'}
+                    onClick={() => setMode('demo')}>Demo walkthrough</button>
+                </div>
+                <div className="control-body">
+                  <div hidden={mode !== 'live'}><LiveConsole onView={setLiveView} onConnected={setConnected} onFindings={() => setPage('findings')} /></div>
                   {mode === 'demo' && <>
-                  <div className="step-header"><span>PREVIEW PHASE</span><strong>{String(walkthroughStep).padStart(2, '0')} / 04</strong></div>
-                  <div className="progress-track" role="progressbar" aria-label="Visual walkthrough step"
-                    aria-valuemin={0} aria-valuemax={4} aria-valuenow={walkthroughStep}>
-                    <span style={{ width: `${walkthroughStep * 25}%` }} />
-                  </div>
-                  <p className="scene-caption" aria-live="polite">{SCENE_CAPTIONS[scene]}</p>
-                  <div className="control-actions">
-                    <button type="button" className="primary-action"
-                      onClick={() => { if (scene === 'complete') setScene('ready'); setPlaying(v => !v); }}>
-                      <Symbol name={playing ? 'pause' : 'play'} size={17}/>
-                      {playing ? 'Pause demo' : scene === 'complete' ? 'Replay walkthrough' : 'Play walkthrough'}
-                    </button>
-                    <button type="button" className="secondary-action" onClick={next}
-                      disabled={scene === 'complete'}>Next stage <Symbol name="arrow" size={16}/></button>
-                    <button type="button" className="icon-action" aria-label="Reset demonstration" title="Reset demonstration" onClick={reset}>
-                      <Symbol name="reset" size={18}/>
-                    </button>
-                  </div>
-                  <div className="control-disclaimer"><Symbol name="shield" size={17}/><span>This playback is an explicitly synthetic design preview. It does not execute models, open repositories or connect to the backend.</span></div>
+                    <div className="step-header"><span>PREVIEW PHASE</span><strong>{String(walkthroughStep).padStart(2, '0')} / 04</strong></div>
+                    <div className="progress-track" role="progressbar" aria-label="Visual walkthrough step"
+                      aria-valuemin={0} aria-valuemax={4} aria-valuenow={walkthroughStep}>
+                      <span style={{ width: `${walkthroughStep * 25}%` }} />
+                    </div>
+                    <p className="scene-caption" aria-live="polite">{SCENE_CAPTIONS[scene]}</p>
+                    <div className="control-actions">
+                      <button type="button" className="primary-action"
+                        onClick={() => { if (scene === 'complete') setScene('ready'); setPlaying(v => !v); }}>
+                        <Symbol name={playing ? 'pause' : 'play'} size={17}/>
+                        {playing ? 'Pause demo' : scene === 'complete' ? 'Replay walkthrough' : 'Play walkthrough'}
+                      </button>
+                      <button type="button" className="secondary-action" onClick={next}
+                        disabled={scene === 'complete'}>Next stage <Symbol name="arrow" size={16}/></button>
+                      <button type="button" className="icon-action" aria-label="Reset demonstration" title="Reset demonstration" onClick={reset}>
+                        <Symbol name="reset" size={18}/>
+                      </button>
+                    </div>
+                    <div className="control-disclaimer"><Symbol name="shield" size={17}/><span>This playback is an explicitly synthetic design preview. It does not execute models, open repositories or connect to the backend.</span></div>
                   </>}
-                </section>
-              </div>
-            </>
+                </div>
+              </section>
+
+              <section className="observatory-card" aria-labelledby="observatory-heading">
+                <div className="panel-heading observatory-heading">
+                  <div><span className="eyebrow">COLLABORATION MAP</span><h2 id="observatory-heading">Agent Observatory</h2></div>
+                  <span className="demo-pill"><span className="mini-orbit"/> {showingLive ? 'LIVE HOST STATES' : 'ILLUSTRATIVE FLOW'}</span>
+                </div>
+                <div className="observatory-stage" aria-label="Click an agent to show its events">
+                  <div className="stage-grain" aria-hidden="true" />
+                  <CommunicationLines stages={stages} />
+                  <div className="evidence-node">
+                    <span className="evidence-glyph"><Symbol name="layers" size={20}/></span>
+                    <div><strong>VERIFIED SCOPE</strong><small>{showingLive ? 'Saved, hash-verified snapshot' : 'Illustrative evidence source'}</small></div>
+                  </div>
+                  {ROLES.map(role => (
+                    <AgentNode role={role} key={role} state={stages[role].state} hostStatus={stages[role].hostStatus}
+                      selected={filter === role} onClick={() => chooseAgent(role)} />
+                  ))}
+                  <span className="graph-watermark">{showingLive ? 'HOST-OBSERVED STATES • LIVE API' : 'HOST-OBSERVED STATES • DEMO REPRESENTATION'}</span>
+                </div>
+                <AgentStrip role={filter === 'all' ? selected : filter} stage={stages[filter === 'all' ? selected : filter]} />
+              </section>
+
+              <section className="activity-card" aria-labelledby="recent-heading">
+                <div className="panel-heading"><div><span className="eyebrow">{showingLive ? 'LIVE LEDGER' : 'PREVIEW'}</span><h3 id="recent-heading">Activity</h3></div>
+                  <span className="heading-actions">
+                    {showingLive && <button className="text-button" type="button" onClick={() => setPage('findings')}>Findings <Symbol name="arrow" size={15}/></button>}
+                    <button className="text-button" type="button" onClick={() => setPage('activity')}>Full timeline <Symbol name="arrow" size={15}/></button>
+                  </span>
+                </div>
+                <div className="filter-chips" role="group" aria-label="Show events for">
+                  {(['all', ...ROLES] as const).map(option => (
+                    <button type="button" key={option} aria-pressed={filter === option}
+                      className={'chip' + (filter === option ? ' is-selected' : '') + (option === 'all' ? '' : ' chip--' + option)}
+                      onClick={() => option === 'all' ? setFilter('all') : chooseAgent(option)}>
+                      {option === 'all' ? 'All' : AGENTS[option].name.replace('The ', '')}
+                    </button>
+                  ))}
+                </div>
+                <div className="activity-scroll"><EventLog events={filter === 'all' ? events : events.filter(e => e.actor === filter)} onAgent={chooseAgent}/></div>
+              </section>
+            </div>
           )}
 
           {page === 'activity' && (
@@ -425,7 +379,7 @@ export function App() {
               <button className="secondary-action" type="button" onClick={() => setPage('observatory')}>Return to Observatory <Symbol name="arrow" size={16}/></button>
             </section>
           )}
-          <footer className="main-footer"><span>CODE ARCHEOLOGIST / MISSION CONTROL</span><span>{showingLive ? 'MC3 · LIVE API · HOST RECORDS, NOT PROOF' : connected ? 'MC3 · API CONNECTED · DEMO OR NO RUN SELECTED' : 'MC3 · API DISCONNECTED · SAMPLE DATA ONLY'}</span></footer>
+          {page !== 'observatory' && <footer className="main-footer"><span>CODE ARCHEOLOGIST / MISSION CONTROL</span><span>{showingLive ? 'MC3 · LIVE API · HOST RECORDS, NOT PROOF' : connected ? 'MC3 · API CONNECTED · DEMO OR NO RUN SELECTED' : 'MC3 · API DISCONNECTED · SAMPLE DATA ONLY'}</span></footer>}
         </div>
       </main>
     </div>
