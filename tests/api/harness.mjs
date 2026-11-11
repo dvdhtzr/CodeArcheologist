@@ -13,13 +13,13 @@ export const client = 'http://localhost:3999';
 export const bootstrap = randomBytes(16).toString('hex');
 const RS = '\x1e';
 
-export async function startApi(dataDirectory) {
+export async function startApi(dataDirectory, allowedOrigin = client) {
   const variables = { ...process.env };
   delete variables.CODE_ARCHEOLOGIST_BOOTSTRAP_CODE;
   const child = spawn('dotnet', ['exec', appDll], {
     cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     env: { ...variables, CODE_ARCHEOLOGIST_BOOTSTRAP_CODE: bootstrap, CODE_ARCHEOLOGIST_DATA_DIR: dataDirectory,
-      CODE_ARCHEOLOGIST_CLIENT_ORIGINS: client },
+      CODE_ARCHEOLOGIST_CLIENT_ORIGINS: allowedOrigin },
   });
   const output = [];
   child.stdout.on('data', c => output.push(c.toString()));
