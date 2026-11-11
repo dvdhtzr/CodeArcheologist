@@ -144,7 +144,20 @@ function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command,
     return () => cancelAnimationFrame(frame);
   }, [command, layout, fitView, getViewport, setViewport, setCenter]);
 
-  return <div className="atlas-viewport" aria-label="Interactive saved-source architecture canvas">
+  return <div className="atlas-viewport" aria-label="Interactive saved-source architecture canvas"
+    onKeyDownCapture={event => {
+      // Keyboard activation explicitly chooses the focused saved graph item.
+      // Keep this separate from React Flow's aggregate selection-change event:
+      // that event may contain the previously selected center and can
+      // overwrite a more recent pointer click with stale selection.
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (!(event.target instanceof Element)) return;
+      const element = event.target.closest('.react-flow__node[data-id], .react-flow__edge[data-id]');
+      const id = element?.getAttribute('data-id');
+      if (!id) return;
+      if (element.classList.contains('react-flow__edge')) onEdge(id);
+      else onNode(id);
+    }}>
     <div className="atlas-canvas-toolbar">
       <span>{projected.mode === 'overview' ? 'Project / file overview' : 'Focused evidence neighborhood'}</span>
       <button type="button" onClick={() => void fitView({
@@ -155,12 +168,6 @@ function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command,
       nodes={visibleNodes} edges={visibleEdges}
       onNodeClick={(_event: MouseEvent, node: FlowNode) => onNode(node.id)}
       onEdgeClick={(_event: MouseEvent, edge: FlowEdge) => onEdge(edge.id)}
-      onSelectionChange={({ nodes, edges }) => {
-        // React Flow keyboard selection must update the same read-only
-        // evidence inspector as a pointer click.
-        if (edges.length) onEdge(edges[0].id);
-        else if (nodes.length) onNode(nodes[0].id);
-      }}
       onMoveEnd={(_event, viewport: Viewport) => onViewport(viewport)}
       nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
       nodesFocusable edgesFocusable
