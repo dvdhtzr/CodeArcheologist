@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { indexAtlas, atlasFocus, atlasOverview, findAtlasNodes } from '../src/live/atlasModel.ts';
-import * as dagre from '@dagrejs/dagre';
+// Dagre publishes CommonJS for Node. Default import resolves module.exports;
+// namespace imports expose it under .default rather than .layout.
+import dagre from '@dagrejs/dagre';
 
 const COUNT = 10_000, EDGE_COUNT = 16_000;
 const SHA = 'a'.repeat(64), FINGERPRINT = 'b'.repeat(64);
