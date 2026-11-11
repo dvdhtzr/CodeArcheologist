@@ -67,7 +67,8 @@ export function eligibleContinuation(execution: Execution | null): number | null
 }
 export type Scope = { workspaceId: string; repositoryId: string; snapshotId: string };
 export type SourceView = {
-  contractVersion: string; filePath: string; fileSha256: string; totalLines: number; focusLine: number;
+  contractVersion: string; snapshotId: string; fingerprintSha256: string;
+  filePath: string; fileSha256: string; totalLines: number; focusLine: number;
   startLine: number; endLine: number; lines: { number: number; text: string; truncated: boolean }[];
   status: string; caveat: string;
 };
