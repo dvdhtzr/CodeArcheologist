@@ -125,16 +125,28 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     if (api && workspaceId && repositoryId) void attempt(async () => setSnapshots((await api.listSnapshots(workspaceId, repositoryId)).items));
   }, [api, workspaceId, repositoryId]);
   useEffect(() => {
+    let active = true;
     setEntryPoints([]); setEntryPointId(''); setRuns([]); setRunId('');
+    // Existing runs remain accessible even when graph/candidate analysis hits
+    // a 413 limit. Recovery eligibility comes from the host, not the graph.
     if (api && scope) void attempt(async () => {
-      const list = await api.listEntryPoints(scope).catch((e: unknown) => {
-        throw new Error('Could not list entry points for this snapshot. ' + (e instanceof Error ? e.message : String(e)));
-      });
-      setEntryPoints(list.items);
-      setEntryCaveat(list.caveat);
-      setRuns((await api.listRuns(scope)).items);
+      const [entryResult, runResult] = await Promise.allSettled([
+        api.listEntryPoints(scope), api.listRuns(scope),
+      ]);
+      if (!active) return;
+      if (runResult.status === 'fulfilled') setRuns(runResult.value.items);
+      if (entryResult.status === 'fulfilled') {
+        setEntryPoints(entryResult.value.items);
+        setEntryCaveat(entryResult.value.caveat);
+      } else if (api.connected) {
+        setError('Entry-point candidates unavailable: ' +
+          (entryResult.reason instanceof Error ? entryResult.reason.message : String(entryResult.reason)) +
+          ' Saved run history and snapshot coverage remain available.');
+      }
+      if (runResult.status === 'rejected') throw runResult.reason;
     });
-  }, [api, snapshotId]);
+    return () => { active = false; };
+  }, [api, workspaceId, repositoryId, snapshotId]);
 
   // The live feed for the selected run.
   useEffect(() => {
