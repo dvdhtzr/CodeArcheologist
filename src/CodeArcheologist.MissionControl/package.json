@@ -11,7 +11,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:live": "node --experimental-strip-types --test tests/*.e2e.mjs",
     "browser:install": "playwright install chromium",
-    "test:browser": "playwright test --config playwright.config.mjs"
+    "test:browser": "playwright test --config playwright.config.mjs",
+    "benchmark:atlas": "node --experimental-strip-types tests/atlas-benchmark.mjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "1.1.8",

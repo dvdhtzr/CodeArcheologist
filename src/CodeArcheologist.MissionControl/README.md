@@ -1,6 +1,6 @@
 # Code Archeologist — Mission Control (MC3)
 
-**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. R1 now adds a bounded, searchable and source-drillable graph neighborhood. The repository-wide, interactive architectural canvas remains planned for R2.
+**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. R1 now adds a bounded, searchable and source-drillable graph neighborhood. The R2 Architecture Atlas provides a bounded, interactive saved-source C# evidence canvas; full repository-wide semantic understanding remains outside the current graph contract.
 
 ## Live mode (MC3)
 
@@ -62,6 +62,14 @@ npm --prefix .\src\CodeArcheologist.MissionControl run dev
 Open **http://127.0.0.1:5175/**. Stop with Ctrl+C. The original developer frontend remains at 5174; MC1 uses 5175 so they can run side by side.
 
 No Ollama, .NET process, database, pairing code or secrets are required for the preview.
+
+## Atlas Visual Polish & Performance — R2 PR3
+
+The Architecture Atlas uses a wider desktop canvas; **Hide/Show search panel** toggles its navigation controls and **Evidence panel width** is a native, keyboard-accessible range input (280–540px). Search, graph and evidence stack responsively on narrower screens. Graph selection/expansion no longer auto-fits the camera. Explicit navigation centers the selected saved node; **Back** restores the prior viewport, selection and expansion when available. **Fit visible graph** remains explicit. Motion is disabled for reduced-motion preferences.
+
+The graph now indexes lowercase search text and exact edge IDs only once per selected snapshot; duplicate edge IDs fail closed. The default model-free tests include 10,000 nodes and 16,000 edges while preserving the 80/150/250 display caps. Run `npm run benchmark:atlas` from the Mission Control project to record a **synthetic only** JSON timing report. Optional pinned real-repository browser acceptance is documented at `docs/architecture/r2-atlas-polish-performance.md`; it requires the owner's existing C6c curated checkouts, never downloads or executes their code and is skipped in default runs.
+
+PR3 requires both the full GREEN suite and a human visual/keyboard walkthrough before merge. No graph evidence contract, source data or agent runtime is changed.
 
 ## Evidence Navigation — R2 PR2
 

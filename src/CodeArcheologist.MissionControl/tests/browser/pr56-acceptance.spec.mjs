@@ -77,6 +77,19 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.locator('.atlas-legend')).toContainText('Provisional local');
     await expect(page.locator('.atlas-legend')).toContainText('Candidate only');
 
+    // R2 PR3: keyboard-operable inspector sizing and the reversible search panel.
+    const panelWidth = page.getByRole('slider', { name: 'Evidence panel width' });
+    await expect(panelWidth).toHaveValue('360');
+    await panelWidth.focus();
+    await panelWidth.press('End');
+    await expect(panelWidth).toHaveValue('540');
+    await expect(page.locator('.atlas-workspace')).toHaveCSS('--atlas-inspector-width', '540px');
+    await page.getByRole('button', { name: 'Hide search panel' }).click();
+    await expect(page.locator('#atlas-search-panel')).toBeHidden();
+    await expect(page.locator('.atlas-viewport')).toBeVisible();
+    await page.getByRole('button', { name: 'Show search panel' }).click();
+    await expect(page.locator('#atlas-search-panel')).toBeVisible();
+
     // Find a declaration that is not in the project/file-only overview.
     await page.getByPlaceholder('Name, file, or declaration').fill('Helper');
     const declaration = page.locator('.atlas-search-results button')
@@ -85,6 +98,9 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await declaration.click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Focused evidence neighborhood');
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
+    const focusedMethodId = await page.locator('.atlas-viewport .react-flow__node.selected')
+      .first().getAttribute('data-id');
+    expect(focusedMethodId).toBeTruthy();
     // SVG <g> wrappers can fail Playwright's element-visibility check even
     // when a valid edge path exists. Assert the actual rendered path data,
     // the nonzero host-projected relationship count, and accessible selection.
@@ -93,12 +109,33 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.locator('.atlas-relationships > button').first()).toBeVisible();
     await expect(page.locator('.atlas-metrics')).toContainText('visible / eligible');
 
-    const other = page.locator('.atlas-viewport .react-flow__node:not(.selected)').first();
-    await expect(other).toBeVisible();
-    await other.click();
+    // Focused Helper has a recorded declared-in edge to the fixture file.
+    // Selecting an arbitrary first non-selected SVG node can select the old
+    // center while React Flow is reconciling selection state.
+    const fileNeighbor = page.locator('.atlas-viewport .react-flow__node')
+      .filter({ hasText: 'SampleController.cs' }).first();
+    await expect(fileNeighbor).toBeVisible();
+    await fileNeighbor.click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('SampleController.cs');
     await expect(page.getByRole('button', { name: "Expand this node's recorded neighbors" })).toBeEnabled();
     await page.getByRole('button', { name: "Expand this node's recorded neighbors" }).click();
     await expect(page.locator('.atlas-scope-note').last()).toContainText('Expansion seeds: 2 of 13');
+
+    // Keyboard Enter activates the exact focused saved graph node, without
+    // an aggregate selection callback overriding it with a previous node.
+    const helperNode = page.getByTestId('rf__node-' + focusedMethodId);
+    await expect(helperNode).toBeVisible();
+    await helperNode.focus();
+    await helperNode.press('Enter');
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
+
+    // R2 PR3: expansion only changes the saved subgraph, never auto-fits the camera.
+    await page.waitForTimeout(200);
+    const beforeInspectTransform = await page.locator('.atlas-viewport .react-flow__viewport')
+      .evaluate(el => getComputedStyle(el).transform);
+    await page.locator('.atlas-relationships > button').first().click();
+    await expect(page.locator('.atlas-viewport .react-flow__viewport'))
+      .toHaveCSS('transform', beforeInspectTransform);
 
     // PR2: inspect an actual declaration->file edge, including API-rehashed
     // saved source, then navigate the exact endpoint and use Back to restore
@@ -125,11 +162,25 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.locator('.atlas-project-evidence')).toContainText(
       'Project candidate details were not supplied');
 
+    await page.waitForTimeout(200);
+    const beforeNavigation = await page.locator('.atlas-viewport .react-flow__viewport').evaluate(el => {
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+      return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+    });
     await page.getByRole('button', { name: /Go to target node/ }).click();
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('SampleController.cs');
     await expect(page.getByRole('button', { name: 'Back to previous Atlas view' })).toBeEnabled();
     await page.getByRole('button', { name: 'Back to previous Atlas view' }).click();
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('declared-in');
+    await expect.poll(async () => {
+      const next = await page.locator('.atlas-viewport .react-flow__viewport').evaluate(el => {
+        const matrix = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+        return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+      });
+      return Math.abs(next.x - beforeNavigation.x) < 2 &&
+        Math.abs(next.y - beforeNavigation.y) < 2 &&
+        Math.abs(next.zoom - beforeNavigation.zoom) < 0.02;
+    }).toBe(true);
     await expect(page.locator('.atlas-endpoints')).toContainText('Go to target node');
     // Returning to the prior selection must not resurrect its old source panel.
     await expect(page.locator('.atlas-inline-source')).toHaveCount(0);
@@ -141,6 +192,14 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
       .toContainText('private int Helper()');
     await page.getByRole('button', { name: 'Back to previous Atlas view' }).click();
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('declared-in');
+
+    // The Atlas remains readable when narrow without changing selected evidence.
+    await page.setViewportSize({ width: 820, height: 760 });
+    await expect(page.locator('.atlas-viewport')).toBeVisible();
+    const canvasBox = await page.locator('.atlas-viewport').boundingBox();
+    const detailsBox = await page.locator('.atlas-details').boundingBox();
+    expect(canvasBox && detailsBox && detailsBox.y > canvasBox.y).toBeTruthy();
+    await page.setViewportSize({ width: 1280, height: 720 });
 
     await page.getByRole('button', { name: 'Project / file overview' }).click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Project / file overview');

@@ -104,3 +104,20 @@ test('Atlas navigation caps history without changing graph evidence or prior rec
   assert.equal(history.length, ATLAS_HISTORY_MAX);
   assert.deepEqual(graph.edges, [edge], 'navigation never manufactures graph edges');
 });
+
+test('Atlas Back preserves an independent finite camera state without modifying evidence', () => {
+  const index = indexAtlas(graph);
+  const originalViewport = { x: -487.25, y: 133.5, zoom: 0.64 };
+  const prior = { mode: 'focus', centerId: method.id, expandedIds: [file.id],
+    selectedId: '', selectedEdgeId: edge.id, viewport: originalViewport };
+  const next = navigateToAtlasNode(index, prior, [], file.id);
+  assert.deepEqual(next.history[0].viewport, originalViewport);
+  assert.notEqual(next.history[0].viewport, originalViewport, 'history stores a defensive viewport copy');
+  const restored = previousAtlasView(next.history);
+  assert.deepEqual(restored.current.viewport, originalViewport);
+  assert.notEqual(restored.current.viewport, next.history[0].viewport);
+  assert.deepEqual(restored.current.expandedIds, [file.id]);
+  assert.equal(restored.current.selectedEdgeId, edge.id);
+  assert.equal(graph.edgeCount, 1);
+  assert.equal(graph.edges[0].status, 'observed-location');
+});
