@@ -47,7 +47,7 @@ test('Atlas index retains exact original directed evidence IDs and never invents
 test('Overview includes ONLY real saved project/file nodes and their candidate membership edges', () => {
   const projection = atlasOverview(indexAtlas(graph));
   assert.equal(projection.mode, 'overview');
-  assert.deepEqual(projection.nodes.map(n => n.id), ['file:Example.cs','file:Other.cs','project:A.csproj'].sort());
+  assert.deepEqual(projection.nodes.map(n => n.id), ['project:A.csproj','file:Example.cs','file:Other.cs']);
   assert.deepEqual(projection.edges.map(e => e.id), ['e1']);
   assert.equal(projection.edges[0].status, 'candidate');
   assert.equal(projection.eligibleNodeCount, 3);
