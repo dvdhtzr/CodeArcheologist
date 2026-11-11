@@ -154,6 +154,8 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
     ? [...new Set(graph.nodes.map(node => node.kind))].sort() : [], [graph]);
   const found = useMemo(() => index ? findAtlasNodes(index, query, kind) :
     { matches: [] as GraphNode[], total: 0 }, [index, query, kind]);
+  const shownResults = useMemo(() => query.trim() || kind !== 'all'
+    ? found.matches : found.matches.slice(0, 30), [found, query, kind]);
   const selectedNode = index?.nodeById.get(selectedId);
   const selectedEdge = graph?.edges.find(e => e.id === selectedEdgeId);
   const visibleIds = useMemo(() => new Set(projection?.nodes.map(n => n.id) ?? []), [projection]);
@@ -244,9 +246,9 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
               {kindOptions.map(k => <option key={k} value={k}>{k}</option>)}
             </select>
           </label>
-          <p className="atlas-search-count">{found.total} matching nodes; first {Math.min(ATLAS_SEARCH_RESULTS, found.total)} listed</p>
+          <p className="atlas-search-count">{found.total} matching nodes; {shownResults.length} listed (maximum {ATLAS_SEARCH_RESULTS})</p>
           <div className="atlas-search-results" aria-label="Atlas node search results">
-            {(query.trim() || kind !== 'all' ? found.matches : found.matches.slice(0, 30)).map(node =>
+            {shownResults.map(node =>
               <button type="button" key={node.id} onClick={() => focusNode(node.id)}
                 className={centerId === node.id ? 'is-focused' : ''}>
                 <strong title={node.label}>{node.label}</strong>
