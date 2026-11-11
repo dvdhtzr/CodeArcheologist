@@ -106,12 +106,26 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.locator('.atlas-relationships > button').first()).toBeVisible();
     await expect(page.locator('.atlas-metrics')).toContainText('visible / eligible');
 
-    const other = page.locator('.atlas-viewport .react-flow__node:not(.selected)').first();
-    await expect(other).toBeVisible();
-    await other.click();
+    // Focused Helper has a recorded declared-in edge to the fixture file.
+    // Selecting an arbitrary first non-selected SVG node can select the old
+    // center while React Flow is reconciling selection state.
+    const fileNeighbor = page.locator('.atlas-viewport .react-flow__node')
+      .filter({ hasText: 'SampleController.cs' }).first();
+    await expect(fileNeighbor).toBeVisible();
+    await fileNeighbor.click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('SampleController.cs');
     await expect(page.getByRole('button', { name: "Expand this node's recorded neighbors" })).toBeEnabled();
     await page.getByRole('button', { name: "Expand this node's recorded neighbors" }).click();
     await expect(page.locator('.atlas-scope-note').last()).toContainText('Expansion seeds: 2 of 13');
+
+    // Keyboard Enter activates the exact focused saved graph node, without
+    // an aggregate selection callback overriding it with a previous node.
+    const helperNode = page.locator('.atlas-viewport .react-flow__node')
+      .filter({ hasText: 'Helper' }).first();
+    await expect(helperNode).toBeVisible();
+    await helperNode.focus();
+    await helperNode.press('Enter');
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
 
     // R2 PR3: expansion only changes the saved subgraph, never auto-fits the camera.
     await page.waitForTimeout(200);
