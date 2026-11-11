@@ -255,10 +255,14 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
           </div>
           <p className="live-help">Search includes declarations not visible on the overview. Select a result to center its exact direct relationships.</p>
         </aside>
-        <ReactFlowProvider>
-          <AtlasCanvas projected={projection} selectedId={selectedId} selectedEdgeId={selectedEdgeId}
-            onNode={chooseNode} onEdge={chooseEdge}/>
-        </ReactFlowProvider>
+        {projection.nodes.length === 0
+          ? <div className="atlas-message atlas-empty-canvas" role="status">
+              No project/file evidence nodes were recorded for this view. This is not proof that the repository has no architecture, APIs, or dependencies. Try another snapshot or inspect Snapshot Coverage.
+            </div>
+          : <ReactFlowProvider>
+              <AtlasCanvas projected={projection} selectedId={selectedId} selectedEdgeId={selectedEdgeId}
+                onNode={chooseNode} onEdge={chooseEdge}/>
+            </ReactFlowProvider>}
         <aside className="atlas-details" aria-label="Atlas selection and evidence summary">
           <h3>{selectedEdge ? 'Recorded relationship' : selectedNode ? 'Saved graph node' : 'Explore a selection'}</h3>
           {selectedNode && <>
