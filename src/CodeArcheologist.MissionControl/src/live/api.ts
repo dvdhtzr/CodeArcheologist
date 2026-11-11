@@ -20,7 +20,7 @@ export type Snapshot = {
 export type Anchor = { filePath: string; fileSha256: string; line: number; column: number };
 export type EntryPoint = { id: string; kind: string; evidenceStatus: string; label: string; detail: string; anchor: Anchor };
 export type EntryPointList = {
-  contractVersion: string; snapshotId: string; count: number; truncated: boolean; items: EntryPoint[]; caveat: string;
+  contractVersion: string; snapshotId: string; fingerprintSha256: string; count: number; truncated: boolean; items: EntryPoint[]; caveat: string;
 };
 export type RunSummary = {
   runId: string; status: string; diagnostic: string; startedAtUtc: string; finishedAtUtc: string | null;
@@ -126,6 +126,10 @@ export class ApiClient {
     return this.#send<Snapshot>('POST', `/api/v1/workspaces/${id(workspaceId)}/repositories/${id(repositoryId)}/snapshots`, {});
   }
   listEntryPoints(scope: Scope) { return this.#send<EntryPointList>('GET', scopePath(scope) + '/entry-points'); }
+  listMethods(scope: Scope) { return this.#send<{ contractVersion: string; snapshotId: string; fingerprintSha256: string; count: number; truncated: boolean; items: Array<{ id: string; label: string; detail: string | null; anchor: { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null }; inboundProvisionalCandidates: number }>; caveat: string }>('GET', scopePath(scope) + '/methods'); }
+  impact(scope: Scope, methodId: string) {
+    return this.#send<{ contractVersion: string; snapshotId: string; fingerprintSha256: string; method: { id: string; label: string; detail: string | null; anchor: { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null }; inboundProvisionalCandidates: number }; directCandidates: Array<{ calleeEdgeId: string; evidenceStatus: string; invocationAnchor: { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null }; callerLabel: string; callerKind: string; callerAnchor: { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null } }>; candidateEdgesWithoutObservedContainment: number; snapshotUnresolvedCalleeCount: number; unknowns: string[]; caveat: string }>('GET', scopePath(scope) + '/impact?methodId=' + encodeURIComponent(methodId));
+  }
   listRuns(scope: Scope) { return this.#send<Page<RunSummary>>('GET', scopePath(scope) + '/investigations'); }
   startInvestigation(scope: Scope, entryPointId: string) {
     return this.#send<RunSummary>('POST', scopePath(scope) + '/investigations', { entryPointId });
