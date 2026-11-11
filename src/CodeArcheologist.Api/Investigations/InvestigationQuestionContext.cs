@@ -65,6 +65,8 @@ public static class InvestigationQuestionContract
     {
         if (context is null || context.ContractVersion != Version ||
             context.QuestionId == Guid.Empty || context.RunId == Guid.Empty ||
+            context.QuestionId == context.RunId ||
+            context.CreatedAtUtc.Offset != TimeSpan.Zero ||
             context.Scope is null || context.SubjectNodeId != context.Scope.EntryPointId ||
             context.QuestionTemplateVersion != TemplateVersion ||
             context.CapabilityPolicyVersion != CapabilityPolicyVersion ||
@@ -80,6 +82,11 @@ public static class InvestigationQuestionContract
     {
         if (GateCEvidenceRegistry.Version != CapabilityPolicyVersion ||
             SnapshotEvidenceTools.Version != EvidenceToolsVersion ||
+            GateCEvidenceSession.MaxToolCalls != 6 ||
+            GateCEvidenceSession.MaxTotalItems != 48 ||
+            GateC3IndependentRunner.RoleTimeoutSeconds != 90 ||
+            GateC3IndependentRunner.AssessmentAttempts != 2 ||
+            GateC6ExecutionContract.AttemptDeadline != TimeSpan.FromMinutes(6) ||
             !ValidScope(scope) || !Supports(ExplainHttpEntryPoint, subjectKind))
             throw new ArgumentException("Unsupported or invalid question scope.");
     }
