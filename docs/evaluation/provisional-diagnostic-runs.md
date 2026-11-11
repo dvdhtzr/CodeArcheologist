@@ -230,3 +230,26 @@ Owner run on Windows, contract v6, Gate C and baseline only (Gate B unchanged). 
 - **Also observed, not acceptance criteria:** completion improved from 14/15 to 15/15, and review flags fell from 5 to 1.
 - **Reading:** a change from 7/13 to 8/13, with one unblinded judge and n = 13, is within noise. Showing the registration site did not clearly help the 9B local model mention registration problems. The context was present for all four target cases, so the limit is likely in what the model does with it, not in what it sees.
 - **Caveats:** the checklist was not blinded (the owner knew it was Gate C); one random trial was shown for repeated cases; thresholds are still provisional.
+
+## Scored run 1 (C7): all 50 cases, owner-approved labels and thresholds
+
+Owner run on Windows, contract `gate-c-evidence-capabilities-v5`. This is the **first non-provisional run**. `check.ps1` GREEN in the same session.
+
+| Comparator | Completed | Integrity breaches | Anchor recall | Objection coverage | Review flags |
+|---|---|---|---|---|---|
+| deterministic-baseline | 46/46 | 0 | 86% | — | 0 |
+| gate-b | 46/46 | 0 | 47% | — | 0 |
+| gate-c | **69/70** | **0** | **88%** | **100%** | 10 |
+
+**Deterministic thresholds:**
+
+| Threshold | Needed | Result | |
+|---|---|---|---|
+| Integrity breaches | 0 | 0 | PASS |
+| Case and expectation failures | 0 | 0 | PASS |
+| Gate C complete workflows | ≥ 90% | 98.6% (69/70) | PASS |
+| Gate C material objection coverage | 100% | 100% | PASS |
+
+- **The one incomplete Gate C attempt** was C12 (injected comment), trial 1: the case whose source contains instruction-like text. It ended incomplete with no breach. That is a fail-closed outcome, not a violation.
+- **Review flags (10)** are lexical screens for human review only and are never scored (rule 57).
+- **Judgment thresholds** are pending the ADR 0022 judgments of record: material-issue detection ≥ 85%, actionable ≥ 80%, usefulness gain ≥ 15 points.
