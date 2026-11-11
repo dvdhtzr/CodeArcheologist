@@ -22,6 +22,13 @@
 - REST sends the token as a header. Browsers cannot set WebSocket headers, so the SignalR hub connection carries it as the `access_token` query value, as the realtime contract specifies.
 - Only loopback API addresses are accepted, and only GUIDs reach URL paths.
 
+**Findings (MC4):** the **Findings** page shows the host-recorded report for the selected run:
+- the Investigator's hypotheses, each with its host-reconciled verdict (the host disposition is authoritative, and never a verified fact), stated uncertainty and the Reviewer's reasoning;
+- the Skeptic's objections;
+- what each agent said it does not know.
+
+All AI-written text is shown as plain text and labelled. Clicking a citation shows bounded lines (±8) from the **saved, hash-verified snapshot**, using the API's `code-archeologist-source-v1` resource. It never reads your live folder.
+
 **Truthfulness:** an *accepted* assessment passed the host's contract checks; it is not proof its claims are true. Entry points are written candidates, and an empty list is *unknown*, not "no endpoints".
 
 ## MC1 visual foundation

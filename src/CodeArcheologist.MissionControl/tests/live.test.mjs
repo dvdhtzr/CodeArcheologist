@@ -80,7 +80,7 @@ test('non-GUID identifiers never reach a URL path', async () => {
 });
 
 test('the token is never persisted in browser storage or cookies', () => {
-  for (const file of ['src/live/api.ts', 'src/live/realtime.ts', 'src/live/ledger.ts', 'src/live/LiveConsole.tsx', 'src/App.tsx']) {
+  for (const file of ['src/live/api.ts', 'src/live/realtime.ts', 'src/live/ledger.ts', 'src/live/LiveConsole.tsx', 'src/live/Findings.tsx', 'src/live/report.ts', 'src/App.tsx']) {
     const source = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     assert.ok(!/localStorage|sessionStorage|document\.cookie|indexedDB/.test(source), file);
   }

@@ -39,6 +39,11 @@ export type Execution = {
   cancellable: boolean; note: string;
 };
 export type Scope = { workspaceId: string; repositoryId: string; snapshotId: string };
+export type SourceView = {
+  contractVersion: string; filePath: string; fileSha256: string; totalLines: number; focusLine: number;
+  startLine: number; endLine: number; lines: { number: number; text: string; truncated: boolean }[];
+  status: string; caveat: string;
+};
 
 export class ApiError extends Error {
   readonly status: number;
@@ -127,6 +132,12 @@ export class ApiClient {
   }
   events(scope: Scope, runId: string) { return this.#send<LedgerEvent[]>('GET', scopePath(scope) + `/investigations/${id(runId)}/events`); }
   execution(scope: Scope, runId: string) { return this.#send<Execution>('GET', scopePath(scope) + `/investigations/${id(runId)}/execution`); }
+  run<T>(scope: Scope, runId: string) { return this.#send<T>('GET', scopePath(scope) + `/investigations/${id(runId)}`); }
+  /** MC4: bounded lines from the saved, hash-verified snapshot (never the live folder). */
+  source(scope: Scope, path: string, sha256: string, line: number, context = 6) {
+    const query = new URLSearchParams({ path, sha256, line: String(line), context: String(context) });
+    return this.#send<SourceView>('GET', scopePath(scope) + '/source?' + query.toString());
+  }
   cancel(scope: Scope, runId: string, expectedAttemptNumber: number) {
     return this.#send<unknown>('POST', scopePath(scope) + `/investigations/${id(runId)}/cancel`, { expectedAttemptNumber });
   }
