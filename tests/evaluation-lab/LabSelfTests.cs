@@ -255,6 +255,77 @@ internal static class LabSelfTests
             finally { Directory.Delete(temp, recursive: true); }
         });
 
+        Check("external judging: blinded packets, hidden calibration, strict import, first import is the record, verdict", () =>
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "code-archeologist-lab-external-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Copy(evalRoot, Path.Combine(temp, "eval"));
+                var copy = Path.Combine(temp, "eval");
+                foreach (var f in Directory.GetFiles(Path.Combine(copy, "cases"), "labels.json", SearchOption.AllDirectories))
+                    File.WriteAllText(f, File.ReadAllText(f).Replace("\"status\": \"draft\"", "\"status\": \"owner-approved\"")
+                        .Replace("\"authoredBy\": \"assistant-draft\"", "\"authoredBy\": \"assistant-draft-owner-reviewed\""));
+                var cases = CorpusValidator.Validate(copy).Cases.Where(c => c.Case.Expectation == CaseExpectation.Investigate && c.Labels.MaterialIssues.Count > 0)
+                    .OrderBy(c => c.Case.Id, StringComparer.Ordinal).Take(2).ToArray();
+                void Write(string dir, string caseId, string comparator, string text)
+                {
+                    Directory.CreateDirectory(dir);
+                    File.WriteAllText(Path.Combine(dir, $"{caseId}.{comparator}.t1.report.json"), JsonSerializer.Serialize(new LabReport(LabSchema.Report,
+                        caseId, comparator, 1, "completed", "d", Guid.NewGuid(), new string('a', 64), "e",
+                        [new("observation", "x", text, [])], null, 1), LabSchema.Json));
+                }
+                var scored = Path.Combine(temp, "scored");
+                Write(scored, cases[0].Case.Id, Comparator.GateB, "source-observation: plain report");
+                Write(scored, cases[0].Case.Id, Comparator.GateC, "H1 ContestedOrInsufficient: richer report");
+                File.WriteAllText(Path.Combine(scored, "summary.json"), """
+                    {"provisional":false,"thresholdStatus":"owner-approved-for-scoring","failures":[],"comparators":[
+                     {"comparator":"gate-b","evaluations":1,"completed":1,"integrityBreaches":0,"observationAnchorRecall":0.5,"meanObjectionCoverage":null,"reviewFlags":0},
+                     {"comparator":"gate-c","evaluations":1,"completed":1,"integrityBreaches":0,"observationAnchorRecall":0.5,"meanObjectionCoverage":1.0,"reviewFlags":0}]}
+                    """);
+                // Calibration source: an earlier paired checklist the owner answered.
+                var old = Path.Combine(temp, "old");
+                Write(old, cases[1].Case.Id, Comparator.GateB, "old b");
+                Write(old, cases[1].Case.Id, Comparator.GateC, "old c");
+                var oldChecks = Path.Combine(temp, "old-checks.json");
+                File.WriteAllText(oldChecks, JsonSerializer.Serialize(new LabOwnerTools.IssueCheckFile(LabOwnerTools.ChecklistSchema, old, DateTimeOffset.UtcNow,
+                    [new(cases[1].Case.Id, cases[1].Labels.MaterialIssues[0].Id, Comparator.GateB, 1, false, Comparator.GateC, 1, true)]), LabSchema.Json));
+
+                var export = Path.Combine(temp, "export");
+                var output = new StringWriter();
+                Expect(LabExternalJudging.Export(copy, scored, export, old, oldChecks, null, null, output, seed: 11) == 0, "export failed: " + output);
+                Expect(LabExternalJudging.Export(copy, scored, export, null, null, null, null, new StringWriter(), seed: 11) == 2, "export must not overwrite");
+                var packets = Directory.GetFiles(Path.Combine(export, "upload-these-to-chatgpt"));
+                var packetText = string.Concat(packets.Select(File.ReadAllText));
+                Expect(packets.Length > 0 && !packetText.Contains("gate-") && !packetText.Contains("calibration", StringComparison.OrdinalIgnoreCase) &&
+                       !packetText.Contains("source-observation:") && !packetText.Contains("ContestedOrInsufficient:"), "packets reveal identity or calibration");
+                Expect(!Directory.GetFiles(Path.Combine(export, "upload-these-to-chatgpt")).Any(f => f.Contains("key", StringComparison.OrdinalIgnoreCase)), "key in upload folder");
+                var key = JsonSerializer.Deserialize<LabExternalJudging.ExportKey>(File.ReadAllText(Path.Combine(export, LabExternalJudging.KeyFileName)), LabSchema.Json)!;
+                Expect(key.Questions.Count(q => q.Calibration) == 1 && key.Questions.Select(q => q.Id).Distinct().Count() == key.Questions.Count, "key wrong");
+
+                // Incomplete answers are refused and nothing is recorded.
+                var answers = Path.Combine(temp, "answers.txt");
+                File.WriteAllText(answers, "Q001: A=y B=y\n");
+                Expect(LabExternalJudging.Import(export, answers, new StringWriter()) == 1 &&
+                       !File.Exists(Path.Combine(export, LabExternalJudging.RecordFileName)), "incomplete import must be refused");
+                // Complete answers: every A=y / ACT=y, so missing-report sides must be normalized to n.
+                File.WriteAllLines(answers, key.Questions.Select(q => q.Kind == "issue" ? $"{q.Id}: A = Y, B = y" : $"```{q.Id}: PREF=TIE ACT_A=y ACT_B=y"));
+                var imported = new StringWriter();
+                Expect(LabExternalJudging.Import(export, answers, imported) == 0, "import failed: " + imported);
+                Expect(LabExternalJudging.Import(export, answers, new StringWriter()) == 2, "the record must never be replaced");
+                var record = JsonSerializer.Deserialize<LabExternalJudging.JudgmentsOfRecord>(
+                    File.ReadAllText(Path.Combine(export, LabExternalJudging.RecordFileName)), LabSchema.Json)!;
+                var detection = record.Metrics.Single(m => m.Name == "material-issue-detection" && m.Comparator == Comparator.GateC);
+                Expect(detection.Numerator == cases[0].Labels.MaterialIssues.Count && detection.Denominator == key.Questions.Count(q => !q.Calibration && q.Kind == "issue"),
+                    "missing reports must count as not detected with a fixed denominator");
+                Expect(record.CalibrationAnswers == 2 && record.CalibrationAgreements == 1, "calibration agreement wrong");
+                var verdict = new StringWriter();
+                LabExternalJudging.Verdict(copy, scored, export, verdict);
+                Expect(verdict.ToString().Contains("ChatGPT-judged") && verdict.ToString().Contains("NOT ACCEPTED") &&
+                       verdict.ToString().Contains("agreed with earlier owner answers on 1/2"), "verdict wrong: " + verdict);
+            }
+            finally { Directory.Delete(temp, recursive: true); }
+        });
+
         Check("repository corpus unmodified by lab runs", () =>
             Expect(TreeDigest(evalRoot) == before, "eval/ tree changed during self-test"));
         Console.WriteLine(_failed == 0
