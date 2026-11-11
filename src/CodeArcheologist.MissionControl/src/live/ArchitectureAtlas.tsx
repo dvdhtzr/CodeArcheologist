@@ -75,6 +75,8 @@ export function layoutAtlas(view: AtlasProjection): { nodes: FlowNode[]; edges: 
       const style = evidenceStyle(edge.status);
       return {
         id: edge.id, source: edge.fromId, target: edge.toId,
+        ariaLabel: edge.kind + ', ' + style.label + ', recorded from ' + edge.fromId +
+          ' to ' + edge.toId + '; not necessarily runtime flow',
         type: 'smoothstep',
         label: undefined,
         markerEnd: { type: MarkerType.ArrowClosed, color: style.stroke, width: 17, height: 17 },
@@ -153,8 +155,15 @@ function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command,
       nodes={visibleNodes} edges={visibleEdges}
       onNodeClick={(_event: MouseEvent, node: FlowNode) => onNode(node.id)}
       onEdgeClick={(_event: MouseEvent, edge: FlowEdge) => onEdge(edge.id)}
+      onSelectionChange={({ nodes, edges }) => {
+        // React Flow keyboard selection must update the same read-only
+        // evidence inspector as a pointer click.
+        if (edges.length) onEdge(edges[0].id);
+        else if (nodes.length) onNode(nodes[0].id);
+      }}
       onMoveEnd={(_event, viewport: Viewport) => onViewport(viewport)}
       nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
+      nodesFocusable edgesFocusable
       panOnDrag zoomOnScroll zoomOnPinch zoomOnDoubleClick={false}
       elementsSelectable fitView fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
       minZoom={0.03} maxZoom={2}
