@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiClient, Scope, SourceView } from './api.ts';
 
 export type ExplorerSelection = { api: ApiClient; scope: Scope } | null;
@@ -28,13 +28,15 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
   const [sourceError, setSourceError] = useState('');
   const [loading, setLoading] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
+  const sourceEpoch = useRef(0);
   const scope = selection?.scope;
   const key = scope ? [scope.workspaceId, scope.repositoryId, scope.snapshotId].join('/') : '';
 
   useEffect(() => {
     let active = true;
     setEntries(null); setMethods(null); setSelectedMethod('');
-    setImpact(null); setSource(null); setError(''); setSearch('');
+    sourceEpoch.current++;
+    setImpact(null); setSource(null); setError(''); setSourceError(''); setSearch('');
     if (!selection) return;
     setLoading(true);
     Promise.all([selection.api.listEntryPoints(selection.scope), selection.api.listMethods(selection.scope)])
@@ -76,13 +78,15 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
 
   async function inspect(anchor: Anchor) {
     if (!selection || !anchor.filePath || !anchor.fileSha256 || !anchor.line) return;
+    const epoch = ++sourceEpoch.current;
     setSource(null); setSourceError('');
     try {
       const result = await selection.api.source(selection.scope, anchor.filePath, anchor.fileSha256, anchor.line, 8);
+      if (epoch !== sourceEpoch.current) return;
       if (result.filePath !== anchor.filePath || result.fileSha256 !== anchor.fileSha256)
         throw new Error('Source response does not match the saved file.');
       setSource(result);
-    } catch (e) { setSourceError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { if (epoch === sourceEpoch.current) setSourceError(e instanceof Error ? e.message : String(e)); }
   }
 
   function location(anchor: Anchor) {
@@ -137,11 +141,11 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
         {impact && <div className="deterministic-impact">
           <h2>Direct impact candidates: {impact.method.label}</h2>
           <p className="live-help">{impact.caveat}</p>
-          <button type="button" onClick={() => void inspect(impact.method.anchor)}>Inspect selected method source</button>
+          <button type="button" disabled={!impact.method.anchor.filePath || !impact.method.anchor.fileSha256 || !impact.method.anchor.line} onClick={() => void inspect(impact.method.anchor)}>Inspect selected method source</button>
           {impact.directCandidates.length === 0 && <p>No attributable provisional callers were found. This does not establish safety.</p>}
           <ul className="deterministic-list">{impact.directCandidates.slice(0, 100).map(c => <li key={c.calleeEdgeId}>
             <strong>{c.callerLabel}</strong><small>{c.callerKind} · {c.evidenceStatus} · {location(c.invocationAnchor)}</small>
-            <button type="button" onClick={() => void inspect(c.invocationAnchor)}>Inspect invocation source</button>
+            <button type="button" disabled={!c.invocationAnchor.filePath || !c.invocationAnchor.fileSha256 || !c.invocationAnchor.line} onClick={() => void inspect(c.invocationAnchor)}>Inspect invocation source</button>
           </li>)}</ul>
           {impact.directCandidates.length > 100 && <p className="live-help">Showing the first 100 candidates.</p>}
           <p>{impact.candidateEdgesWithoutObservedContainment} candidate edges without observed caller containment · {impact.snapshotUnresolvedCalleeCount} unresolved invocation targets across this snapshot.</p>
