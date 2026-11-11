@@ -8,7 +8,7 @@ namespace CodeArcheologist.Api.Investigations;
 
 public static class GateC6CheckpointContract
 {
-    public const string Version = "gate-c6b-role-checkpoint-v1";
+    public const string Version = "gate-c6b-role-checkpoint-v2";
     /// <summary>Version of the host validation rules a checkpoint was accepted under.</summary>
     public const string ValidatorVersion = "gate-c-host-validator-v1";
     /// <summary>The Reviewer consumes validated assessments, not snapshot evidence.</summary>

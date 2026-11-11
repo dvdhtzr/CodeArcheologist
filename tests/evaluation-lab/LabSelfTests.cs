@@ -17,6 +17,7 @@ internal static class LabSelfTests
         var before = TreeDigest(evalRoot);
         Check("real corpus is valid", () => Expect(CorpusValidator.Validate(evalRoot).Valid, "corpus invalid"));
         NegativeCorpusCases(evalRoot);
+        await HostCautionSelfTests.RunAsync(evalRoot);
         var corpus = CorpusValidator.Validate(evalRoot);
 
         foreach (var loaded in corpus.Cases.Where(c => c.Case.Category == CaseCategory.Fixture))

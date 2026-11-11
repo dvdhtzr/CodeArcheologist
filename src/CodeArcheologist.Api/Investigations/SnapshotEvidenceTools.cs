@@ -46,7 +46,9 @@ public sealed record AgentEvidencePackage(
     IReadOnlyList<AgentEvidenceReference> References,
     IReadOnlyList<AgentEvidenceRelation> Relations,
     IReadOnlyList<string> Unknowns,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    IReadOnlyList<HostSyntaxCaution>? HostCautions = null,
+    string HostCautionAnalyzerVersion = CSharpHostCautionAnalyzer.Version);
 
 public sealed record AgentCitationClaim(
     string ClaimKind,
@@ -80,9 +82,10 @@ public sealed class SnapshotEvidenceTools(
     CSharpEvidenceGraphBuilder graphBuilder,
     CSharpHttpAttributeInspector attributeInspector,
     CSharpMinimalApiInspector minimalInspector,
+    CSharpHostCautionAnalyzer hostCautions,
     SnapshotCaptureService capture)
 {
-    public const string Version = "snapshot-agent-evidence-tools-v1";
+    public const string Version = "snapshot-agent-evidence-tools-v2";
     private const int MaxDirectInvocations = 12;
     private const int MaxExcerptChars = 2400;
     private const int MaxClaimCount = 8;
@@ -121,6 +124,8 @@ public sealed class SnapshotEvidenceTools(
         var invocationCount = 0;
         var reportedInvocationCount = 0;
         var unknowns = new List<string>();
+        CSharpMinimalApiCandidate? selectedMinimal = null;
+        CSharpHttpAttributeCandidate? selectedAttribute = null;
 
         if (entry.Kind == "http-endpoint-attribute")
         {
@@ -129,6 +134,7 @@ public sealed class SnapshotEvidenceTools(
             if (candidate is null)
                 throw new SnapshotCaptureException(
                     "HTTP annotation cannot be independently anchored to saved syntax.", 409);
+            selectedAttribute = candidate;
 
             var annotation = graph.Edges.SingleOrDefault(edge =>
                 edge.Kind == "annotates-method" && edge.Status == "candidate" &&
@@ -192,6 +198,7 @@ public sealed class SnapshotEvidenceTools(
             if (candidate is null)
                 throw new SnapshotCaptureException(
                     "Minimal API mapping cannot be independently anchored to saved syntax.", 409);
+            selectedMinimal = candidate;
 
             var mapping = graph.Edges.SingleOrDefault(edge =>
                 edge.Kind == "candidate-http-mapping" && edge.Status == "candidate" &&
@@ -235,6 +242,9 @@ public sealed class SnapshotEvidenceTools(
         var excerpt = ReadSourceExcerpt(snapshot, entry.FilePath,
             entry.FileSha256, sourceSpanStart, sourceSpanLength);
 
+        var hostFindings = hostCautions.Inspect(snapshot, graph, entry,
+            selectedMinimal, selectedAttribute, ct);
+
         return new AgentEvidencePackage(
             Version, snapshot.WorkspaceId, snapshot.RepositoryId,
             snapshot.Id, snapshot.FingerprintSha256, graph.AnalyzerVersion,
@@ -251,7 +261,8 @@ public sealed class SnapshotEvidenceTools(
                 "Only direct, observed method-body invocation sites are shown (maximum 12); no transitive propagation.",
                 "No user repository path, shell, MSBuild project, generator, restore or external provider is accessed.",
                 "This is an ephemeral deterministic tool contract; not an LLM investigation or independent semantic claim verification."
-            ]);
+            ],
+            hostFindings, CSharpHostCautionAnalyzer.Version);
 
         void AddReference(EvidenceGraphNode node, string status)
         {
