@@ -261,3 +261,51 @@ The owner set ChatGPT judging aside for now, so the judgment thresholds remain *
 - **Recorded:** all four deterministic thresholds pass (above).
 - **Pending:** material-issue detection, actionable recommendations and usefulness gain over Gate B.
 - **Best available evidence:** the owner's own judgment on run 6, provisional and on the 15 real repositories. Gate C mentioned 7/13 labelled problems (54%), against 1/13 (8%) for Gate B. That is below the 85% detection threshold. It is not a C7 metric of record.
+
+## E5 (pre-registered): Gate C roles on gemma4:26b
+
+**Why:** prompt and evidence changes stopped improving detection. E4 showed the agents with the right context in view still mostly missed the problems, which points at the 9B model.
+
+**Owner screening (MAF/OllamaSharp structured-output probe, 5 answers each, owner's machine):**
+
+| Model | Time per answer | Valid | Placement |
+|---|---|---|---|
+| qwen3.5:9b (current) | ~24 s | 5/5 | 100% GPU |
+| gemma4:26b | ~15 s | 5/5 | 80% GPU |
+| qwen3:30b | ~45 s | 5/5 | ~54% GPU |
+| qwen3.8:27b | ~80 s | 2/5 (3 provider timeouts) | ~51% GPU |
+
+**Change:**
+- `GateC3IndependentRunner.ModelId` and `GateC4ReconciliationRunner.ModelId` become `gemma4:26b`, and the lab declaration (`eval/lab-config.json` `budgets.model`) is updated to match.
+- Gate B stays on qwen3.5:9b, so Gate B results are unchanged and are not re-judged.
+- Budgets are unchanged: 90 s per role, a 6-minute attempt deadline, 2 assessment attempts. Timeouts count as failures, never as a reason to change the budgets during the experiment.
+- The evidence contract is unchanged (`gate-c-evidence-capabilities-v5`). Checkpoints bind the model ID, so the previous model's checkpoints fail closed.
+
+**Acceptance, measured on the 15 curated repositories against run 6:**
+- zero integrity breaches;
+- Gate C completed at least 14/15;
+- Gate C anchor recall of at least 67%;
+- owner checklist (`--checklist --single gate-c`, every problem): Gate C mentions **at least 9 of 13** problems (run 6: 7/13).
+
+Otherwise E5 is reverted to qwen3.5:9b, and the result is recorded either way. The single-system checklist is not blinded. Scored run 1 (on qwen3.5:9b) remains the official baseline. If E5 passes, a new scored run is needed before any improvement is official.
+
+## Run 8: E5 (gemma4:26b) on the 15 curated repositories
+
+Owner run on Windows, Gate C roles on gemma4:26b, contract v5. `check.ps1` GREEN in the same session.
+
+| Criterion (pre-registered) | Needed | Result | |
+|---|---|---|---|
+| Integrity breaches | 0 | 0 | pass |
+| Gate C completed | ≥ 14/15 | **15/15** | pass |
+| Gate C anchor recall | ≥ 67% | 67% | pass |
+| Owner checklist, every problem (`--single gate-c`) | ≥ 9/13 | **5/13** | **fail** |
+
+- **Verdict: E5 fails its pre-registered criteria and is reverted.** Gate C returns to qwen3.5:9b, and `eval/lab-config.json` returns to the qwen3.5:9b declaration.
+- **Also observed, not acceptance criteria:**
+  - gemma4:26b stayed within the unchanged budgets (15/15 completed, no timeouts) and produced fewer review flags (1);
+  - its reports mentioned fewer labelled problems than qwen3.5:9b: 5/13 against 7/13 in run 6 and 8/13 in run 7.
+- **Reading:**
+  - A larger model on this hardware did not improve problem detection. Within this small, unblinded, single-judge sample, it did slightly worse.
+  - Neither a bigger context (E4) nor a bigger model (E5) moved detection past 8/13.
+  - The bottleneck is not obviously model size. The likely candidates are the fixed questions the roles answer, or the evidence views themselves (which only reach one hop).
+- **Caveats:** n = 13, one judge, not blinded, one random trial for repeated cases; thresholds as approved; scored run 1 (qwen3.5:9b) remains the official baseline.
