@@ -25,9 +25,7 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
 {
     private const int MaxModelText = 8192;
     private const int MaxInputText = 16000;
-    // E5 (owner-approved experiment): Gate C roles use gemma4:26b; Gate B stays on qwen3.5:9b.
-    // Checkpoints bind this ID, so checkpoints from the previous model fail closed (rule 53).
-    public const string ModelId = "gemma4:26b";
+    public const string ModelId = "qwen3.5:9b";
     /// <summary>Per-role model deadline (declared in the C6c lab budget config).</summary>
     public const int RoleTimeoutSeconds = 90;
     /// <summary>At most one host-rejected output may be followed by one corrected attempt.</summary>
