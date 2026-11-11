@@ -34,10 +34,12 @@ const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id);
 export function indexAtlas(graph: EvidenceGraph): AtlasIndex {
   const nodeById = new Map(graph.nodes.map(n => [n.id, n]));
   const edgeById = new Map(graph.edges.map(e => [e.id, e]));
+  if (edgeById.size !== graph.edges.length)
+    throw new Error('Atlas received duplicate saved edge IDs; graph identity is ambiguous.');
   const searchRows = [...graph.nodes].sort(byId).map(node => ({
     node,
     searchText: [node.id, node.label, node.kind, node.filePath ?? '', node.detail ?? '']
-      .join(' ').toLocaleLowerCase(),
+      .join(' ').toLowerCase(),
   }));
   const incoming = new Map<string, GraphEdge[]>();
   const outgoing = new Map<string, GraphEdge[]>();
@@ -122,7 +124,7 @@ export function atlasFocus(index: AtlasIndex, centerId: string, expandedIds: rea
 export function findAtlasNodes(index: AtlasIndex, query: string, kind: string, limit = ATLAS_SEARCH_RESULTS): {
   matches: GraphNode[]; total: number;
 } {
-  const term = query.trim().toLocaleLowerCase();
+  const term = query.trim().toLowerCase();
   const matches: GraphNode[] = [];
   let total = 0;
   const cap = Math.max(0, Math.trunc(limit));
