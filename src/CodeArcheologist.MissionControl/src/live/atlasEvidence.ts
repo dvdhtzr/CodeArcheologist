@@ -79,10 +79,10 @@ export function previousAtlasView(history: readonly AtlasCursor[]): {
   current: AtlasCursor; history: AtlasCursor[];
 } | null {
   if (!history.length) return null;
+  const previous = history[history.length - 1];
   return {
-    current: { ...history[history.length - 1], expandedIds: [...history[history.length - 1].expandedIds],
-      ...(isAtlasViewport(history[history.length - 1].viewport)
-        ? { viewport: { ...history[history.length - 1].viewport } } : {}) },
+    current: { ...previous, expandedIds: [...previous.expandedIds],
+      ...(isAtlasViewport(previous.viewport) ? { viewport: { ...previous.viewport } } : {}) },
     history: history.slice(0, -1),
   };
 }
