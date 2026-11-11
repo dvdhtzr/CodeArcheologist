@@ -17,7 +17,8 @@ public sealed record InvestigationAdmission(InvestigationAdmissionOutcome Outcom
 public sealed class InvestigationAdmissionService(WorkspaceStore store,
     ExecutionOwnershipState ownership, InvestigationWorkSignal signal)
 {
-    public InvestigationAdmission Admit(GateCScope scope, Guid idempotencyKey)
+    public InvestigationAdmission Admit(GateCScope scope, Guid idempotencyKey,
+        string? questionSubjectKind = null)
     {
         var fence = ownership.Fence;
         if (fence is null)
@@ -25,7 +26,7 @@ public sealed class InvestigationAdmissionService(WorkspaceStore store,
         InvestigationCreateResult result;
         try
         {
-            result = store.CreateInvestigation(scope, idempotencyKey, fence);
+            result = store.CreateInvestigation(scope, idempotencyKey, fence, questionSubjectKind);
         }
         catch (ExecutionFenceException error)
         {

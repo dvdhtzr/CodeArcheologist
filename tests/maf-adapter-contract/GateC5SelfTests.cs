@@ -26,8 +26,8 @@ internal static class GateC5SelfTests
                 connection.Open();
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = "PRAGMA user_version;";
-                if (Convert.ToInt32(cmd.ExecuteScalar()) != 6)
-                    throw new InvalidOperationException("C6 schema was not migrated.");
+                if (Convert.ToInt32(cmd.ExecuteScalar()) != 7)
+                    throw new InvalidOperationException("R3 metadata schema v7 was not migrated.");
             }
 
             // Execution state and workflow state are intentionally independent.

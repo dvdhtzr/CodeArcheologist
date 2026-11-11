@@ -25,6 +25,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Gate C1 model-free investigation contract chec
 if ($LASTEXITCODE -ne 0) { throw 'Gate C5a model-free report and persistence checks failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --gate-c6b-self-test
 if ($LASTEXITCODE -ne 0) { throw 'Gate C6b model-free ownership, fencing and worker checks failed.' }
+& dotnet run --project $adapterProject --configuration Release -- --r3-question-context-self-test
+if ($LASTEXITCODE -ne 0) { throw 'R3 PR1 question context, v7 migration and idempotency checks failed.' }
 $labProject = Join-Path $root 'tests/evaluation-lab/EvaluationLab.csproj'
 & dotnet run --project $labProject --configuration Release -- --validate-corpus
 if ($LASTEXITCODE -ne 0) { throw 'C6c evaluation corpus validation failed.' }
@@ -58,6 +60,8 @@ if ($LASTEXITCODE -ne 0) { throw 'C6b execution control HTTP integration tests f
 if ($LASTEXITCODE -ne 0) { throw 'W1 white-label API and SignalR integration tests failed.' }
 & node --test (Join-Path $root 'tests/api/capabilities.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'W2 capability resource integration tests failed.' }
+& node --test (Join-Path $root 'tests/api/investigation-question.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'R3 PR1 structured question HTTP auth and scope tests failed.' }
 & node --test (Join-Path $root 'tests/api/source.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'MC4 snapshot source-lines integration tests failed.' }
 & npm --prefix $mission run test:live
