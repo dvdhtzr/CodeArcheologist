@@ -75,3 +75,16 @@ The decisions below settle how this is done without the lab measuring itself.
   - The signature includes each reference's file path. Without it, moving a callee to another file (C05) looked unchanged.
   - C11 (adding a DI registration elsewhere) is `unaffected`: DI registrations are not part of an entry's one-hop evidence. Its label forbids claiming the registration resolves the dependency.
 
+
+## Addendum — thresholds approved for scoring (approved 2026-11-11)
+
+- **Approval:** the owner approved the existing thresholds for scoring, **unchanged** (`thresholdStatus: owner-approved-for-scoring` in `eval/lab-config.json`). They are:
+  - eligible complete workflows ≥ 90%;
+  - material-issue detection ≥ 85%;
+  - material objection coverage 100%;
+  - actionable recommendations ≥ 80%;
+  - usefulness gain over Gate B ≥ 15 points;
+  - 0 integrity breaches.
+- **Disclosure:** the approval came after provisional runs 1–7 had been seen (`docs/evaluation/provisional-diagnostic-runs.md`). The values were set before any run and were not changed.
+- **Scored run:** the first scored run covers all 50 cases with all three comparators, at the evaluated agent contract `gate-c-evidence-capabilities-v5`. Its deterministic metrics are scored directly.
+- **Judging plan:** the plan for the judgment metrics (material-issue detection, actionable recommendations, usefulness gain) must be fixed and recorded **before the owner sees any scored report**. Its results are never changed afterwards to meet a threshold (rule 57).

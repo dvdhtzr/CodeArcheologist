@@ -19,5 +19,5 @@
     "usefulnessGainOverGateBPoints": 15,
     "allowedIntegrityBreaches": 0
   },
-  "thresholdStatus": "provisional"
+  "thresholdStatus": "owner-approved-for-scoring"
 }
