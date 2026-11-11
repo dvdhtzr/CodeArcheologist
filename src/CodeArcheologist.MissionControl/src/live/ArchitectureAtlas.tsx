@@ -145,7 +145,7 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
     setSelectedId(''); setSelectedEdgeId(''); setQuery(''); setKind('all');
   }, [selection?.api, key]);
 
-  const graph = loaded?.api === selection?.api && loaded.key === key ? loaded.graph : null;
+  const graph = loaded && loaded.api === selection?.api && loaded.key === key ? loaded.graph : null;
   const index = useMemo(() => graph ? indexAtlas(graph) : null, [graph]);
   const projection = useMemo(() => !index ? null : mode === 'overview' || !centerId
     ? atlasOverview(index) : atlasFocus(index, centerId, expandedIds),
