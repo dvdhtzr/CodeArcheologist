@@ -1,6 +1,32 @@
-# Code Archeologist — Mission Control (MC1)
+# Code Archeologist — Mission Control (MC3)
 
-**Status:** standalone visual foundation / design preview. **No API calls, model calls, repository reads, database access or SignalR connections happen in MC1.** All stage events in the walkthrough are synthetic and prominently labeled as such.
+**Status:** MC3 connects Mission Control to the live white-label API (REST + SignalR, `docs/api/README.md`). It keeps the MC1 demo walkthrough, which stays clearly labelled **DEMO MODE** and never mixes with live data.
+
+## Live mode (MC3)
+
+1. **Allow this page's address.** Add `http://127.0.0.1:5175` to `%LOCALAPPDATA%\CodeArcheologist\client-origins.json`, then restart the API:
+   ```json
+   { "schemaVersion": "code-archeologist-client-origins-v1", "origins": ["http://127.0.0.1:5175"] }
+   ```
+2. **Connect.** Start the API and copy the pairing code from its window. Run `npm run dev`, open http://127.0.0.1:5175/, and under **Live API** enter the code.
+3. **Choose what to investigate.** Pick or create a workspace, then register a local folder. Capture a snapshot (always an explicit button press) and choose an entry point. Press **Start investigation**, or watch an earlier run.
+
+**What drives the screen:**
+- **Agents** take their states only from the host execution projection (`gate-c6b-execution-projection-v1`). Each one shows the exact host status code (`running`, `accepted`, `failed` …).
+- **The timeline** shows only committed ledger events.
+- **Delivery:** the events arrive over SignalR. On subscribe, on every reconnect, on any sequence gap, and after a terminal attempt event, the full ledger and projection are re-read over REST. Nothing is missed or shown twice (rule 59).
+- **Commands** (create, register, capture, start, cancel) go only over REST, each with an `Idempotency-Key`. Cancel sends `expectedAttemptNumber`. SignalR is used only to subscribe.
+
+**Security:**
+- The bearer token lives only in memory. It is never stored in browser storage or cookies, and it ends when the tab closes or the 30-minute lifetime ends.
+- REST sends the token as a header. Browsers cannot set WebSocket headers, so the SignalR hub connection carries it as the `access_token` query value, as the realtime contract specifies.
+- Only loopback API addresses are accepted, and only GUIDs reach URL paths.
+
+**Truthfulness:** an *accepted* assessment passed the host's contract checks; it is not proof its claims are true. Entry points are written candidates, and an empty list is *unknown*, not "no endpoints".
+
+## MC1 visual foundation
+
+All stage events in the demo walkthrough are synthetic and prominently labelled as such.
 
 Mission Control is an *independent frontend application in the same Code Archeologist monorepo*. It is not a refactor of `CodeArcheologist.Client` and is not coupled to the C6 worker, MAF adapters or SQLite. The existing frontend remains untouched and continues to serve as a regression harness.
 
@@ -15,6 +41,8 @@ npm --prefix .\src\CodeArcheologist.MissionControl run typecheck
 npm --prefix .\src\CodeArcheologist.MissionControl run build
 npm --prefix .\src\CodeArcheologist.MissionControl run dev
 ```
+
+`npm run test:live` runs the real adapter end to end against a disposable API process. It needs the Release API build (`dotnet build src/CodeArcheologist.Api -c Release`). The run is cancelled at once, so it needs no Ollama.
 
 Open **http://127.0.0.1:5175/**. Stop with Ctrl+C. The original developer frontend remains at 5174; MC1 uses 5175 so they can run side by side.
 
@@ -61,5 +89,5 @@ The original repository checks remain independently applicable. No PR is auto-me
 ## Proposed follow-on PRs
 
 - **MC2:** refine original portraits, connection animation, compact layout, character spotlight and visual interaction under real browser acceptance.
-- **MC3:** add an independent API transport client only after the white-label API contract has been merged and verified. No fake live status.
+- **MC3 (done):** live API adapter and console. See *Live mode* above.
 - **MC4:** real activity/evidence view, historical event playback and trustworthy state projection.
