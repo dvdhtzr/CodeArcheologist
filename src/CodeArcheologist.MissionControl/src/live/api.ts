@@ -172,7 +172,7 @@ function describeFailure(status: number, body: unknown): string {
     : status === 403 ? 'Refused by the API (is this page’s address in client-origins.json?).'
     : status === 404 ? 'Not found in this scope.'
     : status === 409 ? 'Conflict.'
-    : status === 413 ? 'The repository exceeds the snapshot limits; nothing was saved.'
+    : status === 413 ? 'Too large for the analyser\u2019s limits. Try registering a smaller subfolder (for example the web project folder).'
     : `Request failed (${status}).`;
   return detail ? `${prefix} ${detail}`.slice(0, 400) : prefix;
 }

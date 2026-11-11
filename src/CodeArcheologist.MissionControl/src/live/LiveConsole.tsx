@@ -88,7 +88,9 @@ export function LiveConsole({ onView, onConnected }: {
   useEffect(() => {
     setEntryPoints([]); setEntryPointId(''); setRuns([]); setRunId('');
     if (api && scope) void attempt(async () => {
-      const list = await api.listEntryPoints(scope);
+      const list = await api.listEntryPoints(scope).catch((e: unknown) => {
+        throw new Error('Could not list entry points for this snapshot. ' + (e instanceof Error ? e.message : String(e)));
+      });
       setEntryPoints(list.items);
       setEntryCaveat(list.caveat);
       setRuns((await api.listRuns(scope)).items);

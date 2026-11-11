@@ -62,6 +62,13 @@ test('a rejected pairing code and a 401 leave the client disconnected', async ()
   assert.equal(api2.connected, false, 'an expired token is forgotten');
 });
 
+test('a 413 explains the limit without claiming nothing was saved', async () => {
+  const { impl } = fakeFetch([{ status: 200, body: { accessToken: 'd'.repeat(64) } }, { status: 413, body: { detail: 'Invocation syntax occurrences exceeded the 4500-site limit.' } }]);
+  const api = new ApiClient('http://127.0.0.1:5127', impl);
+  await api.pair('x');
+  await assert.rejects(api.listEntryPoints(scope), e => e.status === 413 && /smaller subfolder/.test(e.message) && /4500-site/.test(e.message) && !/nothing was saved/.test(e.message));
+});
+
 test('non-GUID identifiers never reach a URL path', async () => {
   const { impl, calls } = fakeFetch([{ status: 200, body: { accessToken: 'c'.repeat(64) } }]);
   const api = new ApiClient('http://127.0.0.1:5127', impl);
