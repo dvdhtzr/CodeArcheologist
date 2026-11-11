@@ -616,3 +616,11 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 }
 
 .atlas-empty-canvas { min-height: 420px; display: grid; place-items: center; text-align: center; line-height: 1.7; }
+
+/* R2 PR1: evidence remains keyboard-accessible even when SVG paths are too small to click. */
+.atlas-relationships { border-top: 1px solid var(--outline); margin-top: 20px; padding-top: 13px; }
+.atlas-relationships h4 { font-size: 11px; color: #daeaff; margin: 0 0 7px; }
+.atlas-relationships > button { display: grid; text-align: left; gap: 5px; width: 100%; margin: 6px 0; padding: 9px; background: #12273f; border: 1px solid #30516d; border-radius: 7px; color: #cee5f8; min-width: 0; }
+.atlas-relationships > button:hover, .atlas-relationships > button[aria-pressed="true"] { border-color: #80d1f8; background: #21405c; }
+.atlas-relationships > button strong { font-size: 10px; }
+.atlas-relationships > button small { font-size: 10px; color: #97aec5; overflow-wrap: anywhere; }
