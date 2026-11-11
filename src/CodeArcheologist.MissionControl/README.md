@@ -1,15 +1,13 @@
 # Code Archeologist — Mission Control (MC3)
 
-**Status:** MC3 connects Mission Control to the live white-label API (REST + SignalR, `docs/api/README.md`). It keeps the MC1 demo walkthrough, which stays clearly labelled **DEMO MODE** and never mixes with live data.
+**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. The richer graphical architecture canvas is planned for R2.
 
 ## Live mode (MC3)
 
-1. **Allow this page's address.** Add `http://127.0.0.1:5175` to `%LOCALAPPDATA%\CodeArcheologist\client-origins.json`, then restart the API:
-   ```json
-   { "schemaVersion": "code-archeologist-client-origins-v1", "origins": ["http://127.0.0.1:5175"] }
-   ```
-2. **Connect.** Start the API and copy the pairing code from its window. Run `npm run dev`, open http://127.0.0.1:5175/, and under **Live API** enter the code.
-3. **Choose what to investigate.** Pick or create a workspace, then register a local folder. Capture a snapshot (always an explicit button press) and choose an entry point. Press **Start investigation**, or watch an earlier run.
+1. **Start the application.** From the repository root, use `scripts/start.ps1` (Windows) or `bash scripts/start.sh` (macOS/Linux). The trusted developer startup permits the bundled local 5175 origin; no manual allowlist editing is needed. When launching Mission Control independently without the scripts, explicitly allowlist its origin in `client-origins.json` (see `docs/api/README.md`).
+2. **Connect.** Open http://127.0.0.1:5175/, use the current API pairing code under **Live API**, and select or create a workspace, repository, and saved snapshot.
+3. **Explore deterministic evidence.** Open **Architecture Explorer** to inspect source-written HTTP candidates, C# method declarations, provisional one-hop impact candidates, and hash-verified saved source. No model is needed.
+4. **Optionally investigate.** Return to **Agent Observatory**, choose a candidate entry point, and start or review a local MAF/Ollama investigation.
 
 **What drives the screen:**
 - **Agents** take their states only from the host execution projection (`gate-c6b-execution-projection-v1`). Each one shows the exact host status code (`running`, `accepted`, `failed` …).
@@ -30,6 +28,10 @@
 All AI-written text is shown as plain text and labelled. Clicking a citation shows bounded lines (±8) from the **saved, hash-verified snapshot**, using the API's `code-archeologist-source-v1` resource. It never reads your live folder.
 
 **Truthfulness:** an *accepted* assessment passed the host's contract checks; it is not proof its claims are true. Entry points are written candidates, and an empty list is *unknown*, not "no endpoints".
+
+## R1 integration boundaries
+
+The primary UI now exposes the existing deterministic `entry-points`, `methods`, `impact`, and `source` resources. No new analyzer, project-resolution engine, graph persistence, or runtime inference is introduced. The legacy port-5174 explorer retains the richer low-level evidence graph until its visual capabilities are migrated in R2. Both features share one selected workspace/repository/snapshot in Mission Control.
 
 ## MC1 visual foundation
 
