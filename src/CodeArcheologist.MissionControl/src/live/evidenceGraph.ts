@@ -33,7 +33,7 @@ export function validateGraph(report: EvidenceGraph, scope: Scope, fingerprint: 
   const edgeIds = new Set(report.edges.map(edge => edge.id));
   if (ids.size !== report.nodes.length || edgeIds.size !== report.edges.length ||
       report.edges.some(edge => !ids.has(edge.fromId) || !ids.has(edge.toId)))
-    throw new Error('Evidence graph contains invalid or duplicate node or edge identities.');
+    throw new Error('Evidence graph contains invalid node or edge references, or duplicate edge IDs.');
 }
 
 export function adjacent(graph: EvidenceGraph, nodeId: string): Neighbor[] {
