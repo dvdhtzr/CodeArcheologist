@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ApiClient, Scope, SourceView } from './api.ts';
 import {
-  CONCERN_KINDS, REPORT_VERSION, ROLE_STATUS, RUN_STATUS, VERDICTS, citations, label, verdicts,
+  CONCERN_KINDS, ROLE_STATUS, RUN_STATUS, VERDICTS, citations, label, supportedReportVersion, verdicts,
 } from './report.ts';
 import type { Citation, Report, RunDetail } from './report.ts';
 
@@ -48,7 +48,7 @@ export function Findings({ api, scope, runId, runStatus }: {
       </div>
     );
   }
-  if (report.version !== REPORT_VERSION)
+  if (!supportedReportVersion(report.version))
     return <p className="live-error">Unsupported report version {report.version}; nothing is shown rather than guessing.</p>;
 
   return (

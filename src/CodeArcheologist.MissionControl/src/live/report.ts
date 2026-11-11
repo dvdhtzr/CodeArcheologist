@@ -1,5 +1,5 @@
 /**
- * MC4 report model (gate-c5-investigation-report-v1, enums as numbers) and
+ * MC4 report model (gate-c5-investigation-report-v2, enums as numbers) and
  * pure helpers. Model-authored text (hypotheses, concerns, explanations,
  * unknowns) is UNTRUSTED: render it as plain text only. A host-accepted
  * assessment passed contract checks; it is not proof that its claims are true.
@@ -23,6 +23,15 @@ export type ReviewerOutcome = {
     dispositions: { hypothesisId: string; recommendation: number; isVerifiedFact: boolean }[];
   } | null;
 };
+export type HostCautionAnchor = {
+  filePath: string; fileSha256: string;
+  line: number | null; column: number | null;
+  spanStart: number | null; spanLength: number | null;
+};
+export type HostSyntaxCaution = {
+  id: string; kind: string; status: 'host-syntax-caution';
+  statement: string; analyzerVersion: string; anchors: HostCautionAnchor[];
+};
 export type Report = {
   version: string; runId: string;
   investigatorModelId: string; skepticModelId: string; reviewerModelId: string;
@@ -30,10 +39,18 @@ export type Report = {
   startedAtUtc: string; finishedAtUtc: string;
   investigator: RoleOutcome; skeptic: RoleOutcome; reviewer: ReviewerOutcome;
   evidenceLinks: EvidenceLink[]; diagnostic: string;
+  /** Absent only on legacy v1 stored reports. This field is host-authored, not AI evidence. */
+  hostCautionStatus?: 'verified' | 'not-evaluated';
+  hostCautionAnalyzerVersion?: string;
+  hostCautions?: HostSyntaxCaution[];
 };
 export type RunDetail = { summary: RunSummary; report: Report | null };
 
-export const REPORT_VERSION = 'gate-c5-investigation-report-v1';
+export const REPORT_VERSION = 'gate-c5-investigation-report-v2';
+export const LEGACY_REPORT_VERSION = 'gate-c5-investigation-report-v1';
+export function supportedReportVersion(version: string): boolean {
+  return version === REPORT_VERSION || version === LEGACY_REPORT_VERSION;
+}
 export const ROLE_STATUS = ['Not started', 'Running', 'Accepted by host checks', 'Rejected by host checks', 'Failed', 'Timed out', 'Cancelled'];
 export const VERDICTS = ['Structurally supported', 'Plausible hypothesis', 'Contested or insufficient', 'Rejected'];
 export const CONCERN_KINDS = ['Structural contradiction', 'Unsupported inference', 'Insufficient evidence', 'Competing hypothesis', 'Coverage limitation'];

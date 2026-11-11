@@ -221,6 +221,10 @@ internal static class LabSelfTests
                 Write(withIssues[0].Case.Id, Comparator.GateC, string.Join(" ", withIssues[0].Labels.MaterialIssues.Select(i => i.Description)));
                 Write(withIssues[1].Case.Id, Comparator.GateB, "same text");
                 Write(withIssues[1].Case.Id, Comparator.GateC, "same text");
+                // Host-only attribution reads deterministic-baseline reports,
+                // so an incomplete or absent AI result cannot erase host findings.
+                Write(withIssues[0].Case.Id, Comparator.Baseline, "baseline without issue");
+                Write(withIssues[1].Case.Id, Comparator.Baseline, "baseline without issue");
                 var path = Path.Combine(temp, "checks.json");
                 var output = new StringWriter();
                 LabOwnerTools.Checklist(copy, runs, Comparator.GateB, Comparator.GateC, path, new StringReader("y\nn\n"), output, maxPairs: 1, seed: 3);
@@ -252,6 +256,49 @@ internal static class LabSelfTests
                 var singleAgain = new StringWriter();
                 LabOwnerTools.SingleChecklist(copy, runs, Comparator.GateC, singlePath, new StringReader(string.Concat(Enumerable.Repeat("n\n", 10))), singleAgain, seed: 5);
                 Expect(singleAgain.ToString().Contains($"Problems judged: {expected} of {expected} (complete"), "single checklist did not resume to completion");
+
+                // Host-only and combined checklists must be attributable, and
+                // their resumable answer ledgers must never be mixed with AI-only.
+                foreach (var testCase in withIssues)
+                {
+                    foreach (var sourceComparator in new[] { Comparator.Baseline, Comparator.GateC })
+                    {
+                        var sourceReportPath = Path.Combine(runs, $"{testCase.Case.Id}.{sourceComparator}.t1.report.json");
+                        var sourceReport = JsonSerializer.Deserialize<LabReport>(File.ReadAllText(sourceReportPath), LabSchema.Json)!;
+                        var cautions = testCase.Case.Id == withIssues[0].Case.Id
+                            ? new[] { new LabClaim("host-caution", "host", "HOST-ONLY-SENTINEL", Array.Empty<LabCitation>()) }
+                            : Array.Empty<LabClaim>();
+                        File.WriteAllText(sourceReportPath, JsonSerializer.Serialize(sourceReport with {
+                            HostCautionStatus = "verified",
+                            HostCautions = cautions
+                        }, LabSchema.Json));
+                    }
+                }
+                var hostPath = Path.Combine(temp, "host-checks.json");
+                var hostOutput = new StringWriter();
+                LabOwnerTools.SingleChecklist(copy, runs, "host-cautions", hostPath,
+                    new StringReader("y\n"), hostOutput, seed: 5);
+                Expect(hostOutput.ToString().Contains("HOST-ONLY-SENTINEL") &&
+                    hostOutput.ToString().Contains("not AI") &&
+                    !hostOutput.ToString().Contains("source-observation:") &&
+                    hostOutput.ToString().Contains("Mentioned: host-cautions 1/1"),
+                    "host-only checklist mixed agent findings or lost attribution");
+
+                var combinedPath = Path.Combine(temp, "combined-checks.json");
+                var combinedOutput = new StringWriter();
+                LabOwnerTools.SingleChecklist(copy, runs, "gate-c+host", combinedPath,
+                    new StringReader("y\n"), combinedOutput, seed: 5);
+                Expect(combinedOutput.ToString().Contains("HOST-ONLY-SENTINEL") &&
+                    combinedOutput.ToString().Contains("REPORT") &&
+                    combinedOutput.ToString().Contains("Mentioned: gate-c+host 1/1"),
+                    "combined checklist did not disclose both distinct channels");
+                try
+                {
+                    LabOwnerTools.SingleChecklist(copy, runs, Comparator.GateC, hostPath,
+                        new StringReader(""), new StringWriter(), seed: 5);
+                    throw new InvalidOperationException("Different attribution modes shared an answer file.");
+                }
+                catch (InvalidOperationException error) when (error.Message.Contains("attribution mode")) { }
             }
             finally { Directory.Delete(temp, recursive: true); }
         });
@@ -271,9 +318,13 @@ internal static class LabSelfTests
                 void Write(string dir, string caseId, string comparator, string text)
                 {
                     Directory.CreateDirectory(dir);
-                    File.WriteAllText(Path.Combine(dir, $"{caseId}.{comparator}.t1.report.json"), JsonSerializer.Serialize(new LabReport(LabSchema.Report,
+                    var report = new LabReport(LabSchema.Report,
                         caseId, comparator, 1, "completed", "d", Guid.NewGuid(), new string('a', 64), "e",
-                        [new("observation", "x", text, [])], null, 1), LabSchema.Json));
+                        [new("observation", "x", text, [])], null, 1,
+                        "verified", CSharpHostCautionAnalyzer.Version,
+                        [new LabClaim("host-caution", "host", "HOST-ONLY-EXTERNAL-SENTINEL", [])]);
+                    File.WriteAllText(Path.Combine(dir, $"{caseId}.{comparator}.t1.report.json"),
+                        JsonSerializer.Serialize(report, LabSchema.Json));
                 }
                 var scored = Path.Combine(temp, "scored");
                 Write(scored, cases[0].Case.Id, Comparator.GateB, "source-observation: plain report");
@@ -298,7 +349,9 @@ internal static class LabSelfTests
                 var packets = Directory.GetFiles(Path.Combine(export, "upload-these-to-chatgpt"));
                 var packetText = string.Concat(packets.Select(File.ReadAllText));
                 Expect(packets.Length > 0 && !packetText.Contains("gate-") && !packetText.Contains("calibration", StringComparison.OrdinalIgnoreCase) &&
-                       !packetText.Contains("source-observation:") && !packetText.Contains("ContestedOrInsufficient:"), "packets reveal identity or calibration");
+                       !packetText.Contains("source-observation:") &&
+                       !packetText.Contains("HOST-ONLY-EXTERNAL-SENTINEL") &&
+                       !packetText.Contains("ContestedOrInsufficient:"), "packets reveal identity, host cautions or calibration");
                 Expect(!Directory.GetFiles(Path.Combine(export, "upload-these-to-chatgpt")).Any(f => f.Contains("key", StringComparison.OrdinalIgnoreCase)), "key in upload folder");
                 var key = JsonSerializer.Deserialize<LabExternalJudging.ExportKey>(File.ReadAllText(Path.Combine(export, LabExternalJudging.KeyFileName)), LabSchema.Json)!;
                 Expect(key.Questions.Count(q => q.Calibration) == 1 && key.Questions.Select(q => q.Id).Distinct().Count() == key.Questions.Count, "key wrong");

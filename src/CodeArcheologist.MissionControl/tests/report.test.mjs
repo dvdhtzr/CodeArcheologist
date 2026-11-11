@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { citations, label, verdicts, VERDICTS } from '../src/live/report.ts';
+import { citations, label, verdicts, VERDICTS, REPORT_VERSION, LEGACY_REPORT_VERSION, supportedReportVersion } from '../src/live/report.ts';
 import { ApiClient } from '../src/live/api.ts';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -19,6 +19,15 @@ const report = (accepted = true) => ({
     assessment: { decisions: [{ hypothesisId: 'H1', recommendation: 0, addressedConcernIds: ['C1'], explanation: 'e' }], unresolvedGlobalConcernIds: [] },
     reconciliation: { check: { accepted, diagnostic: 'd' }, dispositions: [{ hypothesisId: 'H1', recommendation: 1, isVerifiedFact: false }] } },
   evidenceLinks: [link(0, 'E1', 5), link(1, 'E1', 9)],
+});
+
+test('v2 reports are supported and legacy v1 history remains readable', () => {
+  assert.equal(REPORT_VERSION, 'gate-c5-investigation-report-v2');
+  assert.equal(LEGACY_REPORT_VERSION, 'gate-c5-investigation-report-v1');
+  assert.ok(supportedReportVersion(REPORT_VERSION));
+  assert.ok(supportedReportVersion(LEGACY_REPORT_VERSION));
+  assert.equal(supportedReportVersion('unknown-contract'), false);
+  assert.equal(report().version, REPORT_VERSION);
 });
 
 test('citations resolve only through the citing role’s own links', () => {

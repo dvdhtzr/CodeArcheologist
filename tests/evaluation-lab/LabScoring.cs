@@ -12,12 +12,14 @@ public static class IntegrityBreach
     public const string DiscardedObjection = "silently-discarded-material-objection";
     public const string FalseCompletion = "failed-workflow-presented-as-completed";
     public const string SchemaRegression = "schema-regression";
+    public const string HostCautionMismatch = "host-caution-provenance-mismatch";
 }
 
 public sealed record CaseScore(string SchemaVersion, string CaseId, string Comparator, int Trial,
     string Outcome, bool Completed, IReadOnlyList<string> IntegrityBreaches,
     int RequiredObservations, int CitedObservationAnchors, double? ObjectionCoverage,
-    IReadOnlyList<string> ReviewFlags, IReadOnlyList<string> PendingJudgment, bool LabelsOwnerApproved);
+    IReadOnlyList<string> ReviewFlags, IReadOnlyList<string> PendingJudgment, bool LabelsOwnerApproved,
+    int HostCautionCount = 0, int ComparatorClaimCount = 0, bool HostCautionsVerified = false);
 
 /// <summary>
 /// Deterministic scoring only. Judgment-dependent metrics (material issue
@@ -41,6 +43,18 @@ public static partial class LabScoring
 
         // Every citation must be an exact item of the freshly verified package.
         var citable = LabHarness.Citable(captured.Package).ToList();
+        // Compare independently against the exact source-derived host ledger.
+        // A forged/deleted caution is an integrity breach, not a false agent
+        // citation or an agent-detection success.
+        var expectedHost = LabHarness.HostClaims(captured.Package);
+        var hostVerified = report.HostCautionStatus == "verified" &&
+            report.HostCautionAnalyzerVersion == CSharpHostCautionAnalyzer.Version &&
+            report.HostCautions is not null &&
+            System.Text.Json.JsonSerializer.Serialize(report.HostCautions) ==
+                System.Text.Json.JsonSerializer.Serialize(expectedHost);
+        if (!hostVerified ||
+            report.Claims.Any(c => c.Kind == "host-caution" || c.Role == "host"))
+            breaches.Add(IntegrityBreach.HostCautionMismatch);
         var citations = report.Claims.SelectMany(c => c.Citations).ToArray();
         if (citations.Any(c => !citable.Contains(c)))
             breaches.Add(IntegrityBreach.ForeignCitation);
@@ -78,12 +92,15 @@ public static partial class LabScoring
         return new(LabSchema.Score, report.CaseId, report.Comparator, report.Trial, report.Outcome,
             report.Outcome == "completed", breaches.Distinct(StringComparer.Ordinal).ToArray(),
             labels.RequiredObservations.Count, cited, coverage, flags,
-            ["material-issue-detection", "actionable-usefulness"],
-            labels.Status == LabelStatus.OwnerApproved);
+            ["material-issue-detection", "actionable-usefulness",
+             "host-only-material-issue-detection", "agent-only-material-issue-detection"],
+            labels.Status == LabelStatus.OwnerApproved,
+            report.HostCautions?.Count ?? 0, report.Claims.Count, hostVerified);
     }
 
     public sealed record ComparatorSummary(string Comparator, int Evaluations, int Completed,
-        int IntegrityBreaches, double ObservationAnchorRecall, double? MeanObjectionCoverage, int ReviewFlags);
+        int IntegrityBreaches, double ObservationAnchorRecall, double? MeanObjectionCoverage, int ReviewFlags,
+        int HostCautions, int ComparatorClaims, int HostVerifiedReports);
 
     /// <summary>Aggregates with fixed denominators: every evaluation counts, completed or not.</summary>
     public static IReadOnlyList<ComparatorSummary> Summarize(IReadOnlyList<CaseScore> scores) =>
@@ -94,6 +111,8 @@ public static partial class LabScoring
             return new ComparatorSummary(g.Key, g.Count(), g.Count(s => s.Completed),
                 g.Sum(s => s.IntegrityBreaches.Count),
                 required == 0 ? 0 : (double)g.Sum(s => s.CitedObservationAnchors) / required,
-                coverage.Length == 0 ? null : coverage.Average(), g.Sum(s => s.ReviewFlags.Count));
+                coverage.Length == 0 ? null : coverage.Average(), g.Sum(s => s.ReviewFlags.Count),
+                g.Sum(s => s.HostCautionCount), g.Sum(s => s.ComparatorClaimCount),
+                g.Count(s => s.HostCautionsVerified));
         }).ToArray();
 }

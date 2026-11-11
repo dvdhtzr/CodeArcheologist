@@ -40,7 +40,8 @@ public enum InvestigationWorkerState { Idle, Executing, Halted, NotOwner }
 public sealed class InvestigationWorker(WorkspaceStore store,
     ExecutionOwnershipState ownership, InvestigationWorkSignal signal,
     IInvestigationExecutor executor, InvestigationWorkerOptions options,
-    ILogger<InvestigationWorker> logger) : BackgroundService
+    ILogger<InvestigationWorker> logger,
+    SnapshotEvidenceTools? hostEvidence = null) : BackgroundService
 {
     private volatile InvestigationWorkerState _state = InvestigationWorkerState.Idle;
     private int _executions;
@@ -223,6 +224,36 @@ public sealed class InvestigationWorker(WorkspaceStore store,
             decision = Classify(outcome, fault, run, stoppingToken,
                 ownershipLost.IsCancellationRequested, deadline.IsCancellationRequested,
                 userCancelled);
+            // Host evidence is computed after model execution and before the
+            // single terminal write. No caution influences agent prompts or
+            // their completed assessments. The report stays truthful if an
+            // evidence-rejected run could not produce an evidence package.
+            if (decision.Kind == TerminalKind.Report && hostEvidence is not null)
+            {
+                try
+                {
+                    var package = hostEvidence.ReadEntryPoint(snapshot,
+                        run.Scope.EntryPointId, CancellationToken.None);
+                    decision = decision with
+                    {
+                        Report = GateC5ReportFactory.AttachVerifiedCautions(
+                            decision.Report!, package)
+                    };
+                }
+                catch (SnapshotCaptureException) when (
+                    decision.Report!.Progress.Status == GateCRunStatus.Rejected)
+                {
+                    // Rejected source evidence is not a successful caution
+                    // inspection. "not-evaluated" is distinct from no cautions.
+                }
+                catch (Exception error) when (error is not OutOfMemoryException)
+                {
+                    logger.LogWarning("Host caution verification prevented report publication ({Type}).",
+                        error.GetType().Name);
+                    decision = TerminalDecision.Fail("host-report-validation-failed",
+                        "report-validation-failed");
+                }
+            }
         }
 
         if (decision.Kind == TerminalKind.Halt)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using CodeArcheologist.Api.Execution;
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Workspaces;
@@ -10,7 +11,7 @@ namespace CodeArcheologist.EvaluationLab;
 public sealed record LabCitation(string CanonicalId, string? FilePath, string? FileSha256, int? Line,
     string EvidenceStatus);
 
-/// <summary>One comparable statement. Kind: observation | hypothesis | concern | decision | uncertainty | summary.</summary>
+/// <summary>Agent/comparator statement. Host-written cautions are stored separately, not as model claims.</summary>
 public sealed record LabClaim(string Kind, string Role, string Text, IReadOnlyList<LabCitation> Citations);
 
 /// <summary>Host facts needed for integrity scoring of a Gate C report.</summary>
@@ -20,7 +21,10 @@ public sealed record LabGateCFacts(IReadOnlyList<string> RoleStatuses, IReadOnly
 
 public sealed record LabReport(string SchemaVersion, string CaseId, string Comparator, int Trial,
     string Outcome, string Diagnostic, Guid SnapshotId, string FingerprintSha256, string EntryPointId,
-    IReadOnlyList<LabClaim> Claims, LabGateCFacts? GateC, long DurationMs);
+    IReadOnlyList<LabClaim> Claims, LabGateCFacts? GateC, long DurationMs,
+    string HostCautionStatus = "not-evaluated",
+    string HostCautionAnalyzerVersion = CSharpHostCautionAnalyzer.Version,
+    IReadOnlyList<LabClaim>? HostCautions = null);
 
 /// <summary>A case captured in an isolated data directory, ready for comparators.</summary>
 public sealed class CapturedCase(LoadedCase loaded, ServiceProvider services, WorkspaceStore store,
@@ -351,6 +355,23 @@ public static class LabHarness
             .Concat(package.Relations.Select(r =>
                 new LabCitation(r.Id, r.EvidencePath, r.EvidenceSha256, r.Line, r.EvidenceStatus)));
 
+    /// <summary>
+    /// A distinct, host-only evidence ledger. These cautions NEVER enter
+    /// Claims, which remains reserved for the compared system's output.
+    /// The synthetic host citation IDs have their own namespace and cannot
+    /// be used to authorize an agent citation.
+    /// </summary>
+    public static IReadOnlyList<LabClaim> HostClaims(AgentEvidencePackage package) =>
+        (package.HostCautions ?? throw new InvalidOperationException(
+            "The verified evidence package must carry the host caution collection."))
+        .OrderBy(c => c.Kind, StringComparer.Ordinal)
+        .Select(c => new LabClaim("host-caution", "host", c.Kind + ": " + c.Statement,
+            c.Anchors.Select((anchor, index) => new LabCitation(
+                "host-anchor:" + c.Id + ":" + index,
+                anchor.FilePath, anchor.FileSha256, anchor.Line,
+                CSharpHostCautionAnalyzer.Status)).ToArray()))
+        .ToArray();
+
     private static LabCitation? Cite(AgentEvidencePackage package, string canonicalId) =>
         Citable(package).FirstOrDefault(c => c.CanonicalId == canonicalId);
 
@@ -415,7 +436,8 @@ public static class LabHarness
         var signal = new InvestigationWorkSignal();
         var worker = new InvestigationWorker(c.Store, ownership, signal,
             new GateC6StageCoordinator(c.Store, discovery, roles, revalidator),
-            InvestigationWorkerOptions.Default, NullLogger<InvestigationWorker>.Instance);
+            InvestigationWorkerOptions.Default, NullLogger<InvestigationWorker>.Instance,
+            c.Services.GetRequiredService<SnapshotEvidenceTools>());
         await worker.StartAsync(ct);
         Guid run;
         try
@@ -441,6 +463,13 @@ public static class LabHarness
         LabGateCFacts? facts = null;
         if (detail.Report is { } report)
         {
+            if (report.HostCautionStatus != "verified" ||
+                report.HostCautionAnalyzerVersion != CSharpHostCautionAnalyzer.Version ||
+                report.HostCautions is null ||
+                JsonSerializer.Serialize(report.HostCautions) !=
+                    JsonSerializer.Serialize(c.Package.HostCautions))
+                throw new InvalidOperationException(
+                    "Durable host cautions differ from the freshly verified evidence package.");
             LabCitation[] Cites(GateCRole role, IEnumerable<string> handles) => handles
                 .Select(h => report.EvidenceLinks.FirstOrDefault(l => l.Role == role && l.Handle == h))
                 .Select(l => l is null ? new LabCitation("unresolved-handle", null, null, null, "unknown")
@@ -481,7 +510,8 @@ public static class LabHarness
     private static LabReport Report(CapturedCase c, string comparator, int trial, string outcome, string diagnostic,
         IReadOnlyList<LabClaim> claims, LabGateCFacts? facts, Stopwatch watch) =>
         new(LabSchema.Report, c.Loaded.Case.Id, comparator, trial, outcome, diagnostic, c.Snapshot.Id,
-            c.Snapshot.FingerprintSha256, c.Scope.EntryPointId, claims, facts, watch.ElapsedMilliseconds);
+            c.Snapshot.FingerprintSha256, c.Scope.EntryPointId, claims, facts, watch.ElapsedMilliseconds,
+            "verified", c.Package.HostCautionAnalyzerVersion, HostClaims(c.Package));
 }
 
 public sealed class LabCaseException(string caseId, string reason) : Exception(caseId + ": " + reason);
