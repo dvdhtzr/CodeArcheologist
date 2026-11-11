@@ -63,6 +63,12 @@ Open **http://127.0.0.1:5175/**. Stop with Ctrl+C. The original developer fronte
 
 No Ollama, .NET process, database, pairing code or secrets are required for the preview.
 
+## Evidence Navigation — R2 PR2
+
+Within the Atlas, select an actual recorded edge (or select it in the accessible relationship list) to inspect original from/to IDs, evidence status, origin path/SHA-256/line, explanation and separately labeled source/target/shared project candidate lists. Click **Inspect edge source** (or **Inspect saved source** for a node with a line anchor) to open a bounded, line-numbered saved source excerpt **inside the right inspector**. The API re-verifies copied snapshot bytes and the client validates its exact snapshot ID, fingerprint, file hash and focus line; malformed or mismatched responses are rejected, not displayed as verified. Source text is inert and is not executed.
+
+Use **Go to source node** and **Go to target node** to focus exact recorded endpoint IDs; **Back** restores the previous Atlas center, selected relationship and deliberate expansion seeds. In-memory history is capped at 32 steps and cleared on scope changes. No synthetic path or method-to-method call is implied. PR2 does not change the backend analyzer, graph schema or agent runtime. See `docs/architecture/r2-evidence-navigation.md`.
+
 ## Architecture Atlas — R2 PR1
 
 Mission Control's **Architecture Explorer → Architecture Atlas** tab is the primary visual view. Pair with the local API and select a workspace, repository and saved snapshot in Agent Observatory, then choose **Load Architecture Atlas**. The on-demand read requests an exact snapshot record and the existing `csharp-evidence-graph-v8` API; it refuses a foreign scope, incompatible contract or mismatched saved fingerprint. No new agent prompt, analyzer or persistent graph store is involved.
