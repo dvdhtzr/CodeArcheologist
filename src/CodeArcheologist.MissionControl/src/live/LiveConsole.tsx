@@ -78,6 +78,16 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     });
   }
 
+  function clearRunSelection() {
+    continuationKey.current = null;
+    const current = liveRun.current;
+    liveRun.current = null;
+    void current?.stop();
+    setRunId('');
+    setLive(null);
+    onView(null);
+  }
+
   function disconnectLocally() {
     sessionSubscription.current?.();
     sessionSubscription.current = null;
@@ -133,11 +143,13 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     setLive(null);
     setEditing(false);
     if (!api || !scope || !runId) { onView(null); return; }
-    const feed = new LiveRun(api, scope, runId, state => setLive(state));
+    const feed = new LiveRun(api, scope, runId, state => {
+      if (liveRun.current === feed) setLive(state);
+    });
     liveRun.current = feed;
     void feed.start();
     return () => { void feed.stop(); };
-  }, [api, runId]);
+  }, [api, runId, workspaceId, repositoryId, snapshotId]);
 
   useEffect(() => {
     // Keep the run list's status in step with the authoritative projection.
@@ -156,6 +168,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
       const created = await api.createWorkspace(newWorkspace.trim());
       setNewWorkspace('');
       setWorkspaces((await api.listWorkspaces()).items);
+      clearRunSelection();
       setWorkspaceId(created.id);
     });
   }
@@ -166,6 +179,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
       const created = await api.registerRepository(workspaceId, newFolder.trim());
       setNewFolder('');
       setRepositories((await api.listRepositories(workspaceId)).items);
+      clearRunSelection();
       setRepositoryId(created.id);
     });
   }
@@ -175,6 +189,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     await attempt(async () => {
       const created = await api.captureSnapshot(workspaceId, repositoryId);
       setSnapshots((await api.listSnapshots(workspaceId, repositoryId)).items);
+      clearRunSelection();
       setSnapshotId(created.id);
     });
   }
@@ -257,7 +272,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
           </div>
         : <>
       <label><span className="step-title"><span className="step-no">1</span>Workspace</span>
-        <select value={workspaceId} onChange={e => setWorkspaceId(e.target.value)}>
+        <select value={workspaceId} onChange={e => { clearRunSelection(); setWorkspaceId(e.target.value); }}>
           <option value="">Choose…</option>
           {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
@@ -269,7 +284,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
 
       {workspaceId && <>
         <label><span className="step-title"><span className="step-no">2</span>Repository (local folder)</span>
-          <select value={repositoryId} onChange={e => setRepositoryId(e.target.value)}>
+          <select value={repositoryId} onChange={e => { clearRunSelection(); setRepositoryId(e.target.value); }}>
             <option value="">Choose…</option>
             {repositories.map(r => <option key={r.id} value={r.id}>{r.localPath}</option>)}
           </select>
@@ -282,7 +297,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
 
       {repositoryId && <>
         <label><span className="step-title"><span className="step-no">3</span>Snapshot (saved read-only copy)</span>
-          <select value={snapshotId} onChange={e => setSnapshotId(e.target.value)}>
+          <select value={snapshotId} onChange={e => { clearRunSelection(); setSnapshotId(e.target.value); }}>
             <option value="">Choose…</option>
             {snapshots.map(s => <option key={s.id} value={s.id}>{new Date(s.capturedAtUtc).toLocaleString()} · {s.fileCount} files</option>)}
           </select>
