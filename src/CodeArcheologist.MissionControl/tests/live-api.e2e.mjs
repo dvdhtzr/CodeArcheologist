@@ -37,6 +37,17 @@ test('MC3 adapter drives a real investigation feed end to end', async () => {
     assert.equal(entries.count, 1);
     assert.equal(entries.items[0].evidenceStatus, 'candidate');
 
+    // R1 graph adapter: same authenticated snapshot as the deterministic capability lists.
+    const graph = await caClient.evidenceGraph(scope);
+    assert.equal(graph.snapshotId, snapshot.id);
+    assert.equal(graph.fingerprintSha256, snapshot.fingerprintSha256);
+    assert.equal(graph.workspaceId, workspace.id);
+    assert.equal(graph.repositoryId, repository.id);
+    assert.ok(graph.nodes.some(n => n.kind === 'syntax-declaration'));
+    assert.equal(graph.nodeCount, graph.nodes.length);
+    assert.equal(graph.edgeCount, graph.edges.length);
+    assert.ok(graph.limitations.some(l => /not a verified compiler dependency graph/.test(l)));
+
     const started = await caClient.startInvestigation(scope, entries.items[0].id);
     const states = [];
     feed = new LiveRun(caClient, scope, started.runId, state => states.push(state), origin);
