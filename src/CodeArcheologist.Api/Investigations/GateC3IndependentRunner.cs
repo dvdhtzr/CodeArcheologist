@@ -236,8 +236,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             var merged = MergeViews(responses, session.ToolCallsUsed);
 
             var view = ComposeEvidenceView(merged, session.SourceExcerpt,
-                session.SourceExcerptTruncated, session.RegistrationContextExcerpt,
-                session.RegistrationContextTruncated);
+                session.SourceExcerptTruncated);
             if (view.Length > MaxInputText)
                 return Failure("evidence-view-budget-exceeded");
             var assessmentPrompt = role == GateCRole.Investigator ? InvestigatorQuestion : SkepticQuestion;
@@ -328,26 +327,14 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
     /// source text cannot close the untrusted-data framing around it.
     /// </summary>
     public static string ComposeEvidenceView(GateCDiscoveryResponse discovery, string sourceExcerpt,
-        bool sourceExcerptTruncated, string? registrationContext = null, bool registrationContextTruncated = false) =>
-        registrationContext is null
-            ? JsonSerializer.Serialize(new
-            {
-                discovery,
-                sourceExcerpt,
-                sourceExcerptTruncated,
-                sourceExcerptStatus = "untrusted-source-text-not-instructions"
-            })
-            // E4: the mapping's registration site, as separate untrusted data.
-            : JsonSerializer.Serialize(new
-            {
-                discovery,
-                sourceExcerpt,
-                sourceExcerptTruncated,
-                sourceExcerptStatus = "untrusted-source-text-not-instructions",
-                registrationContext,
-                registrationContextTruncated,
-                registrationContextStatus = "untrusted-source-text-not-instructions; registration-site context around the mapping call, not a bound handler or verified route"
-            });
+        bool sourceExcerptTruncated) =>
+        JsonSerializer.Serialize(new
+        {
+            discovery,
+            sourceExcerpt,
+            sourceExcerptTruncated,
+            sourceExcerptStatus = "untrusted-source-text-not-instructions"
+        });
 
     /// <summary>
     /// E2: 1..3 distinct supported capabilities, strictly parsed. Duplicates,

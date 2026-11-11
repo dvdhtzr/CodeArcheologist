@@ -214,3 +214,19 @@ Every labelled material issue in run 6 was judged: 13 of 13 problems, no selecti
 Otherwise E4 is reverted, and the result is recorded either way.
 
 Unlike run 6's checklist, the single-system checklist is **not blinded**, because the owner knows it shows Gate C. Gate B is unchanged, so it is not re-judged.
+
+## Run 7: E4 on the 15 curated repositories
+
+Owner run on Windows, contract v6, Gate C and baseline only (Gate B unchanged). `check.ps1` GREEN in the same session.
+
+| Criterion (pre-registered) | Needed | Result | |
+|---|---|---|---|
+| Integrity breaches | 0 | 0 | pass |
+| Gate C completed | ≥ 14/15 | **15/15** | pass |
+| Gate C anchor recall | ≥ 67% | 67% | pass |
+| Owner checklist, every problem (`--single gate-c`) | ≥ 9/13 | **8/13** | **fail** |
+
+- **Verdict: E4 fails its pre-registered criteria by one problem and is reverted.** The code and contracts return to `gate-c-evidence-capabilities-v5` and `snapshot-agent-evidence-tools-v1`. The single-system checklist tool is kept.
+- **Also observed, not acceptance criteria:** completion improved from 14/15 to 15/15, and review flags fell from 5 to 1.
+- **Reading:** a change from 7/13 to 8/13, with one unblinded judge and n = 13, is within noise. Showing the registration site did not clearly help the 9B local model mention registration problems. The context was present for all four target cases, so the limit is likely in what the model does with it, not in what it sees.
+- **Caveats:** the checklist was not blinded (the owner knew it was Gate C); one random trial was shown for repeated cases; thresholds are still provisional.
