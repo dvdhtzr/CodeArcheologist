@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ApiClient, ApiError } from './api.ts';
+import { ApiClient, ApiError, eligibleContinuation } from './api.ts';
 import type { EntryPoint, Repository, RunSummary, Scope, Snapshot, Workspace } from './api.ts';
 import { LiveRun } from './realtime.ts';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
@@ -40,6 +40,8 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
   const [live, setLive] = useState<LiveSnapshot | null>(null);
   const [editing, setEditing] = useState(false);
   const liveRun = useRef<LiveRun | null>(null);
+  const sessionSubscription = useRef<(() => void) | null>(null);
+  const continuationKey = useRef<{ runId: string; expected: number; key: string } | null>(null);
 
   const scope: Scope | null = workspaceId && repositoryId && snapshotId ? { workspaceId, repositoryId, snapshotId } : null;
   // One shared explicit scope for investigations and deterministic exploration.
@@ -64,6 +66,11 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     await attempt(async () => {
       const client = new ApiClient(address);
       await client.pair(code);
+      sessionSubscription.current?.();
+      sessionSubscription.current = client.onSessionLost(() => {
+        disconnectLocally();
+        setError('Session expired or revoked. Pair again with the current API code.');
+      });
       setCode('');
       setApi(client);
       onConnected(true);
@@ -72,6 +79,9 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
   }
 
   function disconnectLocally() {
+    sessionSubscription.current?.();
+    sessionSubscription.current = null;
+    continuationKey.current = null;
     void liveRun.current?.stop();
     liveRun.current = null;
     setApi(null); setRunId(''); setLive(null); onView(null); onConnected(false);
@@ -84,6 +94,16 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     disconnectLocally();
     await client?.revoke().catch(() => {});
   }
+
+  // The 30-minute server expiry should clear the UI even if no request is made.
+  // Unauthorized responses independently invalidate the session from any tab.
+  useEffect(() => {
+    if (!api || !api.expiresAtUtc) return;
+    const millis = Date.parse(api.expiresAtUtc) - Date.now();
+    if (!Number.isFinite(millis)) return;
+    const timer = window.setTimeout(() => api.expireSession(), Math.max(0, Math.min(millis + 250, 2_147_483_647)));
+    return () => window.clearTimeout(timer);
+  }, [api]);
 
   // Cascading selections, each re-read from the API.
   useEffect(() => {
@@ -168,6 +188,24 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     });
   }
 
+  async function continueRun() {
+    const expected = eligibleContinuation(live?.execution ?? null);
+    if (!api || !scope || !runId || expected === null || busy) return;
+    const retained = continuationKey.current;
+    if (!retained || retained.runId !== runId || retained.expected !== expected)
+      continuationKey.current = { runId, expected, key: crypto.randomUUID() };
+    const key = continuationKey.current!.key;
+    await attempt(async () => {
+      const response = await api.continueInvestigation(scope, runId, expected, key);
+      // The host is authoritative; an accepted command does not itself mean execution completed.
+      if (!['continuation-admitted', 'continuation-replayed'].includes(response.diagnostic))
+        throw new Error('Unexpected continuation response: ' + response.diagnostic);
+      continuationKey.current = null;
+      await liveRun.current?.resync();
+      setRuns((await api.listRuns(scope)).items);
+    });
+  }
+
   async function cancel() {
     const number = live?.execution?.currentAttempt?.number;
     if (!api || !scope || !runId || number === undefined) return;
@@ -198,9 +236,17 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
         <p>Feed: <strong>{live?.connection ?? 'connecting'}</strong>{execution && <> · run <strong>{execution.runStatus}</strong> ({execution.runDiagnostic})</>}</p>
         {execution?.currentAttempt && <p>Attempt {execution.currentAttempt.number}: {execution.currentAttempt.status} · {execution.currentAttempt.diagnostic}</p>}
         {live?.error && <p className="live-error">{live.error}</p>}
+        {execution && <div className="recovery-status" aria-label="Host recovery eligibility">
+          <strong>Recovery: {eligibleContinuation(execution) !== null ? 'Eligible for explicit continuation' : 'Not currently eligible'}</strong>
+          <p>{execution.recovery?.diagnostic ?? 'No host recovery eligibility has been recorded.'}</p>
+          <small>Only the host verifies saved checkpoints and admits a new attempt. Nothing resumes automatically.</small>
+        </div>}
         <div className="control-actions">
           <button type="button" className="primary-action" onClick={onFindings}>View findings</button>
           <button type="button" className="secondary-action" disabled={busy || !execution?.cancellable} onClick={cancel}>Cancel</button>
+          {eligibleContinuation(execution ?? null) !== null &&
+            <button type="button" className="primary-action" disabled={busy}
+              onClick={() => void continueRun()}>Continue interrupted run</button>}
           <button type="button" className="secondary-action" onClick={() => setRunId('')}>Close</button>
         </div>
       </div>}
