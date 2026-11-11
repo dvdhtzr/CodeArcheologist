@@ -122,6 +122,8 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await page.locator('.atlas-project-evidence summary').click();
     await expect(page.locator('.atlas-project-evidence')).toContainText('Static project membership');
     await expect(page.locator('.atlas-project-evidence')).toContainText('not verified compiler inputs');
+    await expect(page.locator('.atlas-project-evidence')).toContainText(
+      'Project candidate details were not supplied');
 
     await page.getByRole('button', { name: /Go to target node/ }).click();
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('SampleController.cs');
