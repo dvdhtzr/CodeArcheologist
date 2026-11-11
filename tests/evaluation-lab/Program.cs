@@ -27,6 +27,21 @@ try
             return LabOwnerTools.ReviewLabels(evalRoot,
                 args.Length == 3 && args[1] == "--curated-root" ? Path.GetFullPath(args[2]) : null,
                 Console.In, Console.Out);
+        case "--export-judging":
+        case "--import-judging":
+        case "--verdict":
+        {
+            string? Opt(string name) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? Path.GetFullPath(args[i + 1]) : null;
+            if (args[0] == "--export-judging" && Opt("--runs") is { } runs && Opt("--out") is { } outDir)
+                return LabExternalJudging.Export(evalRoot, runs, outDir, Opt("--calibration-checklist-runs"), Opt("--calibration-checklist"),
+                    Opt("--calibration-judge-runs"), Opt("--calibration-judgments"), Console.Out);
+            if (args[0] == "--import-judging" && Opt("--export") is { } export && Opt("--answers") is { } answers)
+                return LabExternalJudging.Import(export, answers, Console.Out);
+            if (args[0] == "--verdict" && Opt("--runs") is { } scoredRuns)
+                return LabExternalJudging.Verdict(evalRoot, scoredRuns, Opt("--export"), Console.Out);
+            Console.Error.WriteLine("Missing required options; see usage.");
+            return 2;
+        }
         case "--checklist" when args.Length >= 3 && args[1] == "--runs" && args.Contains("--single"):
         {
             string Opt(string name, string fallback) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
@@ -62,6 +77,9 @@ try
                   --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
                   --review-labels [--curated-root <dir>]          owner label sign-off (interactive, resumable)
                   --checklist --runs <dir> [--max 5 | --every-problem | --single gate-c] [--out <file>]   short blinded material-issue checklist (interactive, resumable)
+                  --export-judging --runs <scored-dir> --out <new-dir> [--calibration-checklist-runs <dir> --calibration-checklist <file>] [--calibration-judge-runs <dir> --calibration-judgments <file>]
+                  --import-judging --export <dir> --answers <file>   strict import; the first complete import is the record (ADR 0022)
+                  --verdict --runs <scored-dir> [--export <dir>]     compare with owner-approved thresholds
                   --judge --runs <dir> [--a gate-b] [--b gate-c] [--out <file>]   blinded pairwise comparison (interactive, resumable)
                 """);
             return 2;

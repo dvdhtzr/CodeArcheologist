@@ -11,7 +11,7 @@ Status: **C6c-1: owner reported `check.ps1` GREEN on Windows; Linux passed in th
 | C6c-2b | 15 deliberate change experiments: before/after fixtures, deterministic evidence delta and one-hop impact checks | owner GREEN on Windows (`check.ps1`); Linux passed; label sign-off pending |
 | C6c-3a | Owner tools: guided label sign-off (`--review-labels`) and blinded pairwise judging (`--judge`) | Linux passed; awaiting owner `check.ps1` |
 | C6c-3b | 10 held-out cases (owner-authored, sealed); repeatability trials | not started |
-| C7 | Scored acceptance run, integrity audit, documented limitations, owner release decision | not started |
+| C7 | Scored acceptance run, integrity audit, documented limitations, owner release decision | scored run 1 complete: all deterministic thresholds pass; judgment thresholds pending (ADR 0022 judging set aside by the owner) |
 
 ## Lab (`tests/evaluation-lab`)
 
