@@ -27,14 +27,20 @@ public sealed partial class WorkspaceStore
     /// so an admitted attempt is always bound to a live lock-holding worker.
     /// </summary>
     public InvestigationCreateResult CreateInvestigation(
-        GateCScope scope, Guid idempotencyKey, ExecutionFence fence)
+        GateCScope scope, Guid idempotencyKey, ExecutionFence fence,
+        string? questionSubjectKind = null)
     {
-        var digest = Convert.ToHexString(SHA256.HashData(
-            Encoding.UTF8.GetBytes(string.Join("\n",
-                "gate-c5-request-v1", scope.WorkspaceId.ToString("D"),
-                scope.RepositoryId.ToString("D"), scope.SnapshotId.ToString("D"),
-                scope.FingerprintSha256, scope.EntryPointId,
-                scope.EvidenceContractVersion))));
+        // Legacy calls retain their original idempotency digest and checkpoint
+        // semantics. New structured questions include the host-resolved node
+        // kind and all versioned policy identities in their request digest.
+        var digest = questionSubjectKind is null
+            ? Convert.ToHexString(SHA256.HashData(
+                Encoding.UTF8.GetBytes(string.Join("\n",
+                    "gate-c5-request-v1", scope.WorkspaceId.ToString("D"),
+                    scope.RepositoryId.ToString("D"), scope.SnapshotId.ToString("D"),
+                    scope.FingerprintSha256, scope.EntryPointId,
+                    scope.EvidenceContractVersion))))
+            : InvestigationQuestionContract.RequestDigest(scope, questionSubjectKind);
         var now = DateTimeOffset.UtcNow;
         var id = Guid.NewGuid();
         var attemptId = Guid.NewGuid();
@@ -119,6 +125,28 @@ public sealed partial class WorkspaceStore
             reserve.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
             if (reserve.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("Execution slot acquisition failed.");
+        }
+        if (questionSubjectKind is not null)
+        {
+            var context = InvestigationQuestionContract.Create(id, scope, questionSubjectKind, now);
+            using var insertContext = Command(connection, tx, """
+                INSERT INTO investigation_question_contexts
+                    (run_id, question_id, contract_version, subject_node_id,
+                     subject_node_kind, question_kind, context_json, context_digest,
+                     created_at_unix_ms)
+                VALUES ($run,$question,$version,$node,$kind,$questionKind,$json,$digest,$created);
+                """);
+            insertContext.Parameters.AddWithValue("$run", id.ToString("D"));
+            insertContext.Parameters.AddWithValue("$question", context.QuestionId.ToString("D"));
+            insertContext.Parameters.AddWithValue("$version", context.ContractVersion);
+            insertContext.Parameters.AddWithValue("$node", context.SubjectNodeId);
+            insertContext.Parameters.AddWithValue("$kind", context.SubjectNodeKind);
+            insertContext.Parameters.AddWithValue("$questionKind", context.QuestionKind);
+            insertContext.Parameters.AddWithValue("$json", JsonSerializer.Serialize(context));
+            insertContext.Parameters.AddWithValue("$digest", context.ContextDigest);
+            insertContext.Parameters.AddWithValue("$created", context.CreatedAtUtc.ToUnixTimeMilliseconds());
+            if (insertContext.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Question context was not persisted with its run.");
         }
         AppendEvent(connection, tx, attemptId, "attempt-admitted", "queued",
             null, "queued", fence.Epoch);
@@ -303,6 +331,47 @@ public sealed partial class WorkspaceStore
                 throw new InvalidOperationException("Stored report scope does not match its ledger.");
         }
         return new(summary, report);
+    }
+
+    /// <summary>Read the immutable question context of an R3 run, scoped to
+    /// exactly one workspace/repository/snapshot. Older Gate C runs have none.</summary>
+    public InvestigationQuestionContext? GetQuestionContext(Guid workspace,
+        Guid repository, Guid snapshot, Guid runId)
+    {
+        using var connection = Open();
+        using var query = connection.CreateCommand();
+        query.CommandText = """
+            SELECT q.context_json, q.context_digest, q.contract_version,
+                q.question_id, q.subject_node_id, q.subject_node_kind,
+                q.question_kind, q.created_at_unix_ms,
+                r.fingerprint_sha256, r.entry_point_id, r.evidence_contract_version
+            FROM investigation_question_contexts q
+            JOIN investigation_reports r ON r.run_id=q.run_id
+            WHERE r.workspace_id=$workspace AND r.repository_id=$repo
+                AND r.snapshot_id=$snapshot AND r.run_id=$run;
+            """;
+        query.Parameters.AddWithValue("$workspace", workspace.ToString("D"));
+        query.Parameters.AddWithValue("$repo", repository.ToString("D"));
+        query.Parameters.AddWithValue("$snapshot", snapshot.ToString("D"));
+        query.Parameters.AddWithValue("$run", runId.ToString("D"));
+        using var reader = query.ExecuteReader();
+        if (!reader.Read()) return null;
+        InvestigationQuestionContext? context;
+        try { context = JsonSerializer.Deserialize<InvestigationQuestionContext>(reader.GetString(0)); }
+        catch (JsonException) { throw new InvalidOperationException("Stored question context is invalid."); }
+        var expectedScope = new GateCScope(workspace, repository, snapshot,
+            reader.GetString(8), reader.GetString(9), reader.GetString(10));
+        if (!InvestigationQuestionContract.Verify(context) || context!.RunId != runId ||
+            context.Scope != expectedScope ||
+            context.ContextDigest != reader.GetString(1) ||
+            context.ContractVersion != reader.GetString(2) ||
+            context.QuestionId.ToString("D") != reader.GetString(3) ||
+            context.SubjectNodeId != reader.GetString(4) ||
+            context.SubjectNodeKind != reader.GetString(5) ||
+            context.QuestionKind != reader.GetString(6) ||
+            context.CreatedAtUtc.ToUnixTimeMilliseconds() != reader.GetInt64(7))
+            throw new InvalidOperationException("Stored question context provenance is invalid.");
+        return context;
     }
 
     public InvestigationPage ListInvestigations(Guid workspace, Guid repository,
