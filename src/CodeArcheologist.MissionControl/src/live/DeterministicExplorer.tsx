@@ -122,7 +122,6 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
       {view !== 'coverage' && view !== 'atlas' && loading && <p role="status">Loading verified snapshot capabilities…</p>}
       {view !== 'coverage' && view !== 'atlas' && error && <p className="live-error" role="alert">{error}</p>}
       {view === 'atlas' && <ArchitectureAtlas selection={selection}
-        onInspect={anchor => void inspect(anchor)}
         onMethod={id => { setSelectedMethod(id); setView('inventory'); }} />}
       {view === 'coverage' && <SnapshotCoverage selection={selection} />}
       {view === 'graph' && <EvidenceGraphExplorer selection={selection}

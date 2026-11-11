@@ -9,6 +9,9 @@ import * as dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
 import type { EvidenceGraph, GraphNode } from './evidenceGraph.ts';
+import { AtlasEvidenceInspector } from './AtlasEvidenceInspector.tsx';
+import { navigateToAtlasNode, previousAtlasView } from './atlasEvidence.ts';
+import type { AtlasCursor } from './atlasEvidence.ts';
 import { validateGraph } from './evidenceGraph.ts';
 import {
   atlasFocus, atlasOverview, evidenceStyle, findAtlasNodes, indexAtlas,
@@ -16,16 +19,11 @@ import {
 } from './atlasModel.ts';
 import type { AtlasProjection } from './atlasModel.ts';
 
-type EvidenceLocation = { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null };
-type Props = { selection: ExplorerSelection;
-  onInspect: (anchor: EvidenceLocation) => void; onMethod: (methodId: string) => void };
+type Props = { selection: ExplorerSelection; onMethod: (methodId: string) => void };
 type AtlasRecord = { key: string; api: NonNullable<ExplorerSelection>['api']; graph: EvidenceGraph };
 const NODE_W = 216;
 const NODE_H = 74;
 const MAX_EXPANSIONS = 12;
-const isMethod = (n: GraphNode) =>
-  n.kind === 'syntax-declaration' && n.detail?.startsWith('method syntax declaration');
-const canInspect = (item: EvidenceLocation) => Boolean(item.filePath && item.fileSha256 && item.line);
 const clip = (value: string, max = 68) => value.length > max ? value.slice(0, max - 1) + '…' : value;
 
 function nodeStyle(kind: string) {
@@ -133,7 +131,7 @@ function AtlasCanvas({ projected, selectedId, selectedEdgeId, onNode, onEdge }: 
   </div>;
 }
 
-export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
+export function ArchitectureAtlas({ selection, onMethod }: Props) {
   const [loaded, setLoaded] = useState<AtlasRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -142,6 +140,7 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [selectedEdgeId, setSelectedEdgeId] = useState('');
+  const [history, setHistory] = useState<AtlasCursor[]>([]);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const epoch = useRef(0);
@@ -152,7 +151,7 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
     epoch.current++;
     setLoaded(null); setLoading(false); setError('');
     setMode('overview'); setCenterId(''); setExpandedIds([]);
-    setSelectedId(''); setSelectedEdgeId(''); setQuery(''); setKind('all');
+    setSelectedId(''); setSelectedEdgeId(''); setHistory([]); setQuery(''); setKind('all');
   }, [selection?.api, key]);
 
   const graph = loaded && loaded.api === selection?.api && loaded.key === key ? loaded.graph : null;
@@ -192,15 +191,35 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
     }
   }
 
+  function currentCursor(): AtlasCursor {
+    return { mode, centerId, expandedIds, selectedId, selectedEdgeId };
+  }
+
+  function restore(cursor: AtlasCursor) {
+    setMode(cursor.mode);
+    setCenterId(cursor.centerId);
+    setExpandedIds([...cursor.expandedIds]);
+    setSelectedId(cursor.selectedId);
+    setSelectedEdgeId(cursor.selectedEdgeId);
+  }
+
   function focusNode(id: string) {
-    if (!index?.nodeById.has(id)) return;
-    setMode('focus'); setCenterId(id); setExpandedIds([]);
-    setSelectedId(id); setSelectedEdgeId('');
+    if (!index) return;
+    const step = navigateToAtlasNode(index, currentCursor(), history, id);
+    setHistory(step.history);
+    restore(step.current);
+  }
+
+  function goBack() {
+    const step = previousAtlasView(history);
+    if (!step) return;
+    setHistory(step.history);
+    restore(step.current);
   }
 
   function resetOverview() {
-    setMode('overview'); setCenterId(''); setExpandedIds([]);
-    setSelectedId(''); setSelectedEdgeId('');
+    setHistory([]);
+    restore({ mode: 'overview', centerId: '', expandedIds: [], selectedId: '', selectedEdgeId: '' });
   }
 
   function expandSelected() {
@@ -243,6 +262,8 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
         <aside className="atlas-navigation" aria-label="Atlas search and navigation">
           <h3>Explore saved evidence</h3>
           <div className="atlas-mode-controls">
+            <button type="button" disabled={history.length === 0} onClick={goBack}
+              aria-label="Back to previous Atlas view">Back</button>
             <button type="button" aria-pressed={mode === 'overview'} onClick={resetOverview}>Project / file overview</button>
             {mode === 'focus' && <button type="button" aria-pressed={true} disabled>Focused view</button>}
           </div>
@@ -276,40 +297,12 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
                 onNode={chooseNode} onEdge={chooseEdge}/>
             </ReactFlowProvider>}
         <aside className="atlas-details" aria-label="Atlas selection and evidence summary">
-          <h3>{selectedEdge ? 'Recorded relationship' : selectedNode ? 'Saved graph node' : 'Explore a selection'}</h3>
-          {selectedNode && <>
-            <p className="atlas-selected-label">{selectedNode.label}</p>
-            <p><strong>Kind:</strong> {selectedNode.kind}</p>
-            <p><strong>Source:</strong> {selectedNode.filePath ? selectedNode.filePath + (selectedNode.line ? ':' + selectedNode.line : '') : 'No saved line anchor'}</p>
-            <p><strong>Node ID:</strong> <code>{selectedNode.id}</code></p>
-            <p className="live-help">{selectedNode.detail}</p>
-            <button type="button" className="secondary-action" disabled={!canInspect(selectedNode)}
-              onClick={() => onInspect(selectedNode)}>Inspect saved source</button>
-            {isMethod(selectedNode) && <button type="button" className="secondary-action"
-              onClick={() => onMethod(selectedNode.id)}>Inspect direct impact</button>}
-            {mode === 'focus' && <>
-              <button type="button" className="secondary-action" disabled={selectedId === centerId ||
-                expandedIds.includes(selectedId) || expandedIds.length >= MAX_EXPANSIONS ||
-                !visibleIds.has(selectedId)}
-                onClick={expandSelected}>Expand this node's recorded neighbors</button>
-              <button type="button" className="secondary-action" onClick={() => focusNode(selectedNode.id)}>Refocus here</button>
-            </>}
-            {mode === 'overview' && <button type="button" className="secondary-action"
-              onClick={() => focusNode(selectedNode.id)}>Inspect direct relationships</button>}
-          </>}
-          {selectedEdge && <>
-            <p className="atlas-selected-label">{selectedEdge.kind}</p>
-            <p><strong>Status:</strong> {selectedEdge.status}</p>
-            <p><strong>Direction:</strong> {selectedEdge.fromId} → {selectedEdge.toId}</p>
-            <p><strong>Evidence:</strong> {selectedEdge.evidencePath}{selectedEdge.line ? ':' + selectedEdge.line : ''}</p>
-            <p><strong>Edge ID:</strong> <code>{selectedEdge.id}</code></p>
-            <p className="live-help">{selectedEdge.explanation}</p>
-            <button type="button" className="secondary-action"
-              disabled={!canInspect({ filePath: selectedEdge.evidencePath, fileSha256: selectedEdge.evidenceSha256, line: selectedEdge.line, column: selectedEdge.column })}
-              onClick={() => onInspect({ filePath: selectedEdge.evidencePath, fileSha256: selectedEdge.evidenceSha256,
-                line: selectedEdge.line, column: selectedEdge.column })}>Inspect edge source</button>
-          </>}
-          {!selectedNode && !selectedEdge && <p className="live-help">Click a visible node or edge, or search the full loaded evidence graph. A line shows the direction of a saved relationship, not necessarily runtime flow.</p>}
+          {selection && <AtlasEvidenceInspector
+            key={selectedEdge ? 'edge:' + selectedEdge.id : selectedNode ? 'node:' + selectedNode.id : 'unselected'}
+            selection={selection} fingerprint={graph.fingerprintSha256}
+            index={index} node={selectedNode} edge={selectedEdge}
+            mode={mode} centerId={centerId} expandedIds={expandedIds} visibleIds={visibleIds}
+            onNavigate={focusNode} onExpand={expandSelected} onImpact={onMethod}/>}
           {projection.edges.length > 0 && <div className="atlas-relationships" aria-label="Drawn evidence relationships">
             <h4>Drawn relationships ({projection.edges.length})</h4>
             <p className="live-help">These are exact recorded edges, not derived paths. Select one to inspect its evidence even if the diagram is zoomed out.</p>

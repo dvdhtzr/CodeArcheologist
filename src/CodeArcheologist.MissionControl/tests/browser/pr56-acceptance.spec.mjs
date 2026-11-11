@@ -99,6 +99,49 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.getByRole('button', { name: "Expand this node's recorded neighbors" })).toBeEnabled();
     await page.getByRole('button', { name: "Expand this node's recorded neighbors" }).click();
     await expect(page.locator('.atlas-scope-note').last()).toContainText('Expansion seeds: 2 of 13');
+
+    // PR2: inspect an actual declaration->file edge, including API-rehashed
+    // saved source, then navigate the exact endpoint and use Back to restore
+    // the original selected edge. No model output or synthetic graph data.
+    await page.getByPlaceholder('Name, file, or declaration').fill('Helper');
+    await page.locator('.atlas-search-results button')
+      .filter({ hasText: 'syntax-declaration' }).first().click();
+    await page.locator('.atlas-relationships > button')
+      .filter({ hasText: 'declared-in' }).first().click();
+    await expect(page.locator('.atlas-details')).toContainText('observed-location');
+    await expect(page.locator('.atlas-endpoints')).toContainText('Go to source node');
+    await expect(page.locator('.atlas-endpoints')).toContainText('Go to target node');
+    await expect(page.locator('.atlas-details')).toContainText('Edge ID:');
+    await page.getByRole('button', { name: 'Inspect edge source' }).click();
+    const sourceEvidence = page.getByRole('region', { name: 'Atlas verified saved source' });
+    await expect(sourceEvidence).toBeVisible();
+    await expect(sourceEvidence).toContainText('private int Helper()');
+    await expect(sourceEvidence).toContainText('Saved file SHA-256');
+    await expect(sourceEvidence.locator('.atlas-source-line.is-focus')).toContainText('Helper');
+
+    await page.locator('.atlas-project-evidence summary').click();
+    await expect(page.locator('.atlas-project-evidence')).toContainText('Static project membership');
+    await expect(page.locator('.atlas-project-evidence')).toContainText('not verified compiler inputs');
+    await expect(page.locator('.atlas-project-evidence')).toContainText(
+      'Project candidate details were not supplied');
+
+    await page.getByRole('button', { name: /Go to target node/ }).click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('SampleController.cs');
+    await expect(page.getByRole('button', { name: 'Back to previous Atlas view' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Back to previous Atlas view' }).click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('declared-in');
+    await expect(page.locator('.atlas-endpoints')).toContainText('Go to target node');
+    // Returning to the prior selection must not resurrect its old source panel.
+    await expect(page.locator('.atlas-inline-source')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Go to source node/ }).click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
+    await page.getByRole('button', { name: 'Inspect saved source' }).click();
+    await expect(page.getByRole('region', { name: 'Atlas verified saved source' }))
+      .toContainText('private int Helper()');
+    await page.getByRole('button', { name: 'Back to previous Atlas view' }).click();
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('declared-in');
+
     await page.getByRole('button', { name: 'Project / file overview' }).click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Project / file overview');
     await page.getByRole('button', { name: 'Agent Observatory' }).click();
