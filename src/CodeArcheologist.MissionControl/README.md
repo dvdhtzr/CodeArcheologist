@@ -59,6 +59,23 @@ Open **http://127.0.0.1:5175/**. Stop with Ctrl+C. The original developer fronte
 
 No Ollama, .NET process, database, pairing code or secrets are required for the preview.
 
+## Automated browser acceptance (PR #56 and future R1 work)
+
+The standard Windows and Unix GREEN scripts now run **headless Chromium Playwright acceptance** after unit and live adapter tests. The browser and frontend are started automatically; you must stop any existing Code Archeologist API (port 5127) and Mission Control (port 5175) before running the checks. **Do not run `scripts/start.ps1` first.**
+
+The pinned `@playwright/test` 1.65.0 development dependency and its exact npm integrity hashes are in `package-lock.json`. The first verification installs Playwright's matching Chromium browser binary into its user cache; this initial installation needs internet access. Once cached, normal tests do not require internet access. Linux installations may need browser runtime libraries; see Playwright's Chromium dependencies documentation.
+
+Run just the browser suite (after a Release API build and `npm ci`):
+
+```powershell
+npm --prefix .\src\CodeArcheologist.MissionControl run browser:install
+npm --prefix .\src\CodeArcheologist.MissionControl run test:browser
+```
+
+The browser acceptance uses a disposable local API data directory and a temporary C# source folder, automatically creates a workspace/repository and two snapshots, and deletes them afterward. It tests real UI pairing, deterministic graph loading, kind filtering and searching, neighbor navigation, saved node/edge source verification, method-to-impact navigation, and snapshot isolation. **No Ollama, personal repository, persistent workspace, cloud CI, or browser-side mock API is needed.** A browser failure makes the existing GREEN script RED; trace and screenshot artifacts are written only under the ignored `test-results/browser` folder.
+
+This suite validates the tested workflow in Chromium. It does **not** prove every browser, visual responsiveness or accessibility, all source patterns, or runtime/semantic correctness.
+
 ## What to inspect
 
 - **Agent Observatory** — three original human-like SVG character avatars, with distinct cyan / amber / violet identities, selection, responsive stage layout and animated (CSS-only) activity halos.
