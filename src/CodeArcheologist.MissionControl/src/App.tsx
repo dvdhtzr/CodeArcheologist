@@ -6,11 +6,12 @@ import {
 } from './demo';
 import type { DemoScene, InspectorTab, RoleId, StageState } from './demo';
 import { LiveConsole } from './live/LiveConsole.tsx';
+import { Findings } from './live/Findings.tsx';
 import type { LiveView } from './live/LiveConsole.tsx';
 import { displayEvent, liveStages } from './live/ledger.ts';
 import type { DisplayEvent, LiveStage } from './live/ledger.ts';
 
-type Page = 'observatory' | 'activity' | 'design';
+type Page = 'observatory' | 'activity' | 'findings' | 'design';
 type Mode = 'live' | 'demo';
 const stateNames: Record<StageState, string> = {
   queued: 'Standing by', active: 'Working', accepted: 'Accepted', halted: 'Stopped',
@@ -247,6 +248,9 @@ export function App() {
             <button type="button" className={`nav-link ${page === 'activity' ? 'active' : ''}`}
               aria-current={page === 'activity' ? 'page' : undefined}
               onClick={() => setPage('activity')}><Symbol name="pulse"/> Activity Timeline <Symbol name="chevron" size={15}/></button>
+            <button type="button" className={`nav-link ${page === 'findings' ? 'active' : ''}`}
+              aria-current={page === 'findings' ? 'page' : undefined}
+              onClick={() => setPage('findings')}><Symbol name="shield"/> Findings <Symbol name="chevron" size={15}/></button>
             <button type="button" className={`nav-link ${page === 'design' ? 'active' : ''}`}
               aria-current={page === 'design' ? 'page' : undefined}
               onClick={() => setPage('design')}><Symbol name="book"/> Design Principles <Symbol name="chevron" size={15}/></button>
@@ -277,7 +281,7 @@ export function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumb"><span>CODE ARCHEOLOGIST</span><Symbol name="chevron" size={14}/><strong>{page === 'observatory' ? 'Agent Observatory' : page === 'activity' ? 'Activity Timeline' : 'Design Principles'}</strong></div>
+          <div className="breadcrumb"><span>CODE ARCHEOLOGIST</span><Symbol name="chevron" size={14}/><strong>{page === 'observatory' ? 'Agent Observatory' : page === 'activity' ? 'Activity Timeline' : page === 'findings' ? 'Findings' : 'Design Principles'}</strong></div>
           <div className="topbar-status">{connected
             ? <><span className="online-dot" /> API connected <span className="topbar-separator"/> <span className={showingLive ? 'live-label' : 'preview-label'}>{showingLive ? 'LIVE' : mode === 'demo' ? 'DEMO MODE' : 'NO RUN SELECTED'}</span></>
             : <><span className="offline-dot" /> API not connected <span className="topbar-separator"/> <span className="preview-label">{mode === 'demo' ? 'DEMO MODE' : 'NOT LIVE'}</span></>}</div>
@@ -331,7 +335,10 @@ export function App() {
               <div className="lower-grid">
                 <section className="activity-card" aria-labelledby="recent-heading">
                   <div className="panel-heading"><div><span className="eyebrow">{showingLive ? 'EVENT JOURNAL / LIVE LEDGER' : 'EVENT JOURNAL / PREVIEW'}</span><h3 id="recent-heading">Activity signal</h3></div>
-                    <button className="text-button" type="button" onClick={() => setPage('activity')}>View all <Symbol name="arrow" size={15}/></button>
+                    <span>
+                      {showingLive && <button className="text-button" type="button" onClick={() => setPage('findings')}>View findings <Symbol name="arrow" size={15}/></button>}
+                      <button className="text-button" type="button" onClick={() => setPage('activity')}>View all <Symbol name="arrow" size={15}/></button>
+                    </span>
                   </div>
                   <div className="activity-scroll"><EventLog events={events} onAgent={chooseAgent}/></div>
                 </section>
@@ -387,6 +394,23 @@ export function App() {
             </section>
           )}
 
+          {page === 'findings' && (
+            <section className="secondary-page">
+              <span className="eyebrow eyebrow--accent">{showingLive ? 'HOST-RECORDED REPORT' : 'FINDINGS'}</span>
+              <h1>What the agents <em>concluded.</em></h1>
+              {showingLive
+                ? <>
+                    <p className="secondary-intro">{liveView.entryPoint}</p>
+                    <div className="secondary-panel">
+                      <Findings api={liveView.api} scope={liveView.scope} runId={liveView.runId}
+                        runStatus={liveView.snapshot.execution?.runStatus} />
+                    </div>
+                  </>
+                : <p className="secondary-intro">Connect under Live API on the Observatory page and start or choose a run. The demo walkthrough has no findings, because nothing in it is real.</p>}
+              <button className="secondary-action" type="button" onClick={() => setPage('observatory')}>Back to Observatory <Symbol name="arrow" size={16}/></button>
+            </section>
+          )}
+
           {page === 'design' && (
             <section className="secondary-page">
               <span className="eyebrow eyebrow--accent">MISSION CONTROL / DESIGN CONTRACT</span>
@@ -409,5 +433,5 @@ export function App() {
 }
 
 function stateForShort(state: StageState): string {
-  return state === 'accepted' ? '✓' : state === 'active' ? '●' : '–';
+  return state === 'accepted' ? '✓' : state === 'active' ? '●' : state === 'halted' ? '✕' : '–';
 }

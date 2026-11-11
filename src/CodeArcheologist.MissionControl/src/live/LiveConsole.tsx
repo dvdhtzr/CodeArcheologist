@@ -5,7 +5,7 @@ import type { EntryPoint, Repository, RunSummary, Scope, Snapshot, Workspace } f
 import { LiveRun } from './realtime.ts';
 import type { LiveSnapshot } from './realtime.ts';
 
-export type LiveView = { scope: Scope; runId: string; entryPoint: string; snapshot: LiveSnapshot };
+export type LiveView = { api: ApiClient; scope: Scope; runId: string; entryPoint: string; snapshot: LiveSnapshot };
 
 /**
  * MC3 connection and command panel. Every command is an explicit button
@@ -116,7 +116,7 @@ export function LiveConsole({ onView, onConnected }: {
     if (scope && runId && live) {
       const run = runs.find(r => r.runId === runId);
       const entry = entryPoints.find(e => e.id === (run?.scope.entryPointId ?? entryPointId));
-      onView({ scope, runId, entryPoint: entry ? `${entry.label} (${entry.anchor.filePath}:${entry.anchor.line})` : 'entry point', snapshot: live });
+      onView({ api: api!, scope, runId, entryPoint: entry ? `${entry.label} (${entry.anchor.filePath}:${entry.anchor.line})` : 'entry point', snapshot: live });
     }
   }, [live]);
 

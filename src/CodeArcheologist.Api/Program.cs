@@ -132,6 +132,8 @@ app.MapOpenApi("/api/{documentName}/openapi.json");
 app.MapHub<InvestigationEventsHub>(RealtimeContract.HubPath);
 // W2: read-only capability resources (entry points, methods, one-hop impact).
 app.MapSnapshotCapabilities();
+// MC4: bounded, read-only lines from a saved, hash-verified snapshot file.
+app.MapSnapshotSource();
 
 app.MapGet("/api/v1/health", () =>
     Results.Ok(new { status = "ok", component = "api", stage = "local-access" }))

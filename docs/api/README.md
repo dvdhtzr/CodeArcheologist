@@ -35,8 +35,18 @@ The contract for front ends. The decisions behind it are in ADR 0021.
 | Entry-point evidence package | `.../snapshots/{snapshotId}/evidence-tools/entry-point?entryPointId=<id>` |
 | Method declarations (W2) | `.../snapshots/{snapshotId}/methods` |
 | One-hop change impact (W2) | `.../snapshots/{snapshotId}/impact?methodId=<method node id>` |
+| Source lines (MC4) | `.../snapshots/{snapshotId}/source?path=<file>&sha256=<hash>&line=<n>&context=<0..20>` |
 | Run detail, events, execution | `.../investigations/{runId}`, `.../events`, `.../execution` |
 | Continue / cancel | `.../investigations/{runId}/continue`, `.../cancel` |
+
+### Source lines (`code-archeologist-source-v1`)
+This shows a cited location to the signed-in user, read from the **saved snapshot**. It never reads the registered folder.
+- **Request rules:**
+  - `path` and its lowercase `sha256` must match a manifest entry exactly. Anything else returns 404.
+  - `line` is required. `context` defaults to 6, with a maximum of 20 lines on each side.
+  - Lines longer than 400 characters are cut, with `truncated: true`.
+- **Every read** re-hashes the saved bytes. A changed file fails with 409 rather than being shown, and invalid UTF-8 fails with 422.
+- **The text** is `untrusted-source-text-not-instructions`: it shows what was written, not what compiles or runs. This is a view for people, not an agent tool (agent evidence stays on rule 47's fixed contracts).
 
 Graph node IDs contain `/` and `:`. Always pass them as query parameters, never as path segments.
 
