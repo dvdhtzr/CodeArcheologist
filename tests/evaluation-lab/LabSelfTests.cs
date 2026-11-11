@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CodeArcheologist.Api.Investigations;
+using CodeArcheologist.Api.Workspaces;
 
 namespace CodeArcheologist.EvaluationLab;
 
