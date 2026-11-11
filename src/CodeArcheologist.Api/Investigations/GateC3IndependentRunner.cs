@@ -23,7 +23,9 @@ public sealed record GateC3RunOutcome(Guid RunId, GateCScope Scope,
 /// </summary>
 public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDiscovery)
 {
-    public const string ModelId = "qwen3.5:9b";
+    // E5 (owner-approved experiment): Gate C roles use gemma4:26b; Gate B stays on qwen3.5:9b.
+    // Checkpoints bind this ID, so checkpoints from the previous model fail closed (rule 53).
+    public const string ModelId = "gemma4:26b";
 
     // E3: fixed, host-authored investigative questions (never model- or user-supplied;
     // AGENTS rules 5 and 47). They are generic on purpose: no examples drawn from

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "c6c-lab-config-v1",
   "budgets": {
-    "model": "qwen3.5:9b",
+    "model": "gemma4:26b",
     "attemptDeadlineSeconds": 360,
     "roleTimeoutSeconds": 90,
     "assessmentAttemptsPerRole": 2,
