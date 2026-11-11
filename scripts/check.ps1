@@ -62,4 +62,10 @@ if ($LASTEXITCODE -ne 0) { throw 'W2 capability resource integration tests faile
 if ($LASTEXITCODE -ne 0) { throw 'MC4 snapshot source-lines integration tests failed.' }
 & npm --prefix $mission run test:live
 if ($LASTEXITCODE -ne 0) { throw 'Mission Control live API integration tests failed.' }
-Write-Host 'GREEN: Local build, model-free Ollama, Gate B, C1, C5a and C6b (ownership/fencing/worker) contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'
+# Real Chromium UI acceptance: API and repository are disposable; no Ollama needed.
+# Playwright's pinned browser is cached after first installation.
+& npm --prefix $mission run browser:install
+if ($LASTEXITCODE -ne 0) { throw 'Playwright Chromium installation/check failed.' }
+& npm --prefix $mission run test:browser
+if ($LASTEXITCODE -ne 0) { throw 'Mission Control Playwright browser acceptance failed.' }
+Write-Host 'GREEN: Chromium browser acceptance, local build, model-free Ollama, Gate B, C1, C5a and C6b (ownership/fencing/worker) contracts, frontend, security, workspaces, registrations and immutable snapshot checks passed. Real Ollama probe is separate. Cross-platform packaging remains pending.'
