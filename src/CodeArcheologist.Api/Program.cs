@@ -23,6 +23,7 @@ builder.Services.AddSingleton<CSharpInvocationSyntaxInspector>();
 builder.Services.AddSingleton<CSharpProvisionalInvocationBinder>();
 builder.Services.AddSingleton<CSharpHttpAttributeInspector>();
 builder.Services.AddSingleton<CSharpMinimalApiInspector>();
+builder.Services.AddSingleton<CSharpHostCautionAnalyzer>();
 builder.Services.AddSingleton<CSharpDiRegistrationInspector>();
 builder.Services.AddSingleton<CSharpTypeRelationshipInspector>();
 builder.Services.AddSingleton<StaticCSharpProjectInspector>();
