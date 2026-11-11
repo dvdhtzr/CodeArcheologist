@@ -39,9 +39,27 @@ test('R3 structured questions require auth, exact saved scope and approved kind'
     assert.equal(items.length, 1);
     const valid = { subjectNodeId: items[0].id, questionKind: 'explain-http-entry-point' };
 
-    await t.test('no unpaired account can read or admit questions', async () => {
+    await t.test('unpaired accounts cannot read or admit questions; request guard runs before auth', async () => {
+      // Read-only requests reach authentication and return 401 without a token.
       assert.equal((await get(prefix + '/' + randomUUID() + '/question-context')).status, 401);
-      assert.equal((await post(prefix + '/questions', null, valid)).status, 401);
+
+      // Unsafe POSTs without the anti-CSRF custom header are rejected by the
+      // existing local request guard first, even when unauthenticated.
+      assert.equal((await post(prefix + '/questions', null, valid)).status, 403);
+
+      // Supplying that header does not grant authentication: a properly
+      // shaped but unpaired POST must still be rejected with 401.
+      const unauthenticated = await fetch('http://127.0.0.1:5127' + prefix + '/questions', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://localhost:3999',
+          'Content-Type': 'application/json',
+          'X-CodeArcheologist-Request': '1',
+          'Idempotency-Key': randomUUID(),
+        },
+        body: JSON.stringify(valid),
+      });
+      assert.equal(unauthenticated.status, 401);
     });
 
     await t.test('request requires a strong idempotency key and trusted origin', async () => {
