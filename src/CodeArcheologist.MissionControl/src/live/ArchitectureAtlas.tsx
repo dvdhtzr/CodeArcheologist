@@ -20,7 +20,13 @@ import {
 } from './atlasModel.ts';
 import type { AtlasProjection } from './atlasModel.ts';
 
-type Props = { selection: ExplorerSelection; onMethod: (methodId: string) => void };
+type Props = {
+  selection: ExplorerSelection;
+  onMethod: (methodId: string) => void;
+  onInvestigate: (nodeId: string, label: string, fingerprintSha256: string) => void;
+  investigationBusy: boolean;
+  investigationError: string;
+};
 type AtlasRecord = { key: string; api: NonNullable<ExplorerSelection>['api']; graph: EvidenceGraph };
 const NODE_W = 216;
 const NODE_H = 74;
@@ -184,7 +190,9 @@ function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command,
   </div>;
 }
 
-export function ArchitectureAtlas({ selection, onMethod }: Props) {
+export function ArchitectureAtlas({
+  selection, onMethod, onInvestigate, investigationBusy, investigationError,
+}: Props) {
   const [loaded, setLoaded] = useState<AtlasRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -312,6 +320,7 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
         onClick={() => void load()}>{loading ? 'Verifying graph evidence…' : 'Load Architecture Atlas'}</button>}
     </header>
     {!selection && <p className="atlas-message">Select a workspace, repository, and saved snapshot in Agent Observatory → Live API first.</p>}
+    {investigationError && <p className="live-error" role="alert">{investigationError}</p>}
     {error && <div className="atlas-message" role="alert">
       <strong>Atlas unavailable for this snapshot.</strong>
       <p>{error}</p>
@@ -386,7 +395,9 @@ export function ArchitectureAtlas({ selection, onMethod }: Props) {
             selection={selection} fingerprint={graph.fingerprintSha256}
             index={index} node={selectedNode} edge={selectedEdge}
             mode={mode} centerId={centerId} expandedIds={expandedIds} visibleIds={visibleIds}
-            onNavigate={focusNode} onExpand={expandSelected} onImpact={onMethod}/>}
+            onNavigate={focusNode} onExpand={expandSelected} onImpact={onMethod}
+            onInvestigate={(id, label) => onInvestigate(id, label, graph.fingerprintSha256)}
+            investigationBusy={investigationBusy}/>}
           {projection.edges.length > 0 && <div className="atlas-relationships" aria-label="Drawn evidence relationships">
             <h4>Drawn relationships ({projection.edges.length})</h4>
             <p className="live-help">These are exact recorded edges, not derived paths. Select one to inspect its evidence even if the diagram is zoomed out.</p>
