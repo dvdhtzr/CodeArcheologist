@@ -23,6 +23,8 @@ test('graph validation is exact-scope and exact-fingerprint, fail-closed', () =>
   assert.throws(() => validateGraph({ ...graph, nodeCount: 4 }, scope, fingerprint), /unexpected contract/);
   assert.throws(() => validateGraph({ ...graph, edges: [{ ...observed, toId: 'fabricated' }, provisional] }, scope, fingerprint), /invalid node or edge/);
   assert.throws(() => validateGraph({ ...graph, nodes: [a, b, b] }, scope, fingerprint), /invalid node or edge/);
+  assert.throws(() => validateGraph({ ...graph, edges: [observed, { ...provisional, id: 'e1' }] },
+    scope, fingerprint), /duplicate edge IDs/);
 });
 
 test('adjacency preserves direction and original evidence labels, without inference', () => {
