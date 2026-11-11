@@ -21,6 +21,10 @@ dotnet run --project "$ROOT/tests/evaluation-lab/EvaluationLab.csproj" --configu
 npm ci --prefix "$ROOT/src/CodeArcheologist.Client" --no-audit --no-fund
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run typecheck
 npm --prefix "$ROOT/src/CodeArcheologist.Client" run build
+npm ci --prefix "$ROOT/src/CodeArcheologist.MissionControl" --no-audit --no-fund
+npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run typecheck
+npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run build
+npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run test
 node --test "$ROOT/tests/security/local-access.test.mjs"
 node --test "$ROOT/tests/workspaces/workspaces.test.mjs"
 node --test "$ROOT/tests/repositories/registration.test.mjs"
@@ -29,4 +33,5 @@ node --test "$ROOT/tests/investigations/execution-control.test.mjs"
 node --test "$ROOT/tests/api/white-label.test.mjs"
 node --test "$ROOT/tests/api/capabilities.test.mjs"
 node --test "$ROOT/tests/api/source.test.mjs"
+npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run test:live
 echo 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
