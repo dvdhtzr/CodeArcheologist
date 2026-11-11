@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
 import {
   Background, BackgroundVariant, Controls, MarkerType, MiniMap, Position, ReactFlow,
   ReactFlowProvider, useReactFlow,
 } from '@xyflow/react';
-import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
+import type { Edge as FlowEdge, Node as FlowNode, Viewport } from '@xyflow/react';
 import * as dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
 import type { EvidenceGraph, GraphNode } from './evidenceGraph.ts';
 import { AtlasEvidenceInspector } from './AtlasEvidenceInspector.tsx';
-import { navigateToAtlasNode, previousAtlasView } from './atlasEvidence.ts';
-import type { AtlasCursor } from './atlasEvidence.ts';
+import { isAtlasViewport, navigateToAtlasNode, previousAtlasView } from './atlasEvidence.ts';
+import { anchorAtlasLayout } from './atlasLayout.ts';
+import type { AtlasCursor, AtlasViewport } from './atlasEvidence.ts';
 import { validateGraph } from './evidenceGraph.ts';
 import {
   atlasFocus, atlasOverview, evidenceStyle, findAtlasNodes, indexAtlas,
@@ -86,16 +87,34 @@ export function layoutAtlas(view: AtlasProjection): { nodes: FlowNode[]; edges: 
   };
 }
 
-/** Split out so useReactFlow stays under the provider. */
-function AtlasCanvas({ projected, selectedId, selectedEdgeId, onNode, onEdge }: {
+type AtlasViewportCommand = {
+  serial: number; action: 'focus' | 'restore' | 'fit';
+  nodeId?: string; viewport?: AtlasViewport | null;
+};
+const motionDuration = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
+
+/** ReactFlow owns the viewport. The parent records exact pre-navigation
+ * viewport snapshots; only explicit navigation/fit actions move the camera.
+ * Graph expansion and evidence selection NEVER automatically fit/recenter. */
+function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command, onViewport, onNode, onEdge }: {
   projected: AtlasProjection;
+  centerId: string;
   selectedId: string;
   selectedEdgeId: string;
+  command: AtlasViewportCommand | null;
+  onViewport: (viewport: AtlasViewport) => void;
   onNode: (id: string) => void;
   onEdge: (id: string) => void;
 }) {
-  const { fitView } = useReactFlow();
-  const layout = useMemo(() => layoutAtlas(projected), [projected]);
+  const { fitView, setViewport, setCenter, getViewport } = useReactFlow();
+  const previousPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const appliedCommand = useRef(0);
+  const layout = useMemo(() => {
+    const computed = layoutAtlas(projected);
+    const nodes = anchorAtlasLayout(computed.nodes, previousPositions.current, centerId);
+    previousPositions.current = new Map(nodes.map(node => [node.id, node.position]));
+    return { nodes, edges: computed.edges };
+  }, [projected, centerId]);
   const visibleNodes = useMemo(() => layout.nodes.map(node => ({
     ...node, selected: node.id === selectedId,
   })), [layout, selectedId]);
@@ -104,24 +123,41 @@ function AtlasCanvas({ projected, selectedId, selectedEdgeId, onNode, onEdge }: 
   })), [layout, selectedEdgeId]);
 
   useEffect(() => {
+    if (!command || command.serial <= appliedCommand.current) return;
     const frame = requestAnimationFrame(() => {
-      void fitView({ padding: 0.2, duration: 260, maxZoom: 1.1 });
+      appliedCommand.current = command.serial;
+      if (command.action === 'restore' && isAtlasViewport(command.viewport)) {
+        void setViewport(command.viewport, { duration: 0 });
+      } else if (command.action === 'fit') {
+        void fitView({ padding: 0.2, duration: motionDuration(), maxZoom: 1.1 });
+      } else if (command.action === 'focus' && command.nodeId) {
+        const node = layout.nodes.find(n => n.id === command.nodeId);
+        if (node) {
+          const zoom = Math.max(0.4, Math.min(1.1, getViewport().zoom));
+          void setCenter(node.position.x + NODE_W / 2, node.position.y + NODE_H / 2,
+            { zoom, duration: motionDuration() });
+        }
+      }
     });
     return () => cancelAnimationFrame(frame);
-  }, [fitView, layout]);
+  }, [command, layout, fitView, getViewport, setViewport, setCenter]);
 
   return <div className="atlas-viewport" aria-label="Interactive saved-source architecture canvas">
     <div className="atlas-canvas-toolbar">
       <span>{projected.mode === 'overview' ? 'Project / file overview' : 'Focused evidence neighborhood'}</span>
-      <button type="button" onClick={() => void fitView({ padding: 0.2, duration: 250, maxZoom: 1.1 })}>Fit visible graph</button>
+      <button type="button" onClick={() => void fitView({
+        padding: 0.2, duration: motionDuration(), maxZoom: 1.1,
+      })}>Fit visible graph</button>
     </div>
     <ReactFlow
       nodes={visibleNodes} edges={visibleEdges}
       onNodeClick={(_event: MouseEvent, node: FlowNode) => onNode(node.id)}
       onEdgeClick={(_event: MouseEvent, edge: FlowEdge) => onEdge(edge.id)}
+      onMoveEnd={(_event, viewport: Viewport) => onViewport(viewport)}
       nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
       panOnDrag zoomOnScroll zoomOnPinch zoomOnDoubleClick={false}
-      elementsSelectable fitView minZoom={0.03} maxZoom={2}
+      elementsSelectable fitView fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
+      minZoom={0.03} maxZoom={2}
       proOptions={{ hideAttribution: false }}
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="#2c4561"/>
