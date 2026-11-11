@@ -5,7 +5,7 @@ import {
   ReactFlowProvider, useReactFlow,
 } from '@xyflow/react';
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
-import dagre from '@dagrejs/dagre';
+import * as dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
 import type { EvidenceGraph, GraphEdge, GraphNode } from './evidenceGraph.ts';
