@@ -1088,7 +1088,21 @@ test('snapshots are bounded, immutable by app contract and evidence-anchored', a
           'entrypoint evidence: ' + (httpResponse.status === 200
             ? 'OK' : await httpResponse.clone().text()));
         const tool = await httpResponse.json();
-        assert.equal(tool.contractVersion, 'snapshot-agent-evidence-tools-v1');
+        assert.equal(tool.contractVersion, 'snapshot-agent-evidence-tools-v2');
+        assert.equal(tool.hostCautionAnalyzerVersion, 'roslyn-host-cautions-v1');
+        assert.ok(Array.isArray(tool.hostCautions),
+          'host-owned cautions are a distinct evidence collection');
+        for (const caution of tool.hostCautions) {
+          assert.equal(caution.status, 'host-syntax-caution');
+          assert.equal(caution.analyzerVersion, tool.hostCautionAnalyzerVersion);
+          assert.ok(caution.anchors.length > 0, 'every caution must be anchored');
+          for (const anchor of caution.anchors) {
+            const saved = await readFile(join(data, 'snapshots', snapshot.id,
+              'files', ...anchor.filePath.split('/')));
+            assert.equal(anchor.fileSha256, sha256(saved),
+              'host caution anchors must match verified saved snapshot bytes');
+          }
+        }
         assert.equal(tool.snapshotId, snapshot.id);
         assert.equal(tool.workspaceId, wid);
         assert.equal(tool.repositoryId, rid);
