@@ -55,6 +55,16 @@ export function layoutAtlas(view: AtlasProjection): { nodes: FlowNode[]; edges: 
         position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
+        // Explicit geometry allows the saved relationship path to render
+        // before ResizeObserver measurement; these handles are display-only.
+        width: NODE_W,
+        height: NODE_H,
+        handles: [
+          { type: 'source' as const, position: Position.Right, x: NODE_W - 1, y: NODE_H / 2,
+            width: 1, height: 1 },
+          { type: 'target' as const, position: Position.Left, x: 0, y: NODE_H / 2,
+            width: 1, height: 1 },
+        ],
         data: { label: clip(node.label, 65) },
         className: 'atlas-node atlas-node--' + nodeStyle(node.kind),
         ariaLabel: node.kind + ': ' + node.label,
@@ -300,6 +310,17 @@ export function ArchitectureAtlas({ selection, onInspect, onMethod }: Props) {
                 line: selectedEdge.line, column: selectedEdge.column })}>Inspect edge source</button>
           </>}
           {!selectedNode && !selectedEdge && <p className="live-help">Click a visible node or edge, or search the full loaded evidence graph. A line shows the direction of a saved relationship, not necessarily runtime flow.</p>}
+          {projection.edges.length > 0 && <div className="atlas-relationships" aria-label="Drawn evidence relationships">
+            <h4>Drawn relationships ({projection.edges.length})</h4>
+            <p className="live-help">These are exact recorded edges, not derived paths. Select one to inspect its evidence even if the diagram is zoomed out.</p>
+            {projection.edges.slice(0, 24).map(edge =>
+              <button type="button" key={edge.id} aria-pressed={selectedEdgeId === edge.id}
+                onClick={() => chooseEdge(edge.id)}>
+                <strong>{edge.kind} · {edge.status}</strong>
+                <small>{index.nodeById.get(edge.fromId)?.label ?? edge.fromId} → {index.nodeById.get(edge.toId)?.label ?? edge.toId}</small>
+              </button>)}
+            {projection.edges.length > 24 && <p className="live-help">Showing the first 24 of {projection.edges.length} drawn relationships. No edges have been synthesized.</p>}
+          </div>}
           <div className="atlas-legend">
             <h4>Evidence status legend</h4>
             {Object.entries(ATLAS_EVIDENCE_STYLES).map(([status, style]) =>
