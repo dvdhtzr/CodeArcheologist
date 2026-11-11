@@ -8,13 +8,13 @@ import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
 import * as dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
-import type { EvidenceGraph, GraphEdge, GraphNode } from './evidenceGraph.ts';
+import type { EvidenceGraph, GraphNode } from './evidenceGraph.ts';
 import { validateGraph } from './evidenceGraph.ts';
 import {
   atlasFocus, atlasOverview, evidenceStyle, findAtlasNodes, indexAtlas,
   ATLAS_EVIDENCE_STYLES, ATLAS_SEARCH_RESULTS,
 } from './atlasModel.ts';
-import type { AtlasIndex, AtlasProjection } from './atlasModel.ts';
+import type { AtlasProjection } from './atlasModel.ts';
 
 type EvidenceLocation = { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null };
 type Props = { selection: ExplorerSelection;
