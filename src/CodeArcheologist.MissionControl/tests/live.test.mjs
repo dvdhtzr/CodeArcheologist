@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { ApiClient, ApiError, normalizeBaseUrl } from '../src/live/api.ts';
+import { ApiClient, ApiError, eligibleContinuation, normalizeBaseUrl } from '../src/live/api.ts';
 import { displayEvent, hasGap, liveStages, mergeEvents, stageState } from '../src/live/ledger.ts';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -134,4 +134,66 @@ test('network code is confined to the live adapter; demo mode stays labelled', (
   assert.ok(app.includes('DEMO MODE') && app.includes('LIVE'));
   assert.ok(read('src/live/realtime.ts').includes("invoke('Subscribe'"));
   assert.ok(!/invoke\('(Start|Cancel|Continue)/.test(read('src/live/realtime.ts')), 'commands never go over SignalR');
+});
+
+test('host-owned continuation eligibility is not guessed from run status', () => {
+  const eligible = { projectionVersion: 'gate-c6b-execution-projection-v1', legacy: false,
+    recovery: { eligible: true, diagnostic: 'eligible-for-explicit-continuation', expectedAttemptNumber: 2 } };
+  assert.equal(eligibleContinuation(eligible), 2);
+  assert.equal(eligibleContinuation({ ...eligible, recovery: { ...eligible.recovery, eligible: false } }), null);
+  assert.equal(eligibleContinuation({ ...eligible, recovery: { ...eligible.recovery, expectedAttemptNumber: null } }), null);
+  assert.equal(eligibleContinuation({ ...eligible, legacy: true }), null);
+  assert.equal(eligibleContinuation({ ...eligible, projectionVersion: 'future-incompatible' }), null);
+  assert.equal(eligibleContinuation(null), null);
+});
+
+test('continuation sends explicit expected attempt and reuses caller-provided idempotency key', async () => {
+  const key = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const { impl, calls } = fakeFetch([
+    { status: 200, body: { accessToken: 'a'.repeat(64) } },
+    { status: 202, body: { diagnostic: 'continuation-admitted', attempt: { number: 3 } } },
+    { status: 200, body: { diagnostic: 'continuation-replayed', attempt: { number: 3 } } },
+  ]);
+  const api = new ApiClient('http://127.0.0.1:5127', impl);
+  await api.pair('code');
+  assert.equal(calls.length, 1, 'no host mutation before a deliberate user action');
+  assert.throws(() => api.continueInvestigation(scope, run, 0, key), /positive/);
+  assert.throws(() => api.continueInvestigation(scope, run, 2, 'not-a-uuid'), /UUID/);
+  const admitted = await api.continueInvestigation(scope, run, 2, key);
+  const replay = await api.continueInvestigation(scope, run, 2, key);
+  assert.equal(admitted.diagnostic, 'continuation-admitted');
+  assert.equal(replay.diagnostic, 'continuation-replayed');
+  assert.equal(calls.length, 3);
+  for (const call of calls.slice(1)) {
+    assert.equal(call.init.headers['Idempotency-Key'], key);
+    assert.equal(call.init.headers.Authorization, 'Bearer ' + 'a'.repeat(64));
+    assert.equal(JSON.parse(call.init.body).expectedAttemptNumber, 2);
+    assert.match(call.url, /\/investigations\/[^/]+\/continue$/);
+  }
+});
+
+test('one real 401 fires session loss once across all consuming pages; explicit expiry also forgets token', async () => {
+  const { impl } = fakeFetch([
+    { status: 200, body: { accessToken: 'f'.repeat(64), expiresAtUtc: '2026-11-11T12:00:00Z' } },
+    { status: 401, body: { error: 'revoked' } },
+  ]);
+  const api = new ApiClient('http://127.0.0.1:5127', impl);
+  await api.pair('code');
+  let calls = 0;
+  api.onSessionLost(() => { calls++; });
+  await assert.rejects(api.manifest(scope), e => e instanceof ApiError && e.status === 401);
+  assert.equal(api.connected, false);
+  assert.equal(calls, 1);
+  api.expireSession();
+  assert.equal(calls, 1, 'no duplicate notification after previous 401');
+
+  const standalone = fakeFetch([{ status: 200, body: { accessToken: 'f'.repeat(64) } }]);
+  const again = new ApiClient('http://127.0.0.1:5127', standalone.impl);
+  await again.pair('code');
+  let expired = 0;
+  const unsubscribe = again.onSessionLost(() => { expired++; });
+  again.expireSession();
+  assert.equal(again.connected, false);
+  assert.equal(expired, 1);
+  unsubscribe();
 });
