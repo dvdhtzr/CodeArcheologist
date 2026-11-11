@@ -27,3 +27,7 @@ Thumbs.db
 workspaces/
 vaults/
 logs/
+
+# Browser acceptance artifacts (traces, screenshots and report)
+**/test-results/
+**/playwright-report/

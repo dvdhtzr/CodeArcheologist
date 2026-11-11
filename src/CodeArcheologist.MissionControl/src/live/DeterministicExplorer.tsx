@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiClient, Scope, SourceView } from './api.ts';
+import { EvidenceGraphExplorer } from './EvidenceGraphExplorer.tsx';
 
 export type ExplorerSelection = { api: ApiClient; scope: Scope } | null;
 type Anchor = { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null };
@@ -21,6 +22,8 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
   const [entries, setEntries] = useState<List<Entry> | null>(null);
   const [methods, setMethods] = useState<List<Method> | null>(null);
   const [selectedMethod, setSelectedMethod] = useState('');
+  const [view, setView] = useState<'inventory' | 'graph'>('inventory');
+  const impactFocus = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [impact, setImpact] = useState<Impact | null>(null);
   const [source, setSource] = useState<SourceView | null>(null);
@@ -72,6 +75,12 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
     return () => { active = false; };
   }, [selection?.api, key, selectedMethod, methods?.fingerprintSha256]);
 
+  useEffect(() => {
+    if (view === 'inventory' && selectedMethod && impact) {
+      impactFocus.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }, [view, selectedMethod, impact]);
+
   const filtered = useMemo(() => (methods?.items ?? [])
     .filter(m => (m.label + ' ' + (m.anchor.filePath ?? '')).toLowerCase().includes(search.toLowerCase()))
     .slice(0, 100), [methods, search]);
@@ -98,13 +107,21 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
       <span className="eyebrow eyebrow--accent">SAVED SOURCE · NOT AI</span>
       <h1>Explore the code you captured.</h1>
       <p className="secondary-intro">Source-written observations and one-hop provisional relationships. This is not a verified runtime architecture or complete call graph.</p>
+      <div className="graph-tabs" role="group" aria-label="Architecture explorer views">
+        <button type="button" aria-pressed={view === 'inventory'} onClick={() => setView('inventory')}>Candidates &amp; direct impact</button>
+        <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>Evidence graph</button>
+      </div>
       {!selection && <div className="secondary-panel">
         <h2>Choose a snapshot</h2>
         <p>Open Agent Observatory → Live API, connect, and select a workspace, repository and saved snapshot. The same selection powers this explorer and your investigations.</p>
       </div>}
       {loading && <p role="status">Loading verified snapshot capabilities…</p>}
       {error && <p className="live-error" role="alert">{error}</p>}
-      {entries && methods && <div className="secondary-panel">
+      {view === 'graph' && <EvidenceGraphExplorer selection={selection}
+        fingerprint={entries?.fingerprintSha256 ?? null}
+        onInspect={anchor => void inspect(anchor)}
+        onMethod={id => { setSelectedMethod(id); setView('inventory'); }} />}
+      {view === 'inventory' && entries && methods && <div className="secondary-panel">
         <div className="deterministic-summary">
           <div><strong>{entries.count}</strong><span>Written HTTP candidates</span></div>
           <div><strong>{methods.count}</strong><span>Parsed C# methods</span></div>
@@ -138,7 +155,7 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
         {filtered.length === 0 && <p>No matching listed methods.</p>}
         {methods.items.length > 100 && <p className="live-help">Showing at most 100 matching methods; narrow the search to find others.</p>}
         {impactLoading && <p role="status">Inspecting direct impact candidates…</p>}
-        {impact && <div className="deterministic-impact">
+        {impact && <div className="deterministic-impact" ref={impactFocus} tabIndex={-1}>
           <h2>Direct impact candidates: {impact.method.label}</h2>
           <p className="live-help">{impact.caveat}</p>
           <button type="button" disabled={!impact.method.anchor.filePath || !impact.method.anchor.fileSha256 || !impact.method.anchor.line} onClick={() => void inspect(impact.method.anchor)}>Inspect selected method source</button>

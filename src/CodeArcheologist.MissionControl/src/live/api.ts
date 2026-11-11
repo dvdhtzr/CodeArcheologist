@@ -9,6 +9,8 @@
  * Responses are host records, not proof of runtime behavior.
  */
 
+import type { EvidenceGraph } from './evidenceGraph.ts';
+
 export type Page<T> = { items: T[]; totalCount: number; hasMore: boolean };
 
 export type Workspace = { id: string; name: string; createdAtUtc: string; version: number };
@@ -125,6 +127,8 @@ export class ApiClient {
   captureSnapshot(workspaceId: string, repositoryId: string) {
     return this.#send<Snapshot>('POST', `/api/v1/workspaces/${id(workspaceId)}/repositories/${id(repositoryId)}/snapshots`, {});
   }
+  /** Existing snapshot-scoped, verified graph API; response status labels are not semantic proof. */
+  evidenceGraph(scope: Scope) { return this.#send<EvidenceGraph>('GET', scopePath(scope) + '/csharp-evidence-graph'); }
   listEntryPoints(scope: Scope) { return this.#send<EntryPointList>('GET', scopePath(scope) + '/entry-points'); }
   listMethods(scope: Scope) { return this.#send<{ contractVersion: string; snapshotId: string; fingerprintSha256: string; count: number; truncated: boolean; items: Array<{ id: string; label: string; detail: string | null; anchor: { filePath: string | null; fileSha256: string | null; line: number | null; column: number | null }; inboundProvisionalCandidates: number }>; caveat: string }>('GET', scopePath(scope) + '/methods'); }
   impact(scope: Scope, methodId: string) {
