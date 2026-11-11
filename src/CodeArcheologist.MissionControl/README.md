@@ -1,6 +1,6 @@
 # Code Archeologist — Mission Control (MC3)
 
-**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. R1 now adds a bounded, searchable and source-drillable graph neighborhood. The repository-wide, interactive architectural canvas remains planned for R2.
+**Status:** Mission Control is the primary developer UI in R1. It uses the live white-label API (REST + SignalR, `docs/api/README.md`) and includes an initial deterministic Architecture Explorer, while keeping the MC1 walkthrough clearly labelled **DEMO MODE**. The original developer explorer remains available as a fallback. R1 now adds a bounded, searchable and source-drillable graph neighborhood. The R2 Architecture Atlas provides a bounded, interactive saved-source C# evidence canvas; full repository-wide semantic understanding remains outside the current graph contract.
 
 ## Live mode (MC3)
 
