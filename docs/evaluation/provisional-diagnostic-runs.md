@@ -194,3 +194,39 @@ Every labelled material issue in run 6 was judged: 13 of 13 problems, no selecti
 - **Reading:** across every labelled problem on the real repositories, Gate C mentioned the real problem about seven times as often as Gate B, a 46-point gap.
 - **Against the draft target:** Gate C's 54% is well **below** the provisional 85% material-issue detection threshold. It found about half of the problems.
 - **Caveats:** one judge; n = 13; one random trial shown for repeated cases; partial blinding; thresholds still provisional.
+
+## E4 (pre-registered): show Gate C the registration site of Minimal API mappings
+
+**Why:** four of Gate C's six misses in the every-problem checklist (R01 M1, R05 M1, R08 M1, R11 M1) concern how a Minimal API endpoint is *registered*. Examples are endpoint-class or Carter module discovery, route-group prefixes and sibling authorization. For a Minimal API mapping, the agents' excerpt was only the `MapX(...)` call, so that context was never visible to them.
+
+**Change (contract `gate-c-evidence-capabilities-v6`, evidence tools `snapshot-agent-evidence-tools-v2`):**
+- Minimal API entry points get a separate, bounded `registrationContext`: the containing type's declaration header plus the nearest containing method, constructor or local function, or the surrounding text for top-level statements.
+- It is extracted by a syntax-only parse of the hash-verified bytes, with no compilation, binding or project evaluation, and capped at 2,400 characters. When the region is larger, the tool keeps the member's opening lines and a window around the mapping, and reports the truncation.
+- It is labelled as untrusted source text and as registration-site context, not a bound handler or verified route (rules 43, 44, 49).
+- Gate B does not receive it. Attribute entry points are unchanged. The investigative questions are unchanged, so no hint words are added.
+
+**Acceptance, measured on the 15 curated repositories against run 6:**
+- zero integrity breaches;
+- Gate C completed at least 14/15;
+- Gate C anchor recall of at least 67%;
+- owner checklist (`--checklist --single gate-c`, every problem): Gate C mentions **at least 9 of 13** problems (run 6: 7/13).
+
+Otherwise E4 is reverted, and the result is recorded either way.
+
+Unlike run 6's checklist, the single-system checklist is **not blinded**, because the owner knows it shows Gate C. Gate B is unchanged, so it is not re-judged.
+
+## Run 7: E4 on the 15 curated repositories
+
+Owner run on Windows, contract v6, Gate C and baseline only (Gate B unchanged). `check.ps1` GREEN in the same session.
+
+| Criterion (pre-registered) | Needed | Result | |
+|---|---|---|---|
+| Integrity breaches | 0 | 0 | pass |
+| Gate C completed | ≥ 14/15 | **15/15** | pass |
+| Gate C anchor recall | ≥ 67% | 67% | pass |
+| Owner checklist, every problem (`--single gate-c`) | ≥ 9/13 | **8/13** | **fail** |
+
+- **Verdict: E4 fails its pre-registered criteria by one problem and is reverted.** The code and contracts return to `gate-c-evidence-capabilities-v5` and `snapshot-agent-evidence-tools-v1`. The single-system checklist tool is kept.
+- **Also observed, not acceptance criteria:** completion improved from 14/15 to 15/15, and review flags fell from 5 to 1.
+- **Reading:** a change from 7/13 to 8/13, with one unblinded judge and n = 13, is within noise. Showing the registration site did not clearly help the 9B local model mention registration problems. The context was present for all four target cases, so the limit is likely in what the model does with it, not in what it sees.
+- **Caveats:** the checklist was not blinded (the owner knew it was Gate C); one random trial was shown for repeated cases; thresholds are still provisional.

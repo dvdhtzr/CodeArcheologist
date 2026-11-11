@@ -241,6 +241,16 @@ internal static class LabSelfTests
                 var expected = withIssues.Sum(c => c.Labels.MaterialIssues.Count);
                 Expect(allText.Contains(withIssues[1].Case.Id) && allText.Contains($"Problems judged: {expected}") && allText.Contains("complete: every problem"),
                     "every-problem mode must judge all problems, including identical reports");
+                // Single-system mode: one report per problem, census, resumable, labelled as not blinded.
+                var singlePath = Path.Combine(temp, "single.json");
+                var single = new StringWriter();
+                LabOwnerTools.SingleChecklist(copy, runs, Comparator.GateC, singlePath, new StringReader("y\n"), single, seed: 5);
+                var singleText = single.ToString();
+                Expect(singleText.Contains("Problems judged: 1 of") && singleText.Contains("run again to continue") &&
+                       singleText.Contains("not blinded") && singleText.Contains("Mentioned: gate-c 1/1"), "single checklist summary wrong");
+                var singleAgain = new StringWriter();
+                LabOwnerTools.SingleChecklist(copy, runs, Comparator.GateC, singlePath, new StringReader(string.Concat(Enumerable.Repeat("n\n", 10))), singleAgain, seed: 5);
+                Expect(singleAgain.ToString().Contains($"Problems judged: {expected} of {expected} (complete"), "single checklist did not resume to completion");
             }
             finally { Directory.Delete(temp, recursive: true); }
         });
