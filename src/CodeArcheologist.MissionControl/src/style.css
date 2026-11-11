@@ -624,3 +624,32 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 .atlas-relationships > button:hover, .atlas-relationships > button[aria-pressed="true"] { border-color: #80d1f8; background: #21405c; }
 .atlas-relationships > button strong { font-size: 10px; }
 .atlas-relationships > button small { font-size: 10px; color: #97aec5; overflow-wrap: anywhere; }
+
+/* R2 PR2: evidence navigation stays in the Atlas without changing source semantics. */
+.atlas-details { max-height: 760px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+.atlas-details h3 { position: sticky; top: -16px; z-index: 2; padding: 15px 0 11px; margin: -15px 0 13px; background: #101e30; border-bottom: 1px solid var(--outline); }
+.atlas-endpoints { display: grid; gap: 8px; margin: 12px 0; }
+.atlas-endpoints button { display: grid; gap: 5px; text-align: left; background: #142942; border: 1px solid #345a78; color: #d9eafc; border-radius: 9px; padding: 11px 12px; min-width: 0; }
+.atlas-endpoints button:hover, .atlas-endpoints button:focus-visible { border-color: #83d9ff; background: #21405c; }
+.atlas-endpoints button span { color: #92cfe8; font-size: 10px; font-weight: 700; }
+.atlas-endpoints button strong { overflow-wrap: anywhere; font-size: 12px; }
+.atlas-endpoints button small { font-size: 10px; color: #9dafc7; }
+.atlas-project-evidence { border: 1px solid var(--outline); background: #0d1d2f; border-radius: 8px; padding: 11px; margin: 12px 0; }
+.atlas-project-evidence summary { cursor: pointer; font-size: 11px; color: #a9def7; font-weight: 700; }
+.atlas-project-group h5 { color: #c3d9ed; font-size: 11px; margin: 15px 0 7px; }
+.atlas-project-group ul { list-style: none; padding: 0; margin: 0; }
+.atlas-project-group li { display: grid; gap: 5px; padding: 10px 0; border-bottom: 1px solid var(--outline); font-size: 10px; }
+.atlas-project-group li strong, .atlas-project-group li code { overflow-wrap: anywhere; }
+.atlas-project-group li span { color: #9aafc7; }
+.atlas-inline-source { margin: 13px 0 18px; border: 1px solid #426a80; background: #081622; border-radius: 10px; padding: 11px; }
+.atlas-source-heading { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.atlas-source-heading h4 { font-size: 12px; color: #d8f3ff; margin: 0; }
+.atlas-source-heading button { border: 1px solid #375e76; background: #18324a; color: #c6e8fa; border-radius: 6px; padding: 6px 8px; font-size: 10px; }
+.atlas-source-lines { max-height: 330px; overflow: auto; border: 1px solid #243f50; border-radius: 7px; background: #06121e; }
+.atlas-source-line { display: grid; grid-template-columns: 36px max-content; min-width: max-content; align-items: start; font-size: 11px; line-height: 1.55; }
+.atlas-source-line > span { font-variant-numeric: tabular-nums; position: sticky; left: 0; text-align: right; color: #6c839c; padding: 4px 8px 4px 0; background: #101d2e; border-right: 1px solid #25435e; }
+.atlas-source-line code { white-space: pre; padding: 4px 8px; color: #c8e8f6; }
+.atlas-source-line.is-focus { background: #21405a; }
+.atlas-source-line.is-focus > span { background: #21405a; color: #f3da94; font-weight: 750; }
+.atlas-source-status { color: #a3dff6; font-size: 11px; }
+.atlas-details button:focus-visible { outline: 2px solid #8edcff; outline-offset: 2px; }
