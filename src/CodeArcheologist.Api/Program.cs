@@ -346,6 +346,98 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
     };
 }).RequireAuthorization();
 
+// R3 PR1: a structured developer question over an existing saved HTTP
+// candidate. The host verifies the exact snapshot and derives the subject kind;
+// no arbitrary question prompt, path or additional model capability is accepted.
+// The unchanged C6b worker runs the existing fixed Gate C workflow.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/questions",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     InvestigationQuestionCreateRequest request, HttpContext context,
+     WorkspaceStore store, SnapshotEvidenceTools tools,
+     InvestigationAdmissionService admissions) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var key) || key == Guid.Empty)
+        return Results.BadRequest(new { error = "A nonempty UUID Idempotency-Key is required." });
+    if (request.QuestionKind != InvestigationQuestionContract.ExplainHttpEntryPoint ||
+        string.IsNullOrWhiteSpace(request.SubjectNodeId) ||
+        request.SubjectNodeId.Length > 1024 ||
+        request.SubjectNodeId.Any(char.IsControl))
+        return Results.BadRequest(new { error = "Unsupported question or invalid subject node ID." });
+
+    AgentEvidencePackage evidence;
+    try
+    {
+        evidence = tools.ReadEntryPoint(snapshot, request.SubjectNodeId, context.RequestAborted);
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = "Question subject evidence unavailable or invalid." },
+            statusCode: error.StatusCode);
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(408);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved snapshot evidence is unavailable." });
+    }
+    if (!InvestigationQuestionContract.Supports(request.QuestionKind, evidence.EntryPointKind))
+        return Results.BadRequest(new { error = "Unsupported saved question subject kind." });
+
+    var scope = new GateCScope(workspaceId, repositoryId, snapshotId,
+        snapshot.FingerprintSha256, evidence.EntryPointId, SnapshotEvidenceTools.Version);
+    var admission = admissions.Admit(scope, key, evidence.EntryPointKind);
+    if (admission.Outcome is InvestigationAdmissionOutcome.Admitted or
+        InvestigationAdmissionOutcome.Replayed)
+    {
+        // The context was committed atomically with the admitted run, even
+        // when the worker has already advanced the execution state.
+        var saved = store.GetQuestionContext(workspaceId, repositoryId, snapshotId,
+            admission.Record!.RunId);
+        if (saved is null)
+            return Results.Conflict(new { error = "Question context is unavailable." });
+        var location =
+            $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{admission.Record.RunId:D}";
+        return admission.Outcome == InvestigationAdmissionOutcome.Admitted
+            ? Results.Accepted(location, new { investigation = admission.Record, questionContext = saved })
+            : Results.Ok(new { investigation = admission.Record, questionContext = saved });
+    }
+    return admission.Outcome switch
+    {
+        InvestigationAdmissionOutcome.Conflict =>
+            Results.Conflict(new { error = "Idempotency-Key already belongs to another request." }),
+        InvestigationAdmissionOutcome.Busy =>
+            Results.Conflict(new { error = "A local investigation is already running." }),
+        _ => Results.Json(new { error = "Investigation execution is unavailable in this process." },
+            statusCode: StatusCodes.Status503ServiceUnavailable)
+    };
+}).RequireAuthorization();
+
+// Context is an independently verified immutable run record. Existing Gate C
+// runs have no R3 question context and are never retrospectively relabelled.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/question-context",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     WorkspaceStore store) =>
+{
+    if (store.GetInvestigation(workspaceId, repositoryId, snapshotId, runId) is null)
+        return Results.NotFound();
+    try
+    {
+        var saved = store.GetQuestionContext(workspaceId, repositoryId, snapshotId, runId);
+        return saved is null
+            ? Results.Ok(new { status = "legacy-no-question-context", context = (InvestigationQuestionContext?)null })
+            : Results.Ok(new { status = "verified", context = saved });
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.Conflict(new { error = "Saved question context failed verification." });
+    }
+}).RequireAuthorization();
+
 // Workspace metadata only. No file paths, repository content or model output
 // are accepted by these endpoints. All routes require a paired browser session.
 app.MapGet("/api/v1/workspaces", (WorkspaceStore store) =>
