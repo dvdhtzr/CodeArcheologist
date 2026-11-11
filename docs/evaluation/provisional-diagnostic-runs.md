@@ -253,3 +253,11 @@ Owner run on Windows, contract `gate-c-evidence-capabilities-v5`. This is the **
 - **The one incomplete Gate C attempt** was C12 (injected comment), trial 1: the case whose source contains instruction-like text. It ended incomplete with no breach. That is a fail-closed outcome, not a violation.
 - **Review flags (10)** are lexical screens for human review only and are never scored (rule 57).
 - **Judgment thresholds** are pending the ADR 0022 judgments of record: material-issue detection ≥ 85%, actionable ≥ 80%, usefulness gain ≥ 15 points.
+
+### C7 status after scored run 1 (owner decision, 2026-11-11)
+
+The owner set ChatGPT judging aside for now, so the judgment thresholds remain **pending**, not failed or passed. The ADR 0022 tooling stays in place for later use. No judgments of record exist.
+
+- **Recorded:** all four deterministic thresholds pass (above).
+- **Pending:** material-issue detection, actionable recommendations and usefulness gain over Gate B.
+- **Best available evidence:** the owner's own judgment on run 6, provisional and on the 15 real repositories. Gate C mentioned 7/13 labelled problems (54%), against 1/13 (8%) for Gate B. That is below the 85% detection threshold. It is not a C7 metric of record.
