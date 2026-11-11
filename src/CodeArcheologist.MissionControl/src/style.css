@@ -306,3 +306,24 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+
+/* MC3 live console */
+.online-dot { width: 8px; height: 8px; border-radius: 50%; background: #7ee0b4; box-shadow: 0 0 12px rgba(126,224,180,.35); }
+.live-label { border: 1px solid rgba(126,224,180,.35); color: #9be8c4; font-size: 9px; letter-spacing: .12em; padding: 6px 9px; border-radius: 5px; font-weight: 750; }
+.live-form { display: grid; gap: 10px; margin: 16px 20px 18px; }
+.live-form label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+.live-form input, .live-form select {
+  width: 100%; min-width: 0; box-sizing: border-box; background: rgba(9,16,27,.93); color: var(--bright);
+  border: 1px solid var(--outline); border-radius: 7px; padding: 9px 10px; font: inherit; font-size: 12px;
+}
+.live-form input:focus-visible, .live-form select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.live-inline { display: flex; gap: 8px; }
+.live-inline input { flex: 1; }
+.live-help { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+.live-error { color: #ffb4a8; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
+.live-run { border: 1px solid var(--outline); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.live-run p { margin: 0; color: #c0d6e9; }
+.host-status { display: block; color: var(--muted); font-size: 9px; letter-spacing: .06em; margin-top: 2px; }
+.agent-node[data-state="halted"] .state-dot { background: #ff9f8f; }
+.agent-node[data-state="halted"] .agent-aura { opacity: .15; }
+.status-chip--halted { color: #ffb4a8; }

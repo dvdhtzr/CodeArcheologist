@@ -5,11 +5,30 @@ import {
   AGENTS, ROLES, SCENE_CAPTIONS, nextScene, sceneIndex, stageFor, visibleEvents,
 } from './demo';
 import type { DemoScene, InspectorTab, RoleId, StageState } from './demo';
+import { LiveConsole } from './live/LiveConsole.tsx';
+import type { LiveView } from './live/LiveConsole.tsx';
+import { displayEvent, liveStages } from './live/ledger.ts';
+import type { DisplayEvent, LiveStage } from './live/ledger.ts';
 
 type Page = 'observatory' | 'activity' | 'design';
+type Mode = 'live' | 'demo';
 const stateNames: Record<StageState, string> = {
-  queued: 'Standing by', active: 'Working', accepted: 'Accepted',
+  queued: 'Standing by', active: 'Working', accepted: 'Accepted', halted: 'Stopped',
 };
+
+/** Demo fixtures in the same display shape as live ledger events. */
+function demoDisplay(scene: DemoScene): DisplayEvent[] {
+  return visibleEvents(scene).map((event, index) => ({
+    id: event.id, actor: event.actor, label: event.label, detail: event.detail, type: event.type,
+    step: 'D' + String(index + 1).padStart(2, '0'),
+  }));
+}
+
+function demoStages(scene: DemoScene): Record<RoleId, LiveStage> {
+  const result = {} as Record<RoleId, LiveStage>;
+  for (const role of ROLES) result[role] = { state: stageFor(scene, role), hostStatus: 'demo' };
+  return result;
+}
 const accents: Record<RoleId, string> = {
   investigator: '#62d8ff', skeptic: '#ffc17e', reviewer: '#cbb2ff',
 };
@@ -34,8 +53,8 @@ function Symbol({ name, size = 18 }: { name: 'orb' | 'layers' | 'pulse' | 'book'
   );
 }
 
-function AgentNode({ role, state, selected, onClick }: {
-  role: RoleId; state: StageState; selected: boolean; onClick: () => void;
+function AgentNode({ role, state, hostStatus, selected, onClick }: {
+  role: RoleId; state: StageState; hostStatus: string; selected: boolean; onClick: () => void;
 }) {
   const agent = AGENTS[role];
   return (
@@ -43,7 +62,7 @@ function AgentNode({ role, state, selected, onClick }: {
       className={`agent-node agent-node--${role}${selected ? ' agent-node--selected' : ''}`}
       data-state={state} style={{ '--agent-accent': accents[role] } as CSSProperties}
       aria-pressed={selected} onClick={onClick}
-      aria-label={`${agent.name}; ${stateNames[state]}. Show agent details.`}>
+      aria-label={`${agent.name}; ${stateNames[state]}${hostStatus === 'demo' ? '' : ` (host status ${hostStatus})`}. Show agent details.`}>
       <span className="agent-avatar-wrap">
         <span className="agent-aura" aria-hidden="true" />
         <AgentAvatar role={role} />
@@ -51,15 +70,15 @@ function AgentNode({ role, state, selected, onClick }: {
       </span>
       <span className="agent-name">{agent.name}</span>
       <span className="agent-specialty">{agent.title}</span>
-      <span className="agent-state"><span className="state-dot" aria-hidden="true"/>{stateNames[state]}</span>
+      <span className="agent-state"><span className="state-dot" aria-hidden="true"/>{stateNames[state]}{hostStatus !== 'demo' && <small className="host-status">{hostStatus}</small>}</span>
     </button>
   );
 }
 
-function CommunicationLines({ scene }: { scene: DemoScene }) {
-  const investigator = stageFor(scene, 'investigator');
-  const skeptic = stageFor(scene, 'skeptic');
-  const reviewer = stageFor(scene, 'reviewer');
+function CommunicationLines({ stages }: { stages: Record<RoleId, LiveStage> }) {
+  const investigator = stages.investigator.state;
+  const skeptic = stages.skeptic.state;
+  const reviewer = stages.reviewer.state;
   function lineState(state: StageState) {
     return state === 'active' ? 'is-flowing' : state === 'accepted' ? 'is-accepted' : '';
   }
@@ -91,10 +110,11 @@ function CommunicationLines({ scene }: { scene: DemoScene }) {
   );
 }
 
-function EventLog({ scene, onAgent }: { scene: DemoScene; onAgent: (role: RoleId) => void }) {
+function EventLog({ events, onAgent }: { events: DisplayEvent[]; onAgent: (role: RoleId) => void }) {
+  if (events.length === 0) return <p className="live-help">No events recorded yet.</p>;
   return (
     <ol className="event-list">
-      {[...visibleEvents(scene)].reverse().map((event, index) => (
+      {[...events].reverse().map(event => (
         <li className="event-item" key={event.id}>
           <span className={'event-marker event-marker--' + event.actor} aria-hidden="true" />
           <div className="event-body">
@@ -104,7 +124,7 @@ function EventLog({ scene, onAgent }: { scene: DemoScene; onAgent: (role: RoleId
                 : <button type="button" className="inline-link" onClick={() => onAgent(event.actor as RoleId)}>
                     {event.label}
                   </button>}
-              <span className="event-step">D{String(visibleEvents(scene).length - index).padStart(2, '0')}</span>
+              <span className="event-step">{event.step}</span>
             </div>
             <p>{event.detail}</p>
             <span className="event-type">{event.type}</span>
@@ -115,12 +135,13 @@ function EventLog({ scene, onAgent }: { scene: DemoScene; onAgent: (role: RoleId
   );
 }
 
-function AgentInspector({ scene, selected, tab, onTab }: {
-  scene: DemoScene; selected: RoleId; tab: InspectorTab; onTab: (tab: InspectorTab) => void;
+function AgentInspector({ stages, events, live, selected, tab, onTab }: {
+  stages: Record<RoleId, LiveStage>; events: DisplayEvent[]; live: boolean;
+  selected: RoleId; tab: InspectorTab; onTab: (tab: InspectorTab) => void;
 }) {
   const profile = AGENTS[selected];
-  const state = stageFor(scene, selected);
-  const agentEvents = visibleEvents(scene).filter(e => e.actor === selected);
+  const state = stages[selected].state;
+  const agentEvents = events.filter(e => e.actor === selected);
   return (
     <section className="inspector" aria-labelledby="inspector-title"
       style={{ '--agent-accent': accents[selected] } as CSSProperties}>
@@ -153,13 +174,16 @@ function AgentInspector({ scene, selected, tab, onTab }: {
         </div>
       ) : (
         <div className="inspector-copy">
-          <span className="detail-label">DEMONSTRATION ACTIVITY</span>
+          <span className="detail-label">{live ? 'RECORDED HOST EVENTS' : 'DEMONSTRATION ACTIVITY'}</span>
+          {live && <p>Host status: <strong>{stages[selected].hostStatus}</strong></p>}
           {agentEvents.length === 0
-            ? <p>No stage events yet in this visual walkthrough.</p>
+            ? <p>{live ? 'No events recorded for this role yet.' : 'No stage events yet in this visual walkthrough.'}</p>
             : <ul className="agent-activity">{agentEvents.map(event => (
                 <li key={event.id}><strong>{event.label}</strong><span>{event.type}</span></li>
               ))}</ul>}
-          <div className="integrity-note"><Symbol name="shield" size={18}/><span>These are visual fixtures, not actual model calls or persisted host events.</span></div>
+          <div className="integrity-note"><Symbol name="shield" size={18}/><span>{live
+            ? 'Committed host events. An accepted assessment passed the host\u2019s contract checks; it is not proof that its claims are true.'
+            : 'These are visual fixtures, not actual model calls or persisted host events.'}</span></div>
         </div>
       )}
       <div className="inspector-footer"><span className="tiny-led"/> COMPONENT / AGENT CARD V1</div>
@@ -173,6 +197,9 @@ export function App() {
   const [selected, setSelected] = useState<RoleId>('investigator');
   const [tab, setTab] = useState<InspectorTab>('profile');
   const [playing, setPlaying] = useState(false);
+  const [mode, setMode] = useState<Mode>('live');
+  const [connected, setConnected] = useState(false);
+  const [liveView, setLiveView] = useState<LiveView | null>(null);
 
   useEffect(() => {
     if (!playing) return;
@@ -196,8 +223,13 @@ export function App() {
     setScene(current => nextScene(current));
   }
 
-  const stages = sceneIndex(scene);
-  const acceptedCount = ROLES.filter(role => stageFor(scene, role) === 'accepted').length;
+  const walkthroughStep = sceneIndex(scene);
+  // Live only when a run feed is shown; otherwise the clearly labelled demo.
+  const showingLive = mode === 'live' && liveView !== null;
+  const stages = showingLive ? liveStages(liveView.snapshot.execution) : demoStages(scene);
+  const events = showingLive ? liveView.snapshot.events.map(displayEvent) : demoDisplay(scene);
+  const acceptedCount = ROLES.filter(role => stages[role].state === 'accepted').length;
+  const liveEventCount = showingLive ? liveView.snapshot.events.length : 0;
 
   return (
     <div className="mc-shell">
@@ -229,7 +261,7 @@ export function App() {
                 onClick={() => { chooseAgent(role); setPage('observatory'); }}>
                 <span className={'crew-indicator crew-indicator--' + role} />
                 <span>{AGENTS[role].name.replace('The ', '')}</span>
-                <span className="crew-state">{stateForShort(stageFor(scene, role))}</span>
+                <span className="crew-state">{stateForShort(stages[role].state)}</span>
               </button>
             ))}
           </div>
@@ -237,16 +269,18 @@ export function App() {
         <div className="sidebar-bottom">
           <div className="workspace-card">
             <span className="workspace-card-icon"><Symbol name="layers" size={19}/></span>
-            <div><strong>Sample workspace</strong><small>Visual walkthrough only</small></div>
+            <div><strong>{showingLive ? 'Live run' : 'Sample workspace'}</strong><small>{showingLive ? liveView.entryPoint : 'Visual walkthrough only'}</small></div>
           </div>
-          <span className="sidebar-version">MC1 PREVIEW · CLIENT ONLY</span>
+          <span className="sidebar-version">MC3 · {showingLive ? 'LIVE API DATA' : 'DEMO DATA'}</span>
         </div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <div className="breadcrumb"><span>CODE ARCHEOLOGIST</span><Symbol name="chevron" size={14}/><strong>{page === 'observatory' ? 'Agent Observatory' : page === 'activity' ? 'Activity Timeline' : 'Design Principles'}</strong></div>
-          <div className="topbar-status"><span className="offline-dot" /> API not connected <span className="topbar-separator"/> <span className="preview-label">DEMO MODE</span></div>
+          <div className="topbar-status">{connected
+            ? <><span className="online-dot" /> API connected <span className="topbar-separator"/> <span className={showingLive ? 'live-label' : 'preview-label'}>{showingLive ? 'LIVE' : mode === 'demo' ? 'DEMO MODE' : 'NO RUN SELECTED'}</span></>
+            : <><span className="offline-dot" /> API not connected <span className="topbar-separator"/> <span className="preview-label">{mode === 'demo' ? 'DEMO MODE' : 'NOT LIVE'}</span></>}</div>
         </header>
 
         <div className="page-content">
@@ -262,53 +296,61 @@ export function App() {
 
               <div className="stat-row" aria-label="Demo status">
                 <div className="stat-card"><span className="stat-label">CREW MEMBERS</span><strong>03 <small>agents</small></strong><span className="stat-foot">Distinct, evidence-bounded roles</span></div>
-                <div className="stat-card"><span className="stat-label">ACCEPTED STAGES</span><strong>{String(acceptedCount).padStart(2, '0')} <small>/ 03</small></strong><span className="stat-foot">Demonstration state only</span></div>
-                <div className="stat-card"><span className="stat-label">LIVE API EVENTS</span><strong>00 <small>events</small></strong><span className="stat-foot">Integration is scheduled for MC3</span></div>
+                <div className="stat-card"><span className="stat-label">ACCEPTED STAGES</span><strong>{String(acceptedCount).padStart(2, '0')} <small>/ 03</small></strong><span className="stat-foot">{showingLive ? 'From the host execution projection' : 'Demonstration state only'}</span></div>
+                <div className="stat-card"><span className="stat-label">LIVE API EVENTS</span><strong>{String(liveEventCount).padStart(2, '0')} <small>events</small></strong><span className="stat-foot">{showingLive ? `Committed ledger events · feed ${liveView.snapshot.connection}` : 'No live run shown'}</span></div>
               </div>
 
               <div className="mission-grid">
                 <section className="observatory-card" aria-labelledby="observatory-heading">
                   <div className="panel-heading observatory-heading">
                     <div><span className="eyebrow">COLLABORATION MAP</span><h2 id="observatory-heading">Agent Observatory</h2></div>
-                    <span className="demo-pill"><span className="mini-orbit"/> ILLUSTRATIVE FLOW</span>
+                    <span className="demo-pill"><span className="mini-orbit"/> {showingLive ? 'LIVE HOST STATES' : 'ILLUSTRATIVE FLOW'}</span>
                   </div>
                   <div className="observatory-explainer"><Symbol name="shield" size={15}/><span>Independent Investigator and Skeptic paths converge only at the Reviewer.</span></div>
                   <div className="observatory-stage" aria-label="Click an agent to inspect its simulated stage">
                     <div className="stage-grain" aria-hidden="true" />
-                    <CommunicationLines scene={scene} />
+                    <CommunicationLines stages={stages} />
                     <div className="evidence-node">
                       <span className="evidence-glyph"><Symbol name="layers" size={22}/></span>
-                      <div><strong>VERIFIED SCOPE</strong><small>Illustrative evidence source</small></div>
+                      <div><strong>VERIFIED SCOPE</strong><small>{showingLive ? 'Saved, hash-verified snapshot' : 'Illustrative evidence source'}</small></div>
                     </div>
                     {ROLES.map(role => (
-                      <AgentNode role={role} key={role} state={stageFor(scene, role)}
+                      <AgentNode role={role} key={role} state={stages[role].state} hostStatus={stages[role].hostStatus}
                         selected={selected === role} onClick={() => chooseAgent(role)} />
                     ))}
-                    <span className="graph-watermark">HOST-OBSERVED STATES • DEMO REPRESENTATION</span>
+                    <span className="graph-watermark">{showingLive ? 'HOST-OBSERVED STATES • LIVE API' : 'HOST-OBSERVED STATES • DEMO REPRESENTATION'}</span>
                   </div>
                   <div className="observatory-bottom">
                     <div className="legend"><span><i className="legend-line cyan" /> Evidence access</span><span><i className="legend-line amber" /> Independent access</span><span><i className="legend-line violet" /> Reconciliation</span></div>
                   </div>
                 </section>
 
-                <AgentInspector scene={scene} selected={selected} tab={tab} onTab={setTab}/>
+                <AgentInspector stages={stages} events={events} live={showingLive} selected={selected} tab={tab} onTab={setTab}/>
               </div>
 
               <div className="lower-grid">
                 <section className="activity-card" aria-labelledby="recent-heading">
-                  <div className="panel-heading"><div><span className="eyebrow">EVENT JOURNAL / PREVIEW</span><h3 id="recent-heading">Activity signal</h3></div>
+                  <div className="panel-heading"><div><span className="eyebrow">{showingLive ? 'EVENT JOURNAL / LIVE LEDGER' : 'EVENT JOURNAL / PREVIEW'}</span><h3 id="recent-heading">Activity signal</h3></div>
                     <button className="text-button" type="button" onClick={() => setPage('activity')}>View all <Symbol name="arrow" size={15}/></button>
                   </div>
-                  <div className="activity-scroll"><EventLog scene={scene} onAgent={chooseAgent}/></div>
+                  <div className="activity-scroll"><EventLog events={events} onAgent={chooseAgent}/></div>
                 </section>
                 <section className="control-card" aria-labelledby="walkthrough-heading">
-                  <div className="panel-heading"><div><span className="eyebrow">VISUAL WALKTHROUGH</span><h3 id="walkthrough-heading">Explore the sequence</h3></div>
-                    <span className="demo-pill small">NOT LIVE</span>
+                  <div className="panel-heading"><div><span className="eyebrow">{mode === 'live' ? 'LIVE API' : 'VISUAL WALKTHROUGH'}</span><h3 id="walkthrough-heading">{mode === 'live' ? 'Run an investigation' : 'Explore the sequence'}</h3></div>
+                    <span className="demo-pill small">{showingLive ? 'LIVE' : 'NOT LIVE'}</span>
                   </div>
-                  <div className="step-header"><span>PREVIEW PHASE</span><strong>{String(stages).padStart(2, '0')} / 04</strong></div>
+                  <div className="segmented" role="group" aria-label="Data source">
+                    <button type="button" className={mode === 'live' ? 'is-selected' : ''} aria-pressed={mode === 'live'}
+                      onClick={() => { setMode('live'); setPlaying(false); }}>Live API</button>
+                    <button type="button" className={mode === 'demo' ? 'is-selected' : ''} aria-pressed={mode === 'demo'}
+                      onClick={() => setMode('demo')}>Demo walkthrough</button>
+                  </div>
+                  <div hidden={mode !== 'live'}><LiveConsole onView={setLiveView} onConnected={setConnected} /></div>
+                  {mode === 'demo' && <>
+                  <div className="step-header"><span>PREVIEW PHASE</span><strong>{String(walkthroughStep).padStart(2, '0')} / 04</strong></div>
                   <div className="progress-track" role="progressbar" aria-label="Visual walkthrough step"
-                    aria-valuemin={0} aria-valuemax={4} aria-valuenow={stages}>
-                    <span style={{ width: `${stages * 25}%` }} />
+                    aria-valuemin={0} aria-valuemax={4} aria-valuenow={walkthroughStep}>
+                    <span style={{ width: `${walkthroughStep * 25}%` }} />
                   </div>
                   <p className="scene-caption" aria-live="polite">{SCENE_CAPTIONS[scene]}</p>
                   <div className="control-actions">
@@ -324,6 +366,7 @@ export function App() {
                     </button>
                   </div>
                   <div className="control-disclaimer"><Symbol name="shield" size={17}/><span>This playback is an explicitly synthetic design preview. It does not execute models, open repositories or connect to the backend.</span></div>
+                  </>}
                 </section>
               </div>
             </>
@@ -333,10 +376,12 @@ export function App() {
             <section className="secondary-page">
               <span className="eyebrow eyebrow--accent">PREVIEW EVENT JOURNAL</span>
               <h1>Every signal, in context.</h1>
-              <p className="secondary-intro">This is a demonstration of the activity timeline. MC3 will subscribe to committed, versioned SignalR events and recover from REST on reconnect.</p>
+              <p className="secondary-intro">{showingLive
+                ? 'Committed host ledger events for the selected run, pushed over SignalR and re-read from REST on reconnect, so nothing is missed or shown twice.'
+                : 'This is a demonstration of the activity timeline. Connect to the API under Live API to see committed ledger events.'}</p>
               <div className="secondary-panel">
-                <div className="panel-heading"><h2>Illustrative sequence</h2><span className="demo-pill">NO BACKEND EVENTS</span></div>
-                <EventLog scene={scene} onAgent={role => { chooseAgent(role); setPage('observatory'); }}/>
+                <div className="panel-heading"><h2>{showingLive ? 'Live ledger' : 'Illustrative sequence'}</h2><span className="demo-pill">{showingLive ? 'LIVE' : 'NO BACKEND EVENTS'}</span></div>
+                <EventLog events={events} onAgent={role => { chooseAgent(role); setPage('observatory'); }}/>
                 <button className="secondary-action" type="button" onClick={() => setPage('observatory')}>Back to Observatory <Symbol name="arrow" size={16}/></button>
               </div>
             </section>
@@ -356,7 +401,7 @@ export function App() {
               <button className="secondary-action" type="button" onClick={() => setPage('observatory')}>Return to Observatory <Symbol name="arrow" size={16}/></button>
             </section>
           )}
-          <footer className="main-footer"><span>CODE ARCHEOLOGIST / MISSION CONTROL</span><span>MC1 FOUNDATION · API DISCONNECTED · SAMPLE DATA ONLY</span></footer>
+          <footer className="main-footer"><span>CODE ARCHEOLOGIST / MISSION CONTROL</span><span>{showingLive ? 'MC3 · LIVE API · HOST RECORDS, NOT PROOF' : connected ? 'MC3 · API CONNECTED · DEMO OR NO RUN SELECTED' : 'MC3 · API DISCONNECTED · SAMPLE DATA ONLY'}</span></footer>
         </div>
       </main>
     </div>

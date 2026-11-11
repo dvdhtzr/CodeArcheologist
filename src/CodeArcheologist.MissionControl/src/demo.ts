@@ -4,7 +4,7 @@
  * MC3 will add a separate typed adapter for real API contracts.
  */
 export type RoleId = 'investigator' | 'skeptic' | 'reviewer';
-export type StageState = 'queued' | 'active' | 'accepted';
+export type StageState = 'queued' | 'active' | 'accepted' | 'halted';
 export type DemoScene = 'ready' | 'investigating' | 'challenging' | 'reviewing' | 'complete';
 export type InspectorTab = 'profile' | 'activity';
 
