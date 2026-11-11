@@ -65,6 +65,45 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(select(page, 'Snapshot')).not.toHaveValue('');
   });
 
+  await test.step('R2 PR1: Architecture Atlas renders saved nodes, search, focus and provenance', async () => {
+    await page.getByRole('button', { name: 'Architecture Explorer' }).click();
+    await expect(page.getByRole('button', { name: 'Architecture Atlas', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Load Architecture Atlas' }).click();
+    await expect(page.locator('.atlas-metrics')).toContainText('saved nodes');
+    await expect(page.locator('.atlas-provenance')).toContainText('csharp-snapshot-evidence-graph-v8');
+    await expect(page.locator('.atlas-viewport .react-flow')).toBeVisible();
+    await expect(page.locator('.atlas-viewport .react-flow__node').first()).toBeVisible();
+    await expect(page.locator('.atlas-legend')).toContainText('Provisional local');
+    await expect(page.locator('.atlas-legend')).toContainText('Candidate only');
+
+    // Find a declaration that is not in the project/file-only overview.
+    await page.getByPlaceholder('Name, file, or declaration').fill('Helper');
+    const declaration = page.locator('.atlas-search-results button')
+      .filter({ hasText: 'syntax-declaration' }).first();
+    await expect(declaration).toBeVisible();
+    await declaration.click();
+    await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Focused evidence neighborhood');
+    await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
+    // SVG <g> wrappers can fail Playwright's element-visibility check even
+    // when a valid edge path exists. Assert the actual rendered path data,
+    // the nonzero host-projected relationship count, and accessible selection.
+    const paths = page.locator('.atlas-viewport .react-flow__edge-path');
+    await expect(paths.first()).toHaveAttribute('d', /[MLCQ]/);
+    await expect(page.locator('.atlas-relationships > button').first()).toBeVisible();
+    await expect(page.locator('.atlas-metrics')).toContainText('visible / eligible');
+
+    const other = page.locator('.atlas-viewport .react-flow__node:not(.selected)').first();
+    await expect(other).toBeVisible();
+    await other.click();
+    await expect(page.getByRole('button', { name: "Expand this node's recorded neighbors" })).toBeEnabled();
+    await page.getByRole('button', { name: "Expand this node's recorded neighbors" }).click();
+    await expect(page.locator('.atlas-scope-note').last()).toContainText('Expansion seeds: 2 of 13');
+    await page.getByRole('button', { name: 'Project / file overview' }).click();
+    await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Project / file overview');
+    await page.getByRole('button', { name: 'Agent Observatory' }).click();
+  });
+
   await test.step('Load and filter the graph without Ollama', async () => {
     await page.getByRole('button', { name: 'Architecture Explorer' }).click();
     await expect(page.getByRole('heading', { name: 'Explore the code you captured.' })).toBeVisible();
@@ -133,6 +172,9 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
 
     await page.getByRole('button', { name: 'Architecture Explorer' }).click();
     await expect(page.getByRole('heading', { name: 'Verified saved source' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Architecture Atlas', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Load Architecture Atlas' })).toBeVisible();
+    await expect(page.locator('.atlas-viewport')).toHaveCount(0);
     await page.getByRole('button', { name: 'Evidence graph', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Load saved evidence graph' })).toBeVisible();
     await expect(page.locator('.graph-focus')).toHaveCount(0);

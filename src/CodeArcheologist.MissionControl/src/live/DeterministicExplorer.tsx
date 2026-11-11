@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiClient, Scope, SourceView } from './api.ts';
 import { EvidenceGraphExplorer } from './EvidenceGraphExplorer.tsx';
+import { ArchitectureAtlas } from './ArchitectureAtlas.tsx';
 import { SnapshotCoverage } from './SnapshotCoverage.tsx';
 
 export type ExplorerSelection = { api: ApiClient; scope: Scope } | null;
@@ -23,7 +24,7 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
   const [entries, setEntries] = useState<List<Entry> | null>(null);
   const [methods, setMethods] = useState<List<Method> | null>(null);
   const [selectedMethod, setSelectedMethod] = useState('');
-  const [view, setView] = useState<'inventory' | 'graph' | 'coverage'>('inventory');
+  const [view, setView] = useState<'atlas' | 'inventory' | 'graph' | 'coverage'>('atlas');
   const impactFocus = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [impact, setImpact] = useState<Impact | null>(null);
@@ -109,6 +110,7 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
       <h1>Explore the code you captured.</h1>
       <p className="secondary-intro">Source-written observations and one-hop provisional relationships. This is not a verified runtime architecture or complete call graph.</p>
       <div className="graph-tabs" role="group" aria-label="Architecture explorer views">
+        <button type="button" aria-pressed={view === 'atlas'} onClick={() => setView('atlas')}>Architecture Atlas</button>
         <button type="button" aria-pressed={view === 'inventory'} onClick={() => setView('inventory')}>Candidates &amp; direct impact</button>
         <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>Evidence graph</button>
         <button type="button" aria-pressed={view === 'coverage'} onClick={() => setView('coverage')}>Snapshot coverage</button>
@@ -117,8 +119,11 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
         <h2>Choose a snapshot</h2>
         <p>Open Agent Observatory → Live API, connect, and select a workspace, repository and saved snapshot. The same selection powers this explorer and your investigations.</p>
       </div>}
-      {view !== 'coverage' && loading && <p role="status">Loading verified snapshot capabilities…</p>}
-      {view !== 'coverage' && error && <p className="live-error" role="alert">{error}</p>}
+      {view !== 'coverage' && view !== 'atlas' && loading && <p role="status">Loading verified snapshot capabilities…</p>}
+      {view !== 'coverage' && view !== 'atlas' && error && <p className="live-error" role="alert">{error}</p>}
+      {view === 'atlas' && <ArchitectureAtlas selection={selection}
+        onInspect={anchor => void inspect(anchor)}
+        onMethod={id => { setSelectedMethod(id); setView('inventory'); }} />}
       {view === 'coverage' && <SnapshotCoverage selection={selection} />}
       {view === 'graph' && <EvidenceGraphExplorer selection={selection}
         fingerprint={entries?.fingerprintSha256 ?? null}

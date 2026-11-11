@@ -63,6 +63,23 @@ Open **http://127.0.0.1:5175/**. Stop with Ctrl+C. The original developer fronte
 
 No Ollama, .NET process, database, pairing code or secrets are required for the preview.
 
+## Architecture Atlas — R2 PR1
+
+Mission Control's **Architecture Explorer → Architecture Atlas** tab is the primary visual view. Pair with the local API and select a workspace, repository and saved snapshot in Agent Observatory, then choose **Load Architecture Atlas**. The on-demand read requests an exact snapshot record and the existing `csharp-evidence-graph-v8` API; it refuses a foreign scope, incompatible contract or mismatched saved fingerprint. No new agent prompt, analyzer or persistent graph store is involved.
+
+The canvas uses **React Flow 12.11.6** and **Dagre 1.1.8** (MIT). It displays:
+- A bounded **project/file overview** (at most 80 displayed project and C# file nodes; only existing `candidate-compile-item` edges).
+- Full loaded-graph **search and kind filtering**, including declarations omitted from the initial overview.
+- An exact, source-derived **focused neighborhood** (at most 150 nodes and 250 edges), with deliberate expansion of selected neighbors, never inferred transitive edges.
+- Different colors and line patterns for `observed-syntax`, `observed-location`, `candidate`, `provisional-local` and `unresolved`, plus an explicit legend and unknown-status fallback.
+- Zoom, pan, fit-view and minimap; selected node and edge identifiers/statuses with hash-verified source inspection through the pre-existing viewer; method declarations can open existing one-hop impact analysis.
+
+The displayed/eligible and total graph counts remain distinct. If the backend responds with a graph limit (e.g. 413), **no graph is drawn** and the user is directed to the independent Snapshot Coverage view. Changing snapshot resets the entire Atlas and discards in-flight results. The canvas does not claim that a project is compiled, a route is reachable, or an invocation's candidate callee is a real runtime dependency.
+
+**PR1 deliberately does not attempt:** whole-repository graph rendering, new semantic inference, grouping by guessed architectural components, cross-repository tracing, persistent coordinates, editing nodes, export, or the full PR2 evidence-inspector experience. Those belong to later approved milestones.
+
+New `atlas-model.test.mjs` contracts cover exact edges, direction, deterministic selection, one-hop expansion, bounds, search beyond overview and unknown evidence statuses. The standard Playwright acceptance now navigates the real Atlas on a disposable C# repository, verifies search and focus, expansion, and scope reset.
+
 ## Automated browser acceptance (PR #56 and future R1 work)
 
 The standard Windows and Unix GREEN scripts now run **headless Chromium Playwright acceptance** after unit and live adapter tests. The browser and frontend are started automatically; you must stop any existing Code Archeologist API (port 5127) and Mission Control (port 5175) before running the checks. **Do not run `scripts/start.ps1` first.**
