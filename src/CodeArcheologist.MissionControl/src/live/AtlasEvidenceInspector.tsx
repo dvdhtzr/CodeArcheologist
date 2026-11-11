@@ -22,10 +22,10 @@ type Props = {
   onImpact: (nodeId: string) => void;
 };
 
-function CandidateGroup({ title, items }: { title: string; items: ProjectCandidate[] | null }) {
+function CandidateGroup({ title, items }: { title: string; items: ProjectCandidate[] | null | undefined }) {
   return <section className="atlas-project-group">
     <h5>{title}</h5>
-    {items === null ? <p>Project candidate details were not supplied for this relationship.</p>
+    {items == null ? <p>Project candidate details were not supplied for this relationship.</p>
       : items.length === 0 ? <p>No saved project candidates recorded.</p>
         : <ul>{items.map((item, i) => <li key={item.projectPath + ':' + item.projectSha256 + ':' + i}>
           <strong>{item.projectPath}</strong>
