@@ -86,9 +86,9 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.locator('.graph-orbit')).toBeVisible();
     await expect(page.locator('.graph-relation-list')).toContainText(/observed-syntax|provisional-local/);
     await expect(relationships.first().locator('.graph-direction')).toContainText(/selected|neighbor/i);
-    const selectedBefore = await page.locator('.graph-focus h3').innerText();
+    const selectedBefore = await page.locator('.graph-focus > h3').first().innerText();
     await relationships.first().locator('button').first().click();
-    await expect(page.locator('.graph-focus h3')).not.toHaveText(selectedBefore);
+    await expect(page.locator('.graph-focus > h3').first()).not.toHaveText(selectedBefore);
   });
 
   await test.step('Inspect hash-verified saved source for a node and an edge', async () => {
