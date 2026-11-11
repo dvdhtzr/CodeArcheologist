@@ -45,9 +45,16 @@ export function verifyAtlasSource(
   return data;
 }
 
+/** Exact viewport at the moment of navigation. Kept locally, never persisted as source evidence. */
+export type AtlasViewport = { x: number; y: number; zoom: number };
+export function isAtlasViewport(value: AtlasViewport | null | undefined): value is AtlasViewport {
+  return !!value && Number.isFinite(value.x) && Number.isFinite(value.y) &&
+    Number.isFinite(value.zoom) && value.zoom > 0 && value.zoom <= 2;
+}
 export type AtlasCursor = {
   mode: 'overview' | 'focus'; centerId: string; expandedIds: string[];
   selectedId: string; selectedEdgeId: string;
+  viewport?: AtlasViewport | null;
 };
 export const ATLAS_HISTORY_MAX = 32;
 
@@ -63,7 +70,8 @@ export function navigateToAtlasNode(index: AtlasIndex, cursor: AtlasCursor,
   if (same) return { current: cursor, history: [...history] };
   return {
     current: { mode: 'focus', centerId: nodeId, expandedIds: [], selectedId: nodeId, selectedEdgeId: '' },
-    history: [...history, { ...cursor, expandedIds: [...cursor.expandedIds] }].slice(-ATLAS_HISTORY_MAX),
+    history: [...history, { ...cursor, expandedIds: [...cursor.expandedIds],
+      ...(isAtlasViewport(cursor.viewport) ? { viewport: { ...cursor.viewport } } : {}) }].slice(-ATLAS_HISTORY_MAX),
   };
 }
 
@@ -72,7 +80,9 @@ export function previousAtlasView(history: readonly AtlasCursor[]): {
 } | null {
   if (!history.length) return null;
   return {
-    current: { ...history[history.length - 1], expandedIds: [...history[history.length - 1].expandedIds] },
+    current: { ...history[history.length - 1], expandedIds: [...history[history.length - 1].expandedIds],
+      ...(isAtlasViewport(history[history.length - 1].viewport)
+        ? { viewport: { ...history[history.length - 1].viewport } } : {}) },
     history: history.slice(0, -1),
   };
 }
