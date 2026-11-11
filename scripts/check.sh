@@ -34,4 +34,7 @@ node --test "$ROOT/tests/api/white-label.test.mjs"
 node --test "$ROOT/tests/api/capabilities.test.mjs"
 node --test "$ROOT/tests/api/source.test.mjs"
 npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run test:live
-echo 'GREEN: Local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
+# Real Chromium UI acceptance against a disposable API and temporary source tree.
+npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run browser:install
+npm --prefix "$ROOT/src/CodeArcheologist.MissionControl" run test:browser
+echo 'GREEN: Chromium browser acceptance, local build, frontend, security, workspaces, registrations and immutable snapshot checks passed. Cross-platform packaging remains pending.'
