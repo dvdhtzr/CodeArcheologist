@@ -92,7 +92,13 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
   });
 
   await test.step('Inspect hash-verified saved source for a node and an edge', async () => {
-    await page.locator('.graph-node-results .graph-node-choice').filter({ hasText: 'Helper' }).click();
+    // Recenter on the method declaration, not a similarly named invocation.
+    // Neighbor navigation deliberately resets search and kind filters.
+    await page.getByRole('combobox', { name: 'Node kind' }).selectOption('syntax-declaration');
+    await page.getByPlaceholder('Label, kind, or file path').fill('Helper');
+    const method = page.locator('.graph-node-results .graph-node-choice');
+    await expect(method).toHaveCount(1);
+    await method.click();
     await page.getByRole('button', { name: 'Inspect verified source' }).click();
     await expect(page.getByRole('heading', { name: 'Verified saved source' })).toBeVisible();
     await expect(page.locator('.deterministic-source pre')).toContainText('Helper');
