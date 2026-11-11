@@ -105,7 +105,8 @@ export function DeterministicExplorer({ selection }: { selection: ExplorerSelect
   }
 
   return (
-    <section className="deterministic-explorer" aria-label="Deterministic architecture explorer">
+    <section className={view === 'atlas' ? 'deterministic-explorer deterministic-explorer--atlas' : 'deterministic-explorer'}
+      aria-label="Deterministic architecture explorer">
       <span className="eyebrow eyebrow--accent">SAVED SOURCE · NOT AI</span>
       <h1>Explore the code you captured.</h1>
       <p className="secondary-intro">Source-written observations and one-hop provisional relationships. This is not a verified runtime architecture or complete call graph.</p>
