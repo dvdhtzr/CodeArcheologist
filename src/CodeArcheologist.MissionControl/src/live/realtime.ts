@@ -67,6 +67,7 @@ export class LiveRun {
     });
     hub.onreconnecting(() => this.#update({ connection: 'reconnecting' }));
     hub.onreconnected(async () => {
+      if (this.#closed) return;
       try {
         await this.#subscribe();
         await this.resync();
@@ -76,10 +77,14 @@ export class LiveRun {
     hub.onclose(error => { if (!this.#closed) this.#update({ connection: 'disconnected', error: error ? message(error) : null }); });
 
     await this.resync(); // REST first: the screen is correct even before the hub connects
+    if (this.#closed) return; // e.g. unauthorized REST triggered a shared session disconnect
     try {
       await hub.start();
+      if (this.#closed) { await hub.stop(); return; }
       await this.#subscribe();
+      if (this.#closed) { await hub.stop(); return; }
       await this.resync();
+      if (this.#closed) { await hub.stop(); return; }
       this.#update({ connection: 'live', error: null });
     } catch (error) {
       this.#update({ connection: 'disconnected', error: 'Live updates unavailable: ' + message(error) });
