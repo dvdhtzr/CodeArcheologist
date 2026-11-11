@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ApiClient, Scope, SourceView } from './api.ts';
 import {
-  CONCERN_KINDS, ROLE_STATUS, RUN_STATUS, VERDICTS, citations, label, supportedReportVersion, verdicts,
+  CONCERN_KINDS, HOST_CAUTION_LABELS, ROLE_STATUS, RUN_STATUS, VERDICTS,
+  citations, hostCautionView, hostSourceCitation, label, supportedReportVersion, verdicts,
 } from './report.ts';
-import type { Citation, Report, RunDetail } from './report.ts';
+import type { Citation, HostSyntaxCaution, Report, RunDetail } from './report.ts';
 
 /**
  * MC4 findings view of the host-recorded C5 report. AI-written text is shown
@@ -20,11 +21,13 @@ export function Findings({ api, scope, runId, runStatus }: {
   useEffect(() => {
     let current = true;
     setError(null);
+    setDetail(null);
+    setSource(null);
     api.run<RunDetail>(scope, runId)
       .then(result => { if (current) setDetail(result); })
       .catch((e: unknown) => { if (current) setError(e instanceof Error ? e.message : String(e)); });
     return () => { current = false; };
-  }, [api, runId, runStatus]);
+  }, [api, scope.workspaceId, scope.repositoryId, scope.snapshotId, runId, runStatus]);
 
   async function open(citation: Citation) {
     if (!citation.filePath || !citation.fileSha256 || !citation.line) return;
@@ -54,6 +57,7 @@ export function Findings({ api, scope, runId, runStatus }: {
   return (
     <div className="findings">
       <RunHeader report={report} />
+      <HostCautions report={report} onOpen={open} />
       <section aria-labelledby="verdicts-heading">
         <h2 id="verdicts-heading">Hypotheses and verdicts</h2>
         <p className="live-help">The Investigator proposed these. The Reviewer weighed them against the Skeptic's objections, and the host checked the result. A verdict is a structured judgment by AI roles, not proof.</p>
@@ -100,6 +104,86 @@ export function Findings({ api, scope, runId, runStatus }: {
 
       {source && <SourcePanel source={source} onClose={() => setSource(null)} />}
     </div>
+  );
+}
+
+/**
+ * A separate host-authored channel: not a fourth agent, not a reviewer
+ * decision, and not an assertion about route reachability or runtime behavior.
+ */
+function HostCautions({ report, onOpen }: {
+  report: Report; onOpen: (citation: Citation) => void;
+}) {
+  const view = hostCautionView(report);
+  return (
+    <section className="host-cautions-panel" aria-labelledby="host-cautions-heading">
+      <div className="host-cautions-heading">
+        <h2 id="host-cautions-heading">Code-analysis cautions (not AI)</h2>
+        <span className="host-cautions-provenance">Host-written · saved source syntax</span>
+      </div>
+      <p className="live-help">
+        These are deterministic, source-based cautions for the selected entry point,
+        not AI findings, verified runtime behavior, or proof that an endpoint is reachable.
+        They do not affect the Investigator, Skeptic, or Reviewer verdicts.
+      </p>
+      {view.state === 'legacy' &&
+        <p className="host-cautions-message">
+          This older report predates host-written cautions. No host inspection was recorded;
+          this does not mean there are no issues.
+        </p>}
+      {view.state === 'not-evaluated' &&
+        <p className="host-cautions-message">
+          Host caution inspection was not completed for this report. The result is unknown,
+          not a verified absence of cautions.
+        </p>}
+      {view.state === 'incompatible' &&
+        <p className="live-error" role="status">
+          Host caution data is missing, invalid, or uses an unsupported analyzer version.
+          No host cautions are displayed; do not interpret this as zero cautions.
+        </p>}
+      {view.state === 'verified-empty' &&
+        <p className="host-cautions-message">
+          No host-written cautions were emitted by the current limited checks for this entry point.
+          This does not establish runtime behavior, security, or absence of other issues.
+        </p>}
+      {view.state === 'verified-cautions' && <>
+        <p className="host-cautions-count">
+          {view.cautions.length} host-written {view.cautions.length === 1 ? 'caution' : 'cautions'} ·
+          analyzer {view.analyzerVersion}
+        </p>
+        <ol className="host-cautions-list">
+          {view.cautions.map(caution => (
+            <li className="host-caution-card" key={caution.id}>
+              <h3>{HOST_CAUTION_LABELS[caution.kind as keyof typeof HOST_CAUTION_LABELS]}</h3>
+              <p className="host-caution-statement">{caution.statement}</p>
+              <p className="finding-meta">Source-syntax observation only · {caution.status}</p>
+              <HostCautionSources caution={caution} onOpen={onOpen} />
+            </li>
+          ))}
+        </ol>
+      </>}
+    </section>
+  );
+}
+
+function HostCautionSources({ caution, onOpen }: {
+  caution: HostSyntaxCaution; onOpen: (citation: Citation) => void;
+}) {
+  return (
+    <ul className="host-caution-anchors" aria-label="Saved snapshot source locations">
+      {caution.anchors.map((anchor, index) => {
+        const cite = hostSourceCitation(anchor);
+        return (
+          <li key={caution.id + ':' + index}>
+            {cite
+              ? <button type="button" className="citation"
+                  aria-label={'Open verified saved source ' + anchor.filePath + ' at line ' + anchor.line}
+                  onClick={() => onOpen(cite)}>{anchor.filePath}:{anchor.line}</button>
+              : <span className="finding-meta">{anchor.filePath} · project-file candidate (no line available)</span>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -156,7 +240,7 @@ function SourcePanel({ source, onClose }: {
   return (
     <section className="source-panel" aria-label={`Source ${citation.filePath}:${citation.line}`}>
       <header>
-        <strong>{citation.filePath}:{citation.line}</strong>
+        <strong>{citation.kind === 'saved-source-syntax' ? 'Host caution · ' : ''}{citation.filePath}:{citation.line}</strong>
         <button type="button" className="secondary-action" onClick={onClose}>Close</button>
       </header>
       {error && <p className="live-error" role="alert">{error}</p>}

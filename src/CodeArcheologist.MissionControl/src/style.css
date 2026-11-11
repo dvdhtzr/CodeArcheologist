@@ -355,6 +355,28 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 .source-number { color: #5d7088; user-select: none; }
 .findings-empty p { margin: 0 0 6px; color: #c0d6e9; font-size: 13px; }
 
+/* PR 3: separate host-authored cautions from the agent verdict ledger. */
+.host-cautions-panel {
+  border: 1px solid rgba(255,193,126,.35); border-radius: 9px;
+  background: rgba(255,193,126,.035); padding: 15px 17px; min-width: 0;
+  overflow-wrap: anywhere;
+}
+.host-cautions-heading { display: flex; gap: 8px 16px; align-items: baseline; flex-wrap: wrap; margin-bottom: 7px; }
+.host-cautions-heading h2 { margin: 0; }
+.host-cautions-provenance { color: #ffc17e; font-size: 11px; letter-spacing: .025em; }
+.host-cautions-message { color: #dbe7f5; line-height: 1.55; font-size: 13px; margin: 12px 0 0; }
+.host-cautions-count { color: #ffc17e; font-size: 12px; margin: 12px 0 0; }
+.host-cautions-list { display: grid; gap: 10px; padding: 0; margin: 12px 0 0; list-style: none; }
+.host-caution-card {
+  border: 1px solid var(--outline); border-left: 3px solid #ffc17e;
+  background: var(--surface); border-radius: 7px; padding: 11px 13px;
+}
+.host-caution-card h3 { font-size: 13px; color: var(--bright); margin: 0 0 5px; }
+.host-caution-statement { font-size: 13px; color: #dbe7f5; line-height: 1.55; white-space: pre-wrap; margin: 0 0 7px; }
+.host-caution-anchors { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 0; padding: 0; }
+.host-caution-anchors li { min-width: 0; }
+
+
 /* MC5 layout: the Observatory fits one screen (cockpit of three columns) */
 .topbar { min-height: 56px; padding: 10px 24px; }
 .topbar-metrics { display: inline-flex; gap: 14px; margin-right: 14px; color: #8fa4ba; }

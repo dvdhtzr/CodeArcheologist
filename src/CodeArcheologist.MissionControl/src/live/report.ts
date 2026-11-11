@@ -51,6 +51,96 @@ export const LEGACY_REPORT_VERSION = 'gate-c5-investigation-report-v1';
 export function supportedReportVersion(version: string): boolean {
   return version === REPORT_VERSION || version === LEGACY_REPORT_VERSION;
 }
+/**
+ * Host cautions are determined by fixed Roslyn source-syntax checks and were
+ * NOT authored, approved or verified as runtime facts by any AI role.
+ * Fail closed for missing/unknown/incompatible warning data.
+ */
+export const HOST_CAUTION_ANALYZER_VERSION = 'roslyn-host-cautions-v1';
+const CAUTION_KINDS = [
+  'unobserved-registration',
+  'route-group-receiver',
+  'sibling-modifier-difference',
+  'conditional-invocation',
+  'multiple-project-candidates',
+] as const;
+export const HOST_CAUTION_LABELS: Readonly<Record<(typeof CAUTION_KINDS)[number], string>> = {
+  'unobserved-registration': 'Registration call not observed',
+  'route-group-receiver': 'Route group receiver',
+  'sibling-modifier-difference': 'Different authorization modifiers',
+  'conditional-invocation': 'Conditional invocation',
+  'multiple-project-candidates': 'Multiple project candidates',
+};
+
+export type HostCautionView =
+  | { state: 'legacy' | 'not-evaluated' | 'incompatible'; cautions: readonly []; analyzerVersion: null }
+  | { state: 'verified-empty' | 'verified-cautions'; cautions: readonly HostSyntaxCaution[]; analyzerVersion: string };
+
+function validHostAnchor(anchor: HostCautionAnchor): boolean {
+  if (!anchor || typeof anchor.filePath !== 'string' || !anchor.filePath.trim() ||
+      typeof anchor.fileSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(anchor.fileSha256))
+    return false;
+  // The static project inspector supplies file-level anchors with null spans.
+  // Never fabricate line 1 for a file-level anchor.
+  if (anchor.line == null || anchor.column == null ||
+      anchor.spanStart == null || anchor.spanLength == null)
+    return anchor.line === null && anchor.column === null &&
+      anchor.spanStart === null && anchor.spanLength === null;
+  return Number.isSafeInteger(anchor.line) && anchor.line >= 1 &&
+    Number.isSafeInteger(anchor.column) && anchor.column >= 1 &&
+    Number.isSafeInteger(anchor.spanStart) && anchor.spanStart >= 0 &&
+    Number.isSafeInteger(anchor.spanLength) && anchor.spanLength >= 1;
+}
+
+export function hostCautionView(report: Report): HostCautionView {
+  const absent = (state: 'legacy' | 'not-evaluated' | 'incompatible'): HostCautionView =>
+    ({ state, cautions: [], analyzerVersion: null });
+
+  if (report.version === LEGACY_REPORT_VERSION) return absent('legacy');
+  if (report.version !== REPORT_VERSION) return absent('incompatible');
+  if (report.hostCautionStatus === 'not-evaluated') return absent('not-evaluated');
+  if (report.hostCautionStatus !== 'verified' ||
+      report.hostCautionAnalyzerVersion !== HOST_CAUTION_ANALYZER_VERSION ||
+      !Array.isArray(report.hostCautions) || report.hostCautions.length > 5)
+    return absent('incompatible');
+
+  const kinds = new Set<string>();
+  const ids = new Set<string>();
+  for (const caution of report.hostCautions) {
+    if (!caution || typeof caution.kind !== 'string' ||
+        !CAUTION_KINDS.includes(caution.kind as (typeof CAUTION_KINDS)[number]) ||
+        typeof caution.id !== 'string' || !caution.id.startsWith('host-caution:' + caution.kind + ':'))
+      return absent('incompatible');
+    if (kinds.has(caution.kind) || ids.has(caution.id) ||
+        caution.status !== 'host-syntax-caution' ||
+        caution.analyzerVersion !== HOST_CAUTION_ANALYZER_VERSION ||
+        typeof caution.statement !== 'string' ||
+        !caution.statement.trim() || caution.statement.length > 1000 ||
+        !Array.isArray(caution.anchors) || caution.anchors.length < 1 || caution.anchors.length > 6 ||
+        !caution.anchors.every(validHostAnchor) ||
+        !caution.anchors.some(anchor => anchor.line !== null))
+      return absent('incompatible');
+    kinds.add(caution.kind);
+    ids.add(caution.id);
+  }
+  return { state: report.hostCautions.length ? 'verified-cautions' : 'verified-empty',
+    cautions: report.hostCautions, analyzerVersion: HOST_CAUTION_ANALYZER_VERSION };
+}
+
+/** Source opener intentionally returns nothing for file-level project anchors. */
+export function hostSourceCitation(anchor: HostCautionAnchor): Citation | null {
+  if (!validHostAnchor(anchor) || anchor.line === null) return null;
+  return {
+    handle: 'host-source-anchor',
+    filePath: anchor.filePath,
+    fileSha256: anchor.fileSha256,
+    line: anchor.line,
+    status: 'host-syntax-caution',
+    kind: 'saved-source-syntax',
+    missing: false,
+  };
+}
+
 export const ROLE_STATUS = ['Not started', 'Running', 'Accepted by host checks', 'Rejected by host checks', 'Failed', 'Timed out', 'Cancelled'];
 export const VERDICTS = ['Structurally supported', 'Plausible hypothesis', 'Contested or insufficient', 'Rejected'];
 export const CONCERN_KINDS = ['Structural contradiction', 'Unsupported inference', 'Insufficient evidence', 'Competing hypothesis', 'Coverage limitation'];
