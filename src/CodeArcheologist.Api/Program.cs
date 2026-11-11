@@ -402,9 +402,9 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
             return Results.Conflict(new { error = "Question context is unavailable." });
         var location =
             $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{admission.Record.RunId:D}";
-        return admission.Outcome == InvestigationAdmissionOutcome.Admitted
-            ? Results.Accepted(location, new { investigation = admission.Record, questionContext = saved })
-            : Results.Ok(new { investigation = admission.Record, questionContext = saved });
+        if (admission.Outcome == InvestigationAdmissionOutcome.Admitted)
+            return Results.Accepted(location, new { investigation = admission.Record, questionContext = saved });
+        return Results.Ok(new { investigation = admission.Record, questionContext = saved });
     }
     return admission.Outcome switch
     {
@@ -428,9 +428,10 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     try
     {
         var saved = store.GetQuestionContext(workspaceId, repositoryId, snapshotId, runId);
-        return saved is null
-            ? Results.Ok(new { status = "legacy-no-question-context", context = (InvestigationQuestionContext?)null })
-            : Results.Ok(new { status = "verified", context = saved });
+        if (saved is null)
+            return Results.Ok(new { status = "legacy-no-question-context",
+                context = (InvestigationQuestionContext?)null });
+        return Results.Ok(new { status = "verified", context = saved });
     }
     catch (InvalidOperationException)
     {
