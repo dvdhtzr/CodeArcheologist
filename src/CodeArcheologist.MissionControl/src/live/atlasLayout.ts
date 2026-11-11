@@ -14,5 +14,5 @@ export function anchorAtlasLayout<T extends { id: string; position: AtlasPositio
   if (dx === 0 && dy === 0) return [...next];
   return next.map(node => ({ ...node, position: {
     x: node.position.x + dx, y: node.position.y + dy,
-  } }));
+  } } as T));
 }
