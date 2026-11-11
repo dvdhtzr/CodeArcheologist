@@ -25,12 +25,13 @@ internal static class R3QuestionContextSelfTests
                     "http-endpoint-attribute");
                 Expect(admitted.Created && !admitted.Busy && !admitted.Conflict &&
                     admitted.Record is not null, "R3 run must be admitted");
-                var run = admitted.Record.RunId;
+                var run = admitted.Record!.RunId;
                 var context = f.Store.GetQuestionContext(
-                    scope.WorkspaceId, scope.RepositoryId, scope.SnapshotId, run);
+                    scope.WorkspaceId, scope.RepositoryId, scope.SnapshotId, run)
+                    ?? throw new InvalidOperationException("Question context missing after admission.");
                 Expect(InvestigationQuestionContract.Verify(context),
                     "the saved question must be fully host-verifiable");
-                Expect(context!.RunId == run && context.QuestionId != run &&
+                Expect(context.RunId == run && context.QuestionId != run &&
                     context.SubjectNodeId == scope.EntryPointId &&
                     context.QuestionKind == InvestigationQuestionContract.ExplainHttpEntryPoint &&
                     context.QuestionTemplateVersion == InvestigationQuestionContract.TemplateVersion,
