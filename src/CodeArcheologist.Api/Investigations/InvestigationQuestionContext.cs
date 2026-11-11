@@ -29,6 +29,10 @@ public static class InvestigationQuestionContract
     public const string Version = "r3-investigation-context-v1";
     public const string ExplainHttpEntryPoint = "explain-http-entry-point";
     public const string TemplateVersion = "r3-explain-http-entry-point-v1";
+    // Historical v1 identities remain readable even if runtime evidence
+    // and capability registries advance to new versions in later milestones.
+    public const string EvidenceToolsVersion = "snapshot-agent-evidence-tools-v2";
+    public const string CapabilityPolicyVersion = "gate-c-evidence-capabilities-v6";
     // This profile names the existing fixed C6b resource budgets, not new limits.
     public const string BudgetProfileVersion = "r3-legacy-gate-c6b-budget-v1";
 
@@ -41,7 +45,7 @@ public static class InvestigationQuestionContract
         RequireSupported(scope, subjectKind);
         return Hash("r3-question-request-v1", ScopeParts(scope), subjectKind,
             ExplainHttpEntryPoint, Version, TemplateVersion,
-            GateCEvidenceRegistry.Version, BudgetProfileVersion);
+            CapabilityPolicyVersion, BudgetProfileVersion);
     }
 
     public static InvestigationQuestionContext Create(Guid runId, GateCScope scope,
@@ -63,7 +67,7 @@ public static class InvestigationQuestionContract
             context.QuestionId == Guid.Empty || context.RunId == Guid.Empty ||
             context.Scope is null || context.SubjectNodeId != context.Scope.EntryPointId ||
             context.QuestionTemplateVersion != TemplateVersion ||
-            context.CapabilityPolicyVersion != GateCEvidenceRegistry.Version ||
+            context.CapabilityPolicyVersion != CapabilityPolicyVersion ||
             context.BudgetProfileVersion != BudgetProfileVersion ||
             !Supports(context.QuestionKind, context.SubjectNodeKind) ||
             !ValidScope(context.Scope) ||
@@ -74,7 +78,9 @@ public static class InvestigationQuestionContract
 
     private static void RequireSupported(GateCScope scope, string subjectKind)
     {
-        if (!ValidScope(scope) || !Supports(ExplainHttpEntryPoint, subjectKind))
+        if (GateCEvidenceRegistry.Version != CapabilityPolicyVersion ||
+            SnapshotEvidenceTools.Version != EvidenceToolsVersion ||
+            !ValidScope(scope) || !Supports(ExplainHttpEntryPoint, subjectKind))
             throw new ArgumentException("Unsupported or invalid question scope.");
     }
 
@@ -85,7 +91,7 @@ public static class InvestigationQuestionContract
         scope.FingerprintSha256.All(char.IsAsciiHexDigit) &&
         scope.EntryPointId is { Length: > 0 and <= 1024 } &&
         !scope.EntryPointId.Any(char.IsControl) &&
-        scope.EvidenceContractVersion == SnapshotEvidenceTools.Version;
+        scope.EvidenceContractVersion == EvidenceToolsVersion;
 
     private static string Digest(InvestigationQuestionContext c) =>
         Hash("r3-question-context-v1", c.ContractVersion,
