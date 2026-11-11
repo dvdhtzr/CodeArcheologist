@@ -60,6 +60,8 @@ if ($LASTEXITCODE -ne 0) { throw 'C6b execution control HTTP integration tests f
 if ($LASTEXITCODE -ne 0) { throw 'W1 white-label API and SignalR integration tests failed.' }
 & node --test (Join-Path $root 'tests/api/capabilities.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'W2 capability resource integration tests failed.' }
+& node --test (Join-Path $root 'tests/api/investigation-question.test.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'R3 PR1 structured question HTTP auth and scope tests failed.' }
 & node --test (Join-Path $root 'tests/api/source.test.mjs')
 if ($LASTEXITCODE -ne 0) { throw 'MC4 snapshot source-lines integration tests failed.' }
 & npm --prefix $mission run test:live
