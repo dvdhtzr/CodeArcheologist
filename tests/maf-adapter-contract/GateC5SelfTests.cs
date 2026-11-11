@@ -146,6 +146,55 @@ internal static class GateC5SelfTests
                     "valid", review, reconciled));
             var report = GateC5ReportFactory.Create(outcome,
                 create.Record.StartedAtUtc, DateTimeOffset.UtcNow);
+            if (report.HostCautionStatus != "not-evaluated" ||
+                report.HostCautions is { Count: > 0 })
+                throw new InvalidOperationException("Uninspected report presented as verified.");
+
+            // The disposable contract fixture supplies trusted host provenance;
+            // full snapshot/source anchoring is verified by the lab and API tests.
+            var hostCaution = new HostSyntaxCaution(
+                "host-caution:conditional-invocation:" + scope.EntryPointId,
+                "conditional-invocation", CSharpHostCautionAnalyzer.Status,
+                "A written direct call is inside a conditional branch; no runtime execution is proven.",
+                CSharpHostCautionAnalyzer.Version,
+                [new HostCautionAnchor("Main.cs", new string('b', 64), 1, 1, 0, 5)]);
+            var hostPackage = new AgentEvidencePackage(
+                SnapshotEvidenceTools.Version, scope.WorkspaceId, scope.RepositoryId,
+                scope.SnapshotId, scope.FingerprintSha256, "graph-v8", scope.EntryPointId,
+                "http-endpoint-attribute", "source-only", false, 0, 0, 0,
+                [], [], [], [], [hostCaution], CSharpHostCautionAnalyzer.Version);
+
+            var noWarningReport = GateC5ReportFactory.AttachVerifiedCautions(
+                report, hostPackage with { HostCautions = [] });
+            if (noWarningReport.HostCautionStatus != "verified" ||
+                noWarningReport.HostCautions?.Count != 0)
+                throw new InvalidOperationException("Verified zero cautions were not distinguished from uninspected.");
+            ExpectRejected(() => GateC5ReportFactory.AttachVerifiedCautions(report,
+                hostPackage with { SnapshotId = Guid.NewGuid() }));
+            ExpectRejected(() => GateC5ReportFactory.AttachVerifiedCautions(report,
+                hostPackage with { HostCautions = [hostCaution with { Status = "AI-claim" }] }));
+            ExpectRejected(() => GateC5ReportFactory.AttachVerifiedCautions(report,
+                hostPackage with { HostCautions = [hostCaution with { Anchors = [] }] }));
+            report = GateC5ReportFactory.AttachVerifiedCautions(report, hostPackage);
+            ExpectRejected(() => GateC5ReportFactory.AttachVerifiedCautions(report, hostPackage));
+
+            // Host evidence survives an incomplete AI investigation without
+            // turning the incomplete review into a verified agent outcome.
+            var incompleteOutcome = outcome with
+            {
+                Progress = progress with { Status = GateCRunStatus.Incomplete }
+            };
+            var incompleteReport = GateC5ReportFactory.AttachVerifiedCautions(
+                GateC5ReportFactory.Create(incompleteOutcome,
+                    create.Record.StartedAtUtc, DateTimeOffset.UtcNow),
+                hostPackage);
+            if (incompleteReport.Progress.Status != GateCRunStatus.Incomplete ||
+                incompleteReport.HostCautionStatus != "verified" ||
+                incompleteReport.HostCautions?.Count != 1 ||
+                incompleteReport.Diagnostic != "investigation-incomplete")
+                throw new InvalidOperationException(
+                    "Host warnings were suppressed or promoted by incomplete AI status.");
+
             if (report.EvidenceLinks.Count != 2 ||
                 report.EvidenceLinks[0].CanonicalId == report.EvidenceLinks[1].CanonicalId)
                 throw new InvalidOperationException("Role-local evidence identities were conflated.");
@@ -184,7 +233,11 @@ internal static class GateC5SelfTests
                 snapshotId, effectiveRun);
             if (loaded?.Summary.Status != "completed" ||
                 loaded.Report?.EvidenceLinks.Count != 2 ||
-                loaded.Report.Reviewer.Reconciliation?.Dispositions[0].IsVerifiedFact != false)
+                loaded.Report.Reviewer.Reconciliation?.Dispositions[0].IsVerifiedFact != false ||
+                loaded.Report.HostCautionStatus != "verified" ||
+                loaded.Report.HostCautionAnalyzerVersion != CSharpHostCautionAnalyzer.Version ||
+                loaded.Report.HostCautions?.SingleOrDefault()?.Kind != "conditional-invocation" ||
+                loaded.Report.HostCautions?.FirstOrDefault()?.Anchors.FirstOrDefault()?.FileSha256 != new string('b', 64))
                 throw new InvalidOperationException("Durable C5 report could not round-trip.");
             if (store.ListInvestigations(workspace.Id, repositoryId, snapshotId).TotalCount != 1)
                 throw new InvalidOperationException("C5 report listing failed.");

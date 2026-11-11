@@ -46,8 +46,15 @@ try
         {
             string Opt(string name, string fallback) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
             var runs = Path.GetFullPath(args[2]);
-            return LabOwnerTools.SingleChecklist(evalRoot, runs, Opt("--single", Comparator.GateC),
-                Path.GetFullPath(Opt("--out", Path.Combine(runs, "issue-checklist-single.json"))), Console.In, Console.Out);
+            var attribution = Opt("--single", Comparator.GateC);
+            var defaultName = attribution switch
+            {
+                "host-cautions" => "issue-checklist-host-only.json",
+                "gate-c+host" => "issue-checklist-gate-c-plus-host.json",
+                _ => "issue-checklist-single.json"
+            };
+            return LabOwnerTools.SingleChecklist(evalRoot, runs, attribution,
+                Path.GetFullPath(Opt("--out", Path.Combine(runs, defaultName))), Console.In, Console.Out);
         }
         case "--checklist" when args.Length >= 3 && args[1] == "--runs":
         {
@@ -76,7 +83,7 @@ try
                   --describe <case-dir> [--curated-root <dir>]   citable evidence locations for labeling
                   --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
                   --review-labels [--curated-root <dir>]          owner label sign-off (interactive, resumable)
-                  --checklist --runs <dir> [--max 5 | --every-problem | --single gate-c] [--out <file>]   short blinded material-issue checklist (interactive, resumable)
+                  --checklist --runs <dir> [--max 5 | --every-problem | --single gate-c | --single host-cautions | --single gate-c+host] [--out <file>]   short blinded material-issue checklist (interactive, resumable)
                   --export-judging --runs <scored-dir> --out <new-dir> [--calibration-checklist-runs <dir> --calibration-checklist <file>] [--calibration-judge-runs <dir> --calibration-judgments <file>]
                   --import-judging --export <dir> --answers <file>   strict import; the first complete import is the record (ADR 0022)
                   --verdict --runs <scored-dir> [--export <dir>]     compare with owner-approved thresholds

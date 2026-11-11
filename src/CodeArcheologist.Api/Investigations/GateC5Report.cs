@@ -5,7 +5,7 @@ namespace CodeArcheologist.Api.Investigations;
 /// <summary>Host-owned reporting data, never accepted as model-authored authority.</summary>
 public static class GateC5ReportContract
 {
-    public const string Version = "gate-c5-investigation-report-v1";
+    public const string Version = "gate-c5-investigation-report-v2";
 }
 public sealed record GateC5EvidenceLink(
     GateCRole Role, string Handle, string CanonicalId,
@@ -21,10 +21,72 @@ public sealed record GateC5Report(
     GateC3RoleOutcome Investigator, GateC3RoleOutcome Skeptic,
     GateC4ReviewerOutcome Reviewer,
     IReadOnlyList<GateC5EvidenceLink> EvidenceLinks,
-    string Diagnostic);
+    string Diagnostic,
+    string HostCautionStatus = "not-evaluated",
+    string HostCautionAnalyzerVersion = CSharpHostCautionAnalyzer.Version,
+    IReadOnlyList<HostSyntaxCaution>? HostCautions = null);
 
 public static class GateC5ReportFactory
 {
+    /// <summary>
+    /// The worker attaches warnings only from freshly verified snapshot tools,
+    /// after the AI workflow has finished. This never enters the role prompts,
+    /// checkpoint ledgers, or reviewer reconciliation.
+    /// </summary>
+    internal static GateC5Report AttachVerifiedCautions(
+        GateC5Report report, AgentEvidencePackage evidence)
+    {
+        var scope = report.Scope;
+        if (report.Version != GateC5ReportContract.Version ||
+            report.HostCautionStatus != "not-evaluated" ||
+            report.HostCautions is { Count: > 0 } ||
+            evidence.ContractVersion != scope.EvidenceContractVersion ||
+            evidence.WorkspaceId != scope.WorkspaceId ||
+            evidence.RepositoryId != scope.RepositoryId ||
+            evidence.SnapshotId != scope.SnapshotId ||
+            evidence.FingerprintSha256 != scope.FingerprintSha256 ||
+            evidence.EntryPointId != scope.EntryPointId ||
+            evidence.HostCautionAnalyzerVersion != CSharpHostCautionAnalyzer.Version ||
+            evidence.HostCautions is not { Count: <= 5 } cautions)
+            throw new InvalidOperationException("Host caution source or scope is not verified.");
+
+        var kinds = new HashSet<string>(StringComparer.Ordinal);
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "unobserved-registration", "route-group-receiver",
+            "sibling-modifier-difference", "conditional-invocation",
+            "multiple-project-candidates"
+        };
+        foreach (var caution in cautions)
+        {
+            if (!allowed.Contains(caution.Kind) ||
+                !kinds.Add(caution.Kind) || !ids.Add(caution.Id) ||
+                caution.Id != "host-caution:" + caution.Kind + ":" + scope.EntryPointId ||
+                caution.AnalyzerVersion != CSharpHostCautionAnalyzer.Version ||
+                caution.Status != CSharpHostCautionAnalyzer.Status ||
+                string.IsNullOrWhiteSpace(caution.Statement) ||
+                caution.Statement.Length > 1000 ||
+                caution.Anchors is not { Count: >= 1 and <= 6 } ||
+                !caution.Anchors.Any(a => !string.IsNullOrWhiteSpace(a.FilePath) &&
+                    a.Line is >= 1 && a.SpanStart is >= 0) ||
+                caution.Anchors.Any(a => string.IsNullOrWhiteSpace(a.FilePath) ||
+                    a.FileSha256.Length != 64 ||
+                    a.FileSha256.Any(c => !Uri.IsHexDigit(c)) ||
+                    (a.Line is null) != (a.Column is null) ||
+                    (a.SpanStart is null) != (a.SpanLength is null) ||
+                    a.Line is < 1 || a.Column is < 1 ||
+                    a.SpanStart is < 0 || a.SpanLength is < 1))
+                throw new InvalidOperationException("Invalid host caution provenance.");
+        }
+        return report with
+        {
+            HostCautionStatus = "verified",
+            HostCautionAnalyzerVersion = CSharpHostCautionAnalyzer.Version,
+            HostCautions = cautions.ToArray()
+        };
+    }
+
     public static GateC5Report Create(GateC4RunOutcome outcome,
         DateTimeOffset started, DateTimeOffset finished)
     {

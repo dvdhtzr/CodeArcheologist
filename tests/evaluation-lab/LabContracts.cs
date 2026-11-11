@@ -9,8 +9,8 @@ public static class LabSchema
     public const string Case = "c6c-case-v1";
     public const string Labels = "c6c-labels-v1";
     public const string Config = "c6c-lab-config-v1";
-    public const string Report = "c6c-lab-report-v1";
-    public const string Score = "c6c-lab-score-v1";
+    public const string Report = "c6c-lab-report-v2";
+    public const string Score = "c6c-lab-score-v2";
     public const string Curated = "c6c-curated-v1";
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)

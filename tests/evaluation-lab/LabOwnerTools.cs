@@ -253,20 +253,49 @@ public static class LabOwnerTools
         if (!corpus.Valid) { output.WriteLine("Corpus is invalid; run --validate-corpus."); return 1; }
         var labels = corpus.Cases.Where(c => c.Labels.Status == LabelStatus.OwnerApproved)
             .ToDictionary(c => c.Case.Id, c => c.Labels, StringComparer.Ordinal);
+        var view = comparator switch
+        {
+            "host-cautions" => "host-only",
+            "gate-c+host" => "combined",
+            _ => "comparator-only"
+        };
+        // Host-only uses the deterministic baseline's verified caution ledger,
+        // not Gate C completion. Combined mode includes the Gate C agent output.
+        var sourceComparator = view switch
+        {
+            "host-only" => Comparator.Baseline,
+            "combined" => Comparator.GateC,
+            _ => comparator
+        };
+        if (!Comparator.All.Contains(sourceComparator, StringComparer.Ordinal))
+            throw new ArgumentException("Unsupported checklist comparator: " + comparator);
         var reports = Directory.GetFiles(runsDirectory, "*.report.json")
             .Select(f => JsonSerializer.Deserialize<LabReport>(File.ReadAllText(f), LabSchema.Json)!)
             .Where(r => r.Outcome == "completed").ToArray();
-        var done = File.Exists(checksPath)
-            ? JsonSerializer.Deserialize<SingleCheckFile>(File.ReadAllText(checksPath), LabSchema.Json)!.Checks.ToList()
-            : [];
+        var prior = File.Exists(checksPath)
+            ? JsonSerializer.Deserialize<SingleCheckFile>(File.ReadAllText(checksPath), LabSchema.Json)
+            : null;
+        if (prior is not null &&
+            (prior.SchemaVersion != SingleChecklistSchema || prior.Comparator != comparator ||
+             prior.RunsDirectory != Path.GetFullPath(runsDirectory)))
+            throw new InvalidOperationException(
+                "Checklist already belongs to another run or attribution mode; choose another --out.");
+        var done = prior?.Checks.ToList() ?? new List<SingleCheck>();
         var problems = new List<(string CaseId, MaterialIssue Issue, LabReport Report)>();
         foreach (var caseId in reports.Select(r => r.CaseId).Distinct().Order(StringComparer.Ordinal))
-            if (labels.TryGetValue(caseId, out var set) && Pick(reports, caseId, comparator, random) is { } report)
+            if (labels.TryGetValue(caseId, out var set) && Pick(reports, caseId, sourceComparator, random) is { } report)
                 problems.AddRange(set.MaterialIssues.Select(issue => (caseId, issue, report)));
+        if (view != "comparator-only" && problems.Any(p =>
+                p.Report.HostCautionStatus != "verified" || p.Report.HostCautions is null))
+            throw new InvalidOperationException(
+                "Host cautions have not been verified for every selected report; do not judge unknown as empty.");
         var queue = problems.Where(p => done.All(d => d.CaseId != p.CaseId || d.IssueId != p.Issue.Id))
             .OrderBy(_ => random.Next()).ToList();
 
-        output.WriteLine("Issue checklist (one report per problem). Answer whether the report mentions the problem.");
+        output.WriteLine("Issue checklist (one report per problem). Attribution: " + comparator +
+            ". Answer whether the selected source mentions the problem.");
+        if (view != "comparator-only")
+            output.WriteLine("Host cautions are NOT AI findings. Their detection credit is separate.");
         var total = done.Count + queue.Count;
         foreach (var item in queue)
         {
@@ -274,8 +303,15 @@ public static class LabOwnerTools
             output.WriteLine(new string('=', 78));
             output.WriteLine($"Question {done.Count + 1} of {total}: {item.CaseId}");
             output.WriteLine($"PROBLEM: {item.Issue.Description}");
-            Show("REPORT", item.Report, output);
-            var answer = Ask(input, output, "Does the REPORT mention this problem? [y/n/q] ", "y", "n", "q");
+            if (view == "host-only")
+                ShowHost("HOST CAUTIONS (not AI)", item.Report, output);
+            else
+            {
+                Show("REPORT", item.Report, output);
+                if (view == "combined")
+                    ShowHost("HOST CAUTIONS (not AI)", item.Report, output);
+            }
+            var answer = Ask(input, output, "Does the shown material mention this problem? [y/n/q] ", "y", "n", "q");
             if (answer is null or "q") break;
             done.Add(new(item.CaseId, item.Issue.Id, comparator, item.Report.Trial, answer == "y"));
             File.WriteAllText(checksPath, JsonSerializer.Serialize(new SingleCheckFile(SingleChecklistSchema,
@@ -357,6 +393,24 @@ public static class LabOwnerTools
                 ? $"  [cites {string.Join(", ", claim.Citations.Select(c => $"{c.FilePath}:{c.Line}"))}]" : ""));
         var unknowns = report.Claims.Where(c => c.Kind == "uncertainty").Select(c => c.Text).Distinct().ToArray();
         if (unknowns.Length > 0) output.WriteLine($"  Unknowns: {string.Join(" | ", unknowns.Take(4))}");
+    }
+
+    private static void ShowHost(string side, LabReport report, TextWriter output)
+    {
+        output.WriteLine("--- " + side);
+        if (report.HostCautionStatus != "verified" || report.HostCautions is null)
+        {
+            output.WriteLine("  Host caution inspection was not verified; do not count an empty list as no issues.");
+            return;
+        }
+        if (report.HostCautions.Count == 0)
+            output.WriteLine("  No host-written cautions for this selected entry point.");
+        var number = 0;
+        foreach (var claim in report.HostCautions)
+            output.WriteLine($"  {++number}. {claim.Text}" +
+                (claim.Citations.Count == 0 ? "" :
+                    $"  [cites {string.Join(", ", claim.Citations.Select(c => c.FilePath +
+                        (c.Line is null ? "" : ":" + c.Line)))}]"));
     }
 
     private static readonly System.Text.RegularExpressions.Regex IdentityPrefix = new(
