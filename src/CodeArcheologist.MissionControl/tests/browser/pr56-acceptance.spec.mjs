@@ -85,7 +85,12 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await declaration.click();
     await expect(page.locator('.atlas-canvas-toolbar')).toContainText('Focused evidence neighborhood');
     await expect(page.locator('.atlas-details .atlas-selected-label')).toContainText('Helper');
-    await expect(page.locator('.atlas-viewport .react-flow__edge').first()).toBeVisible();
+    // SVG <g> wrappers can fail Playwright's element-visibility check even
+    // when a valid edge path exists. Assert the actual rendered path data,
+    // the nonzero host-projected relationship count, and accessible selection.
+    const paths = page.locator('.atlas-viewport .react-flow__edge-path');
+    await expect(paths.first()).toHaveAttribute('d', /[MLCQ]/);
+    await expect(page.locator('.atlas-relationships > button').first()).toBeVisible();
     await expect(page.locator('.atlas-metrics')).toContainText('visible / eligible');
 
     const other = page.locator('.atlas-viewport .react-flow__node:not(.selected)').first();
