@@ -153,7 +153,8 @@ function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command,
       if (event.key !== 'Enter' && event.key !== ' ') return;
       if (!(event.target instanceof Element)) return;
       const element = event.target.closest('.react-flow__node[data-id], .react-flow__edge[data-id]');
-      const id = element?.getAttribute('data-id');
+      if (!element) return;
+      const id = element.getAttribute('data-id');
       if (!id) return;
       if (element.classList.contains('react-flow__edge')) onEdge(id);
       else onNode(id);
