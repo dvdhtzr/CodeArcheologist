@@ -9,6 +9,9 @@ export const ATLAS_SEARCH_RESULTS = 80;
 export type AtlasIndex = {
   graph: EvidenceGraph;
   nodeById: ReadonlyMap<string, GraphNode>;
+  edgeById: ReadonlyMap<string, GraphEdge>;
+  /** Sorted/indexed exactly once on load; subsequent searches never sort 10k matches. */
+  searchRows: readonly { node: GraphNode; searchText: string }[];
   incoming: ReadonlyMap<string, readonly GraphEdge[]>;
   outgoing: ReadonlyMap<string, readonly GraphEdge[]>;
 };
@@ -30,6 +33,12 @@ const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id);
 /** Use backend IDs and edge direction verbatim. An edge is NEVER inferred. */
 export function indexAtlas(graph: EvidenceGraph): AtlasIndex {
   const nodeById = new Map(graph.nodes.map(n => [n.id, n]));
+  const edgeById = new Map(graph.edges.map(e => [e.id, e]));
+  const searchRows = [...graph.nodes].sort(byId).map(node => ({
+    node,
+    searchText: [node.id, node.label, node.kind, node.filePath ?? '', node.detail ?? '']
+      .join(' ').toLocaleLowerCase(),
+  }));
   const incoming = new Map<string, GraphEdge[]>();
   const outgoing = new Map<string, GraphEdge[]>();
   for (const edge of graph.edges) {
@@ -42,7 +51,7 @@ export function indexAtlas(graph: EvidenceGraph): AtlasIndex {
   }
   for (const edges of incoming.values()) edges.sort(byId);
   for (const edges of outgoing.values()) edges.sort(byId);
-  return { graph, nodeById, incoming, outgoing };
+  return { graph, nodeById, edgeById, searchRows, incoming, outgoing };
 }
 
 /**
@@ -113,12 +122,17 @@ export function atlasFocus(index: AtlasIndex, centerId: string, expandedIds: rea
 export function findAtlasNodes(index: AtlasIndex, query: string, kind: string, limit = ATLAS_SEARCH_RESULTS): {
   matches: GraphNode[]; total: number;
 } {
-  const term = query.trim().toLowerCase();
-  const all = index.graph.nodes.filter(n =>
-    (kind === 'all' || n.kind === kind) &&
-    (!term || [n.label, n.kind, n.filePath ?? '', n.detail ?? '']
-      .some(text => text.toLowerCase().includes(term)))).sort(byId);
-  return { matches: all.slice(0, limit), total: all.length };
+  const term = query.trim().toLocaleLowerCase();
+  const matches: GraphNode[] = [];
+  let total = 0;
+  const cap = Math.max(0, Math.trunc(limit));
+  for (const row of index.searchRows) {
+    if ((kind !== 'all' && row.node.kind !== kind) ||
+        (term && !row.searchText.includes(term))) continue;
+    total++;
+    if (matches.length < cap) matches.push(row.node);
+  }
+  return { matches, total };
 }
 
 /** Distinguish statuses rather than reducing uncertainty to a single stroke. */
