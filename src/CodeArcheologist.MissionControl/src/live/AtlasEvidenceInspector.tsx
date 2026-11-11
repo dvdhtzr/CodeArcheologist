@@ -20,6 +20,8 @@ type Props = {
   onNavigate: (nodeId: string) => void;
   onExpand: () => void;
   onImpact: (nodeId: string) => void;
+  onInvestigate: (nodeId: string, label: string) => void;
+  investigationBusy: boolean;
 };
 
 function CandidateGroup({ title, items }: { title: string; items: ProjectCandidate[] | null | undefined }) {
@@ -38,7 +40,7 @@ function CandidateGroup({ title, items }: { title: string; items: ProjectCandida
 
 export function AtlasEvidenceInspector({
   selection, fingerprint, index, node, edge, mode, centerId, expandedIds, visibleIds,
-  onNavigate, onExpand, onImpact,
+  onNavigate, onExpand, onImpact, onInvestigate, investigationBusy,
 }: Props) {
   const [sourceAnchor, setSourceAnchor] = useState<EvidenceAnchor | null>(null);
   const [source, setSource] = useState<SourceView | null>(null);
@@ -86,6 +88,14 @@ export function AtlasEvidenceInspector({
       <p><strong>Node ID:</strong> <code>{node.id}</code></p>
       <p><strong>File SHA-256:</strong> <code>{node.fileSha256 ?? 'Not supplied'}</code></p>
       <p className="live-help">{node.detail ?? 'No further details recorded.'}</p>
+      {(node.kind === 'http-endpoint-attribute' || node.kind === 'http-minimal-mapping') &&
+        <div className="atlas-question-action">
+          <button type="button" className="primary-action" disabled={investigationBusy}
+            onClick={() => onInvestigate(node.id, node.label)}>
+            {investigationBusy ? 'Starting verified investigation…' : 'Investigate this HTTP candidate'}
+          </button>
+          <p className="live-help">Runs the existing read-only, fixed-question Investigator / Skeptic / Reviewer workflow on this saved candidate. Source syntax is not proof of runtime registration.</p>
+        </div>}
       {node.kind === 'syntax-declaration' && node.detail?.startsWith('method syntax declaration') &&
         <button type="button" className="secondary-action"
           onClick={() => onImpact(node.id)}>Inspect direct impact</button>}
