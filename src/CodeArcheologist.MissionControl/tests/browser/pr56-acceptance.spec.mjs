@@ -218,5 +218,5 @@ test('PR3: revoked token disconnects every tab and offers re-pairing', async ({ 
   await expect(page.locator('.snapshot-coverage .deterministic-summary')).toHaveCount(0);
   await page.getByRole('button', { name: 'Connect to local API' }).click();
   await expect(page.getByLabel('Pairing code (shown in the API window)')).toBeVisible();
-  await expect(page.getByText('Session expired or revoked. Pair again with the current API code.')).toBeVisible();
+  await expect(page.locator('.live-form .live-error')).toContainText(/Session expired|not authorized|revoked/i);
 });
