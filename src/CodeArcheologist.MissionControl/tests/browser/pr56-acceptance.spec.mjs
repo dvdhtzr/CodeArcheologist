@@ -111,7 +111,7 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     await expect(page.locator('.atlas-details')).toContainText('observed-location');
     await expect(page.locator('.atlas-endpoints')).toContainText('Go to source node');
     await expect(page.locator('.atlas-endpoints')).toContainText('Go to target node');
-    await expect(page.locator('.atlas-details')).toContainText('Saved graph');
+    await expect(page.locator('.atlas-details')).toContainText('Edge ID:');
     await page.getByRole('button', { name: 'Inspect edge source' }).click();
     const sourceEvidence = page.getByRole('region', { name: 'Atlas verified saved source' });
     await expect(sourceEvidence).toBeVisible();
