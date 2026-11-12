@@ -319,7 +319,15 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     expect(alternative).toBeTruthy();
     await snapshotSelect.selectOption(alternative);
     await page.getByRole('button', { name: 'Architecture Explorer' }).click();
+    // R3 PR2 retains the Explorer across page navigation, but switching saved
+    // snapshots MUST discard the entire previous Explorer state, including
+    // the previously selected Coverage tab and its verified manifest.
+    await expect(page.getByRole('button', { name: 'Architecture Atlas', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Load Architecture Atlas' })).toBeVisible();
+    await expect(page.locator('.coverage-files')).toHaveCount(0);
     await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+    await expect(page.getByRole('button', { name: 'Snapshot coverage' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Load snapshot coverage' })).toBeVisible();
     await expect(page.locator('.coverage-files')).toHaveCount(0);
   });
