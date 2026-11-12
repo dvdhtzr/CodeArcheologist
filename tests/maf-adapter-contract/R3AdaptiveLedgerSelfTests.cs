@@ -98,6 +98,21 @@ internal static class R3AdaptiveLedgerSelfTests
                     skepticReceipt.Role == GateCRole.Skeptic,
                     "Skeptic must have a separate, independently numbered request ledger.");
 
+                var third = investigator.Request(GateCEvidenceRegistry.DirectInvocations,
+                    CancellationToken.None).Response!;
+                try
+                {
+                    f.Store.RecordAdaptiveEvidenceReceipt(
+                        new ExecutionFence(Guid.NewGuid(), fence.Epoch),
+                        attemptId, investigator, third, "initial",
+                        "Unauthorized stale-owner attempt");
+                    throw new InvalidOperationException("Foreign execution owner wrote a receipt.");
+                }
+                catch (ExecutionFenceException) { }
+                Expect(f.Store.ListAdaptiveEvidenceReceipts(runId, attemptId,
+                    GateCRole.Investigator).Count == 2,
+                    "Rejected stale-owner write left a receipt behind.");
+
                 GateC6bSelfTests.ExpectSqliteAbort(f.Store,
                     "UPDATE adaptive_evidence_receipts SET purpose='tampered';");
                 GateC6bSelfTests.ExpectSqliteAbort(f.Store,
