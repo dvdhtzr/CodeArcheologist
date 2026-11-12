@@ -22,9 +22,18 @@ internal static class R3AdaptiveLedgerSelfTests
                 using var owner = new ExecutionOwnershipState();
                 Expect(owner.TryAcquire(f.Store), "Test must own execution lock and epoch.");
                 var fence = owner.Fence!;
-                var admitted = f.Store.CreateInvestigation(scope, Guid.NewGuid(), fence,
+                var key = Guid.NewGuid();
+                var admitted = f.Store.CreateInvestigation(scope, key, fence,
                     adaptiveQuestionSubjectKind: "http-endpoint-attribute");
                 var runId = admitted.Record!.RunId;
+                var replay = f.Store.CreateInvestigation(scope, key, fence,
+                    adaptiveQuestionSubjectKind: "http-endpoint-attribute");
+                Expect(!replay.Created && !replay.Conflict && replay.Record?.RunId == runId,
+                    "Adaptive request retries must retain their original run identity.");
+                Expect(f.Store.CreateInvestigation(scope, key, fence,
+                    "http-endpoint-attribute").Conflict &&
+                    f.Store.CreateInvestigation(scope, key, fence).Conflict,
+                    "V1/legacy idempotency keys must never alias an adaptive run.");
                 var savedContext = f.Store.GetAdaptiveContext(
                     scope.WorkspaceId, scope.RepositoryId, scope.SnapshotId, runId);
                 Expect(AdaptiveQuestionContract.Verify(savedContext) &&
