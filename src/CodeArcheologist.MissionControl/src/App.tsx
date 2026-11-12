@@ -251,6 +251,13 @@ export function App() {
           ? liveView.snapshot.execution?.runStatus : undefined }
     : showingLive ? { api: liveView.api, scope: liveView.scope,
         runId: liveView.runId, status: liveView.snapshot.execution?.runStatus } : null;
+  // PR2 must retain the Explorer for page navigation, but NEVER retain
+  // component state across saved snapshots. Scope changes create a new
+  // Explorer instance, discarding prior graph, source, tabs and viewport.
+  const explorerScopeKey = explorerSelection
+    ? [explorerSelection.scope.workspaceId, explorerSelection.scope.repositoryId,
+        explorerSelection.scope.snapshotId].join('/')
+    : 'no-snapshot';
 
 
   return (
@@ -425,7 +432,7 @@ export function App() {
               Leaving the page must not discard its selected node, expansion
               history, graph source panel or React Flow viewport. */}
           <div className="r3-explorer-host" hidden={page !== 'explorer'}>
-            <DeterministicExplorer selection={explorerSelection}
+            <DeterministicExplorer key={explorerScopeKey} selection={explorerSelection}
               onInvestigate={(id, label, fingerprint) => void startAtlasQuestion(id, label, fingerprint)}
               investigationBusy={startingQuestion} investigationError={questionError} />
           </div>
