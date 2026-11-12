@@ -172,26 +172,54 @@ try {
     throw 'ERROR: provisional paired smoke was accepted as a sealed scored study.'
   }
   Write-Host 'VERIFIED: provisional paired smoke cannot pass the scored census.'
-  $runMetadata = Get-Content -Raw -LiteralPath (Join-Path $smoke 'pr4-run-metadata.json') | ConvertFrom-Json
-  if ($runMetadata.executionIdentity.gitCommit -cne $commit -or
-      $runMetadata.executionIdentity.modelDigest -cne "$($model[0].digest)".ToLowerInvariant() -or
-      $runMetadata.executionIdentity.ollamaVersion -cne $version.version) {
+  # Preflight has already completed all model work. Finalization is read-only
+  # except for this new record, and missing values fail with a named diagnostic.
+  Write-Host 'PRECHECK: final provenance and preflight record'
+  $runMetadataPath = Join-Path $smoke 'pr4-run-metadata.json'
+  $runMetadata = Get-Content -Raw -LiteralPath $runMetadataPath | ConvertFrom-Json
+  if ($null -eq $runMetadata -or $null -eq $runMetadata.executionIdentity) {
+    throw 'Paired smoke metadata is missing executionIdentity.'
+  }
+  $expectedModelDigest = [string]$model[0].digest
+  $observedModelDigest = [string]$runMetadata.executionIdentity.modelDigest
+  $observedGitCommit = [string]$runMetadata.executionIdentity.gitCommit
+  $observedOllamaVersion = [string]$runMetadata.executionIdentity.ollamaVersion
+  if ([string]::IsNullOrWhiteSpace($expectedModelDigest) -or
+      [string]::IsNullOrWhiteSpace($observedModelDigest) -or
+      [string]::IsNullOrWhiteSpace($observedGitCommit) -or
+      [string]::IsNullOrWhiteSpace($observedOllamaVersion)) {
+    throw 'Preflight/smoke provenance has a missing model digest, Git commit, or Ollama version.'
+  }
+  if ($observedGitCommit -cne $commit -or
+      $observedModelDigest -cne $expectedModelDigest.ToLowerInvariant() -or
+      $observedOllamaVersion -cne [string]$version.version) {
     throw 'Provisional run provenance disagrees with independent preflight observations.'
   }
-  $protocolSha = (Get-FileHash -Algorithm SHA256 -LiteralPath (
-    Join-Path $repoRoot 'eval/r3-pr4-experiment.json')).Hash.ToLowerInvariant()
+  $protocolPath = Join-Path $repoRoot 'eval/r3-pr4-experiment.json'
+  $protocolHashResult = Get-FileHash -Algorithm SHA256 -LiteralPath $protocolPath
+  if ($null -eq $protocolHashResult -or
+      [string]::IsNullOrWhiteSpace([string]$protocolHashResult.Hash)) {
+    throw 'Cannot compute PR4 protocol digest.'
+  }
+  $protocolSha = ([string]$protocolHashResult.Hash).ToLowerInvariant()
+  $architecture = [string][System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+  $osDescription = [string][System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+  if ([string]::IsNullOrWhiteSpace($architecture) -or
+      [string]::IsNullOrWhiteSpace($osDescription)) {
+    throw 'Runtime architecture/OS provenance is unavailable.'
+  }
   $record = [ordered]@{
     schemaVersion = 'r3-pr4b2-preflight-v1'
     readiness = 'preflight-green-only; no scored experiment authorized'
-    recordedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+    recordedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
     executingGitCommit = $commit
     protocolSha256 = $protocolSha
     modelTag = 'qwen3.5:9b'
-    modelDigest = "$($model[0].digest)".ToLowerInvariant()
-    ollamaVersion = $version.version
+    modelDigest = $expectedModelDigest.ToLowerInvariant()
+    ollamaVersion = [string]$version.version
     dotnetVersion = (& dotnet --version)
-    operatingSystem = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
-    processArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+    operatingSystem = $osDescription
+    processArchitecture = $architecture
     fullLocalCheck = 'GREEN'
     adaptiveMafProbe = 'GREEN'
     pairedProvisionalSmoke = 'GREEN'
