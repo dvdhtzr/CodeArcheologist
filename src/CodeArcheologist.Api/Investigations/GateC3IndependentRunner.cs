@@ -316,8 +316,8 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
         {
             ResponseFormat = format
         };
-        var response = await agent.RunAsync(prompt,
-            options: options, cancellationToken: ct);
+        var response = await EvaluationModelCalls.ObserveAsync(() =>
+            agent.RunAsync(prompt, options: options, cancellationToken: ct));
         return response.Text ?? "";
     }
 
