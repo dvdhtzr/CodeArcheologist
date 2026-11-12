@@ -124,8 +124,15 @@ try {
       @($negativeSummary.failures).Count -gt 0) {
     throw 'Curated negative expectations did not all pass.'
   }
-  $audit = & dotnet run --project $lab --configuration Release -- --r3-pr4-audit --runs $negativeRun 2>&1
-  if ($LASTEXITCODE -eq 0) {
+  # Intentional RED probe: Windows PowerShell 5.1 can promote redirected
+  # native stderr to a terminating error under ErrorActionPreference=Stop.
+  $oldPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $audit = & dotnet run --project $lab --configuration Release -- --r3-pr4-audit --runs $negativeRun 2>&1
+    $auditExit = $LASTEXITCODE
+  } finally { $ErrorActionPreference = $oldPreference }
+  if ($auditExit -eq 0) {
     throw 'ERROR: a provisional incomplete 4-case run was accepted as a sealed scored study.'
   }
   Write-Host 'VERIFIED: provisional/incomplete negative-case run is rejected by scored census.'
@@ -155,8 +162,13 @@ try {
     }
     Write-Host "VERIFIED: $arm completed; provider attempts=$($activity.modelCalls); failures=0"
   }
-  $smokeAudit = & dotnet run --project $lab --configuration Release -- --r3-pr4-audit --runs $smoke 2>&1
-  if ($LASTEXITCODE -eq 0) {
+  $oldPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    $smokeAudit = & dotnet run --project $lab --configuration Release -- --r3-pr4-audit --runs $smoke 2>&1
+    $smokeAuditExit = $LASTEXITCODE
+  } finally { $ErrorActionPreference = $oldPreference }
+  if ($smokeAuditExit -eq 0) {
     throw 'ERROR: provisional paired smoke was accepted as a sealed scored study.'
   }
   Write-Host 'VERIFIED: provisional paired smoke cannot pass the scored census.'
