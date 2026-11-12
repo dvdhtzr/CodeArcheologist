@@ -110,11 +110,11 @@ internal static class R3AdaptiveLedgerSelfTests
                 Expect(owner.TryAcquire(f.Store), "v7 fixture ownership required.");
                 var run = f.Store.CreateInvestigation(scope, Guid.NewGuid(), owner.Fence!,
                     "http-endpoint-attribute").Record!.RunId;
+                f.Store.Initialize();
+                f.Store.Initialize();
                 Expect(f.Store.GetAdaptiveContext(scope.WorkspaceId, scope.RepositoryId,
                     scope.SnapshotId, run) is null,
                     "Historical v1 question gained an adaptive execution identity.");
-                f.Store.Initialize();
-                f.Store.Initialize();
                 Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 8,
                     "v7-to-v8 migration failed.");
                 Expect(f.Store.GetQuestionContext(scope.WorkspaceId, scope.RepositoryId,
