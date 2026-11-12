@@ -171,6 +171,23 @@ internal static class R3Pr4B1SelfTests
                 File.Delete(Path.Combine(runs, "unexpected.report.json"));
                 expect(R3Pr4Census.Audit(evalRoot, runs).Valid,
                     "restoring exact sealed bytes failed");
+
+                // A failed model response must occupy its assigned trial slot.
+                // It is not a successful investigation, but a sealed and
+                // independently auditable INCOMPLETE observation.
+                var incompleteRuns = Path.Combine(root, "incomplete-runs");
+                Directory.CreateDirectory(incompleteRuns);
+                CreateSyntheticStudy(evalRoot, incompleteRuns, incompletePrimary: true);
+                R3Pr4Census.SealCompleteRun(evalRoot, incompleteRuns);
+                var incompleteAudit = R3Pr4Census.Audit(evalRoot, incompleteRuns);
+                expect(incompleteAudit.Valid &&
+                    incompleteAudit.Primary("F01-attribute-private-helper", Comparator.Adaptive)?.Outcome
+                        == "provider-or-adapter-failure",
+                    "properly recorded incomplete primary trial was dropped or rejected");
+                File.Delete(Path.Combine(incompleteRuns,
+                    "F01-attribute-private-helper.gate-c-adaptive.t1.pr4-activity.json"));
+                expect(!R3Pr4Census.Audit(evalRoot, incompleteRuns).Valid,
+                    "missing activity of an incomplete trial was accepted");
             }
             finally
             {
@@ -182,7 +199,8 @@ internal static class R3Pr4B1SelfTests
         });
     }
 
-    private static void CreateSyntheticStudy(string evalRoot, string runs)
+    private static void CreateSyntheticStudy(string evalRoot, string runs,
+        bool incompletePrimary = false)
     {
         var corpus = CorpusValidator.Validate(evalRoot);
         var protocol = R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var errors);
@@ -210,15 +228,19 @@ internal static class R3Pr4B1SelfTests
         {
             var loaded = corpus.Cases.Single(c => c.Case.Id == slot.CaseId);
             var gate = slot.Comparator is Comparator.GateC or Comparator.Adaptive;
-            var facts = gate
+            var incomplete = incompletePrimary &&
+                slot.CaseId == "F01-attribute-private-helper" &&
+                slot.Comparator == Comparator.Adaptive && slot.Trial == 1;
+            var outcome = incomplete ? "provider-or-adapter-failure" : "completed";
+            var facts = gate && !incomplete
                 ? new LabGateCFacts(["CompletedValidated", "CompletedValidated", "CompletedValidated"],
                     [], [], false, false, true, 3) : null;
             var report = new LabReport(LabSchema.Report, slot.CaseId, slot.Comparator,
-                slot.Trial, "completed", "synthetic-test-only",
+                slot.Trial, outcome, "synthetic-test-only",
                 Guid.NewGuid(), new string('a',64), "test-entry", [], facts, 1,
                 "verified", "synthetic", []);
             var score = new CaseScore(LabSchema.Score, slot.CaseId, slot.Comparator,
-                slot.Trial, "completed", true, [],
+                slot.Trial, outcome, !incomplete, [],
                 loaded.Labels.RequiredObservations.Count, 0, gate ? 1.0 : null,
                 [], ["pending-synthetic"], true, 0, 0, true);
             scores.Add(score);
@@ -228,9 +250,10 @@ internal static class R3Pr4B1SelfTests
             if (!gate) continue;
             var telemetry = new R3Pr4Activity(R3Pr4Activity.Version, slot.CaseId,
                 slot.Comparator, slot.Trial, Guid.NewGuid(), Guid.NewGuid(),
-                "completed", 1, 1, 1, slot.Comparator == Comparator.Adaptive ? 1 : null,
+                incomplete ? "failed" : "completed", 1, 1, 1,
+                slot.Comparator == Comparator.Adaptive ? 1 : null,
                 0, 0, 1, 3, true, slot.Comparator == Comparator.Adaptive ? true : null,
-                "synthetic-test-only", 0, "opt-in-MAF-request-attempts");
+                "synthetic-test-only", incomplete ? 1 : 0, "opt-in-MAF-request-attempts");
             File.WriteAllText(stem + ".pr4-activity.json",
                 JsonSerializer.Serialize(telemetry, LabSchema.Json));
         }
