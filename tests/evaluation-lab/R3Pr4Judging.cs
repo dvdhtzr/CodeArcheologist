@@ -27,7 +27,8 @@ public static class R3Pr4Judging
         string BReportSha256, string PacketName);
     public sealed record Key(string SchemaVersion, string ProtocolSha256,
         string RunDirectory, string RunSealSha256, int Seed,
-        IReadOnlyList<Question> Questions);
+        IReadOnlyList<Question> Questions,
+        IReadOnlyDictionary<string, string> PacketSha256);
     public sealed record Answer(string Id, bool? AMentions, bool? BMentions,
         string? Preferred, bool? AActionable, bool? BActionable);
     public sealed record Record(string SchemaVersion, string RunDirectory,
@@ -105,9 +106,13 @@ public static class R3Pr4Judging
             }
             File.WriteAllText(Path.Combine(upload, name), builder.ToString());
         }
+        var packetHashes = Directory.GetFiles(upload, "*.txt")
+            .OrderBy(Path.GetFileName, StringComparer.Ordinal)
+            .ToDictionary(Path.GetFileName, path => LabSchema.Sha256(File.ReadAllBytes(path)),
+                StringComparer.Ordinal);
         var key = new Key(KeyVersion, audit.ProtocolSha256!,
             Path.GetFullPath(runs), LabSchema.Sha256(File.ReadAllBytes(
-                Path.Combine(runs, R3Pr4Census.SealName))), FrozenSeed, keys);
+                Path.Combine(runs, R3Pr4Census.SealName))), FrozenSeed, keys, packetHashes);
         File.WriteAllText(Path.Combine(outDir, KeyName),
             JsonSerializer.Serialize(key, LabSchema.Json));
         output.WriteLine($"PR4: exported {keys.Count} blinded questions ({keys.Count(x => x.Kind == "issue")} issue, " +
@@ -184,7 +189,7 @@ public static class R3Pr4Judging
             var key = JsonSerializer.Deserialize<Key>(keyBytes, LabSchema.Json)!;
             var audit = R3Pr4Census.Audit(evalRoot, key.RunDirectory);
             var corpus = CorpusValidator.Validate(evalRoot);
-            var invalid = ValidateKey(key, audit, corpus);
+            var invalid = ValidateKey(key, audit, corpus, export);
             if (invalid.Count != 0)
             {
                 output.WriteLine("PR4 KEY REJECTED: " + string.Join("; ", invalid.Take(10)));
@@ -244,7 +249,7 @@ public static class R3Pr4Judging
     }
 
     public static IReadOnlyList<string> ValidateKey(Key key, R3Pr4Census.Result audit,
-        CorpusReport corpus)
+        CorpusReport corpus, string? export = null)
     {
         var errors = new List<string>();
         if (!audit.Valid) errors.AddRange(audit.Errors);
@@ -253,6 +258,17 @@ public static class R3Pr4Judging
             key.RunSealSha256 != LabSchema.Sha256(File.ReadAllBytes(
                 Path.Combine(key.RunDirectory, R3Pr4Census.SealName))))
             errors.Add("PR4 key provenance mismatch.");
+        if (export is not null)
+        {
+            var upload = Path.Combine(export, "upload-these-to-chatgpt");
+            if (key.PacketSha256 is null || !Directory.Exists(upload) ||
+                key.PacketSha256.Count != Directory.GetFiles(upload, "*.txt").Length ||
+                key.PacketSha256.Any(item =>
+                    item.Key != Path.GetFileName(item.Key) ||
+                    !File.Exists(Path.Combine(upload, item.Key)) ||
+                    LabSchema.Sha256(File.ReadAllBytes(Path.Combine(upload, item.Key))) != item.Value))
+                errors.Add("PR4 blinded packet bytes changed after export.");
+        }
         var labelled = corpus.Cases.Where(c => c.Case.Expectation == CaseExpectation.Investigate).ToArray();
         var expected = labelled.SelectMany(c => c.Labels.MaterialIssues
                 .Select(i => (Case: c.Case.Id, Kind: "issue", Issue: (string?)i.Id))
@@ -294,7 +310,7 @@ public static class R3Pr4Judging
         var record = JsonSerializer.Deserialize<Record>(File.ReadAllText(recordFile), LabSchema.Json)!;
         var corpus = CorpusValidator.Validate(evalRoot);
         var audit = R3Pr4Census.Audit(evalRoot, runs);
-        errors.AddRange(ValidateKey(key, audit, corpus));
+        errors.AddRange(ValidateKey(key, audit, corpus, export));
         if (Path.GetFullPath(runs) != Path.GetFullPath(key.RunDirectory) ||
             record.SchemaVersion != RecordVersion ||
             record.RunDirectory != key.RunDirectory ||
