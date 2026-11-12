@@ -93,11 +93,16 @@ internal static class GateC6bLocalRun
             .AddSingleton<WorkspaceStore>().AddSingleton<SnapshotCaptureService>()
             .AddSingleton<CSharpSyntaxInspector>().AddSingleton<CSharpInvocationSyntaxInspector>()
             .AddSingleton<CSharpProvisionalInvocationBinder>().AddSingleton<CSharpHttpAttributeInspector>()
-            .AddSingleton<CSharpMinimalApiInspector>().AddSingleton<CSharpDiRegistrationInspector>()
+            .AddSingleton<CSharpMinimalApiInspector>()
+            .AddSingleton<CSharpHostCautionAnalyzer>().AddSingleton<CSharpDiRegistrationInspector>()
             .AddSingleton<CSharpTypeRelationshipInspector>().AddSingleton<StaticCSharpProjectInspector>()
             .AddSingleton<CSharpProjectLinkContextInspector>().AddSingleton<CSharpEvidenceGraphBuilder>()
             .AddSingleton<SnapshotEvidenceTools>().AddSingleton<GateCEvidenceDiscovery>()
-            .BuildServiceProvider();
+            .BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
         var store = services.GetRequiredService<WorkspaceStore>();
         store.Initialize();
         var workspace = store.Create("C6b walkthrough", Guid.NewGuid()).Workspace;
