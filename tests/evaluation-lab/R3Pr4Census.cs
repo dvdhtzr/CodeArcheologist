@@ -171,12 +171,17 @@ public static class R3Pr4Census
                 problems.Add("Stored summary disagrees with every trial score.");
             if (requireSeal)
             {
-                var seal = Read<Seal>(Path.Combine(runs, SealName));
-                var actual = Fingerprints(runs, expectedFiles);
-                if (seal.SchemaVersion != SealVersion ||
-                    seal.ProtocolSha256 != protocolSha ||
-                    !seal.Artifacts.SequenceEqual(actual))
-                    problems.Add("Run seal does not match the complete artifact set.");
+                if (!File.Exists(Path.Combine(runs, SealName)))
+                    problems.Add("Required run seal missing.");
+                else
+                {
+                    var seal = Read<Seal>(Path.Combine(runs, SealName));
+                    var actual = Fingerprints(runs, expectedFiles);
+                    if (seal.SchemaVersion != SealVersion ||
+                        seal.ProtocolSha256 != protocolSha ||
+                        !seal.Artifacts.SequenceEqual(actual))
+                        problems.Add("Run seal does not match the complete artifact set.");
+                }
             }
         }
         catch (Exception error) when (error is not OutOfMemoryException)
