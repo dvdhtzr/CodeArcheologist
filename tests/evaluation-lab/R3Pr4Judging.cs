@@ -107,9 +107,9 @@ public static class R3Pr4Judging
             File.WriteAllText(Path.Combine(upload, name), builder.ToString());
         }
         var packetHashes = Directory.GetFiles(upload, "*.txt")
-            .OrderBy(Path.GetFileName, StringComparer.Ordinal)
-            .ToDictionary(Path.GetFileName, path => LabSchema.Sha256(File.ReadAllBytes(path)),
-                StringComparer.Ordinal);
+            .OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal)
+            .ToDictionary(path => Path.GetFileName(path)!, path =>
+                LabSchema.Sha256(File.ReadAllBytes(path)), StringComparer.Ordinal);
         var key = new Key(KeyVersion, audit.ProtocolSha256!,
             Path.GetFullPath(runs), LabSchema.Sha256(File.ReadAllBytes(
                 Path.Combine(runs, R3Pr4Census.SealName))), FrozenSeed, keys, packetHashes);
@@ -320,6 +320,22 @@ public static class R3Pr4Judging
             record.Answers.Count != key.Questions.Count ||
             !record.Answers.Select((a,i) => a.Id == key.Questions[i].Id).All(x => x))
             errors.Add("PR4 imported judgment record does not bind to key, run, or complete answer set.");
+        for (var i = 0; i < Math.Min(record.Answers.Count, key.Questions.Count); i++)
+        {
+            var q = key.Questions[i];
+            var a = record.Answers[i];
+            var valid = q.Kind == "issue"
+                ? a.AMentions is not null && a.BMentions is not null &&
+                  a.Preferred is null && a.AActionable is null && a.BActionable is null &&
+                  !(q.AMissing && a.AMentions == true) &&
+                  !(q.BMissing && a.BMentions == true)
+                : q.Kind == "pair" && a.Preferred is "A" or "B" or "TIE" &&
+                  a.AActionable is not null && a.BActionable is not null &&
+                  a.AMentions is null && a.BMentions is null &&
+                  !(q.AMissing && a.AActionable == true) &&
+                  !(q.BMissing && a.BActionable == true);
+            if (!valid) errors.Add("PR4 answer type or missing-report boundary altered: " + q.Id);
+        }
         return (key, record, errors);
     }
 
