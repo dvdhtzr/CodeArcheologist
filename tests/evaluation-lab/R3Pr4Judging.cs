@@ -329,7 +329,7 @@ public static class R3Pr4Judging
                   a.Preferred is null && a.AActionable is null && a.BActionable is null &&
                   !(q.AMissing && a.AMentions == true) &&
                   !(q.BMissing && a.BMentions == true)
-                : q.Kind == "pair" && a.Preferred is "A" or "B" or "TIE" &&
+                : q.Kind == "pair" && a.Preferred is ("A" or "B" or "TIE") &&
                   a.AActionable is not null && a.BActionable is not null &&
                   a.AMentions is null && a.BMentions is null &&
                   !(q.AMissing && a.AActionable == true) &&
