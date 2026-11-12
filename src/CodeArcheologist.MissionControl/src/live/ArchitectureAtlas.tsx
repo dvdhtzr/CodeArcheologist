@@ -24,6 +24,7 @@ type Props = {
   selection: ExplorerSelection;
   onMethod: (methodId: string) => void;
   onInvestigate: (nodeId: string, label: string, fingerprintSha256: string) => void;
+  onInvestigateAdaptive: (nodeId: string, label: string, fingerprintSha256: string) => void;
   investigationBusy: boolean;
   investigationError: string;
 };
@@ -191,7 +192,7 @@ function AtlasCanvas({ projected, centerId, selectedId, selectedEdgeId, command,
 }
 
 export function ArchitectureAtlas({
-  selection, onMethod, onInvestigate, investigationBusy, investigationError,
+  selection, onMethod, onInvestigate, onInvestigateAdaptive, investigationBusy, investigationError,
 }: Props) {
   const [loaded, setLoaded] = useState<AtlasRecord | null>(null);
   const [loading, setLoading] = useState(false);
@@ -397,6 +398,7 @@ export function ArchitectureAtlas({
             mode={mode} centerId={centerId} expandedIds={expandedIds} visibleIds={visibleIds}
             onNavigate={focusNode} onExpand={expandSelected} onImpact={onMethod}
             onInvestigate={(id, label) => onInvestigate(id, label, graph.fingerprintSha256)}
+            onInvestigateAdaptive={(id, label) => onInvestigateAdaptive(id, label, graph.fingerprintSha256)}
             investigationBusy={investigationBusy}/>}
           {projection.edges.length > 0 && <div className="atlas-relationships" aria-label="Drawn evidence relationships">
             <h4>Drawn relationships ({projection.edges.length})</h4>
