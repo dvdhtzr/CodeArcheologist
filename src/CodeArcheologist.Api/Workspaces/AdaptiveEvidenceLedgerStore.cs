@@ -144,7 +144,7 @@ public sealed partial class WorkspaceStore
         if (response.ToolCallsUsed != (prior?.Ordinal ?? 0) + 1 ||
             (phase == "follow-up" && (prior is null || prior.Phase == "follow-up")))
             throw new InvalidOperationException("Out of order or duplicate adaptive evidence request.");
-        var previousLinks = prior is null ? [] :
+        GateC5EvidenceLink[] previousLinks = prior is null ? [] :
             JsonSerializer.Deserialize<GateC5EvidenceLink[]>(prior.EvidenceLinksJson)
                 ?? throw new InvalidOperationException("Prior receipt mappings invalid.");
         if (previousLinks.Length > links.Count ||
