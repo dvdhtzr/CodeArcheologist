@@ -1,5 +1,6 @@
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Workspaces;
+using Microsoft.Extensions.DependencyInjection;
 
 internal static class R3AdaptiveExecutionSelfTests
 {
