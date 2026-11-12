@@ -257,6 +257,34 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
         Console.Error.WriteLine("PR4 output must be a new empty directory; earlier trials cannot be overwritten.");
         return 2;
     }
+    // Bind every PR4 artifact to the observed local Ollama and executing source identity.
+    // Fail before creating an output directory if provenance is unavailable.
+    R3Pr4ExecutionIdentity? executionIdentity = null;
+    if (pr4 && !provisional)
+    {
+        var trustedRoot = Path.GetFullPath(Path.GetDirectoryName(evalRoot)!)
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var resolvedOutput = Path.GetFullPath(outDir).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        if (resolvedOutput.StartsWith(trustedRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("Scored PR4 output must be outside the trusted source checkout.");
+            return 2;
+        }
+    }
+    if (pr4)
+    {
+        try
+        {
+            executionIdentity = await R3Pr4ExecutionIdentity.CaptureAsync(
+                Path.GetDirectoryName(evalRoot)!, requireClean: !provisional);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine("PR4 execution provenance unavailable: " + error.Message);
+            return 2;
+        }
+    }
     Directory.CreateDirectory(outDir);
     if (pr4)
         await File.WriteAllTextAsync(Path.Combine(outDir, "pr4-run-metadata.json"),
@@ -267,6 +295,7 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
                 protocolSha256 = LabSchema.Sha256(File.ReadAllBytes(
                     Path.Combine(evalRoot, R3Pr4Protocol.FileName))),
                 comparators, selectedCases = selected, provisional,
+                executionIdentity,
                 recordedAtUtc = DateTimeOffset.UtcNow,
                 judgmentStatus = "pending-blinded-adjudication"
             }, LabSchema.Json));
@@ -379,6 +408,20 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
     var initialGreen = totalBreaches == 0 && failures.Count == 0;
     if (pr4 && !provisional)
     {
+        // Fail closed if the local model or executable changed during the study.
+        // The original metadata and any incomplete artifacts are preserved unsealed.
+        try
+        {
+            var after = await R3Pr4ExecutionIdentity.CaptureAsync(
+                Path.GetDirectoryName(evalRoot)!, requireClean: true);
+            if (after != executionIdentity)
+                throw new InvalidOperationException("Local model/executable identity changed during PR4.");
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine("RED: PR4 provenance recheck failed; run was NOT sealed: " + error.Message);
+            return 1;
+        }
         // The full study is not complete until ALL 232 slots and 19 negative/
         // change expectations exist and every output artifact is sealed.
         try

@@ -68,6 +68,14 @@ public static class R3Pr4Census
                 metadata.GetProperty("selectedCases").GetArrayLength() != corpus.Cases.Count)
                 problems.Add("Run is provisional, incomplete, or bound to another protocol/case census.");
 
+            // Scored artifacts must carry the observed model digest, Ollama version,
+            // trusted source revision and both executable module identities.
+            var identity = metadata.TryGetProperty("executionIdentity", out var provenance)
+                ? provenance.Deserialize<R3Pr4ExecutionIdentity>(LabSchema.Json)
+                : null;
+            if (identity?.Valid != true)
+                problems.Add("Missing or invalid scored-run model/executable identity.");
+
             var summary = Read<JsonElement>(Path.Combine(runs, "summary.json"));
             if (summary.GetProperty("schemaVersion").GetString() != "r3-pr4-lab-summary-v1" ||
                 summary.GetProperty("provisional").GetBoolean() ||
