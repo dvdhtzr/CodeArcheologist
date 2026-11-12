@@ -98,7 +98,7 @@ internal static class R3QuestionContextSelfTests
                 }
                 f.Store.Initialize();
                 f.Store.Initialize();
-                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 7,
+                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 8,
                     "forward migration must reach schema v7");
                 var prior = f.Store.GetInvestigation(scope.WorkspaceId, scope.RepositoryId,
                     scope.SnapshotId, legacyRun);
