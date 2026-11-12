@@ -260,6 +260,18 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
     // Bind every PR4 artifact to the observed local Ollama and executing source identity.
     // Fail before creating an output directory if provenance is unavailable.
     R3Pr4ExecutionIdentity? executionIdentity = null;
+    if (pr4 && !provisional)
+    {
+        var trustedRoot = Path.GetFullPath(Path.GetDirectoryName(evalRoot)!)
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var resolvedOutput = Path.GetFullPath(outDir).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        if (resolvedOutput.StartsWith(trustedRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("Scored PR4 output must be outside the trusted source checkout.");
+            return 2;
+        }
+    }
     if (pr4)
     {
         try
