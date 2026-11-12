@@ -10,7 +10,7 @@ $lab = Join-Path $root 'tests/evaluation-lab/EvaluationLab.csproj'
 $adapter = Join-Path $root 'tests/maf-adapter-contract/MafAdapterContractProbe.csproj'
 $curated = (Resolve-Path -LiteralPath $CuratedRoot -ErrorAction Stop).Path
 $repoRoot = (Resolve-Path -LiteralPath $root).Path
-if (($curated.TrimEnd('\', '/') + '\').StartsWith(($repoRoot.TrimEnd('\', '/') + '\'),
+if (($curated.TrimEnd([char[]]@('\', '/')) + '\').StartsWith(($repoRoot.TrimEnd([char[]]@('\', '/')) + '\'),
     [StringComparison]::OrdinalIgnoreCase)) {
   throw 'Curated root must be outside Code Archeologist.'
 }
@@ -19,7 +19,7 @@ if ((Test-Path -LiteralPath $Out) -and @(Get-ChildItem -Force -LiteralPath $Out)
 }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $outFull = (Resolve-Path -LiteralPath $Out).Path
-if (($outFull.TrimEnd('\', '/') + '\').StartsWith(($repoRoot.TrimEnd('\', '/') + '\'),
+if (($outFull.TrimEnd([char[]]@('\', '/')) + '\').StartsWith(($repoRoot.TrimEnd([char[]]@('\', '/')) + '\'),
     [StringComparison]::OrdinalIgnoreCase)) {
   throw 'Preflight output must be outside Code Archeologist.'
 }
@@ -77,11 +77,15 @@ try {
       $survey = & dotnet run --project $lab --configuration Release -- --survey $source 2>&1
       if ($LASTEXITCODE -ne 0) { throw "$($r.id): snapshot survey failed: $($survey -join '; ')" }
       $line = @($survey | Where-Object { "$_" -match '^fingerprint [0-9a-f]{64} files=\d+' })
-      if ($line.Count -ne 1 -or "$($line[0])" -notmatch '^fingerprint ([0-9a-f]{64}) files=(\d+)') {
+      if ($line.Count -ne 1) {
         throw "$($r.id): snapshot survey did not provide a unique fingerprint."
       }
-      $fingerprint = $Matches[1]
-      $count = [int]$Matches[2]
+      if ("$($line[0])" -match '^fingerprint ([0-9a-f]{64}) files=(\d+)') {
+        $fingerprint = $Matches[1]
+        $count = [int]$Matches[2]
+      } else {
+        throw "$($r.id): invalid snapshot fingerprint output."
+      }
       if ($fingerprint -cne $r.snapshotFingerprint -or $count -ne [int]$r.snapshotFileCount) {
         throw "$($r.id): source fingerprint/file count differs from the approved manifest."
       }
