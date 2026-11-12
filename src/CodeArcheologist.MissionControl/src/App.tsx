@@ -189,11 +189,11 @@ export function App() {
     setQuestionError('');
     const identity = [selection.scope.workspaceId, selection.scope.repositoryId,
       selection.scope.snapshotId, fingerprintSha256, nodeId].join('/');
-    if (questionRequest.current?.identity !== identity)
-      questionRequest.current = { identity, key: crypto.randomUUID() };
+    const request = questionRequest.current?.identity === identity
+      ? questionRequest.current : { identity, key: crypto.randomUUID() };
+    questionRequest.current = request;
     try {
-      const response = await selection.api.startQuestion(selection.scope,
-        nodeId, questionRequest.current.key);
+      const response = await selection.api.startQuestion(selection.scope, nodeId, request.key);
       const context = verifiedQuestionAdmission(response, selection.scope, nodeId, fingerprintSha256);
       const current = selectionRef.current;
       if (!current || current.api !== selection.api ||
@@ -244,9 +244,11 @@ export function App() {
   const liveEventCount = showingLive ? liveView.snapshot.events.length : 0;
   const activeInScope = launchMatchesSelection(activeQuestion, explorerSelection?.api ?? null,
     explorerSelection?.scope ?? null) ? activeQuestion : null;
-  const findingsTarget = activeInScope && (!liveView || liveView.runId === activeInScope.run.runId)
+  const findingsTarget = activeInScope
     ? { api: activeInScope.api, scope: activeInScope.scope,
-        runId: activeInScope.run.runId, status: liveView?.snapshot.execution?.runStatus }
+        runId: activeInScope.run.runId,
+        status: liveView?.runId === activeInScope.run.runId
+          ? liveView.snapshot.execution?.runStatus : undefined }
     : showingLive ? { api: liveView.api, scope: liveView.scope,
         runId: liveView.runId, status: liveView.snapshot.execution?.runStatus } : null;
 
@@ -344,6 +346,7 @@ export function App() {
                     }}
                     onSelection={setExplorerSelection}
                     onFindings={() => setPage('findings')}
+                    onDismissExternalRun={() => setActiveQuestion(null)}
                     externalRun={activeInScope} /></div>
                   {activeInScope && mode === 'live' && <div className="r3-question-summary"
                     aria-label="Current Atlas investigation">
@@ -421,7 +424,7 @@ export function App() {
           {/* Keep the Atlas mounted between Observatory and Findings.
               Leaving the page must not discard its selected node, expansion
               history, graph source panel or React Flow viewport. */}
-          <div hidden={page !== 'explorer'}>
+          <div className="r3-explorer-host" hidden={page !== 'explorer'}>
             <DeterministicExplorer selection={explorerSelection}
               onInvestigate={(id, label, fingerprint) => void startAtlasQuestion(id, label, fingerprint)}
               investigationBusy={startingQuestion} investigationError={questionError} />
