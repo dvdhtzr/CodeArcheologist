@@ -252,6 +252,7 @@ internal static class R3AdaptiveLedgerSelfTests
             "R3 replay: missing gap event fails closed despite surviving receipt",
             f =>
             {
+                f.Store.Initialize();
                 var scope = GateC6bSelfTests.SeedSnapshot(f.Store);
                 using var owner = new ExecutionOwnershipState();
                 Expect(owner.TryAcquire(f.Store), "Fixture needs an owner.");
