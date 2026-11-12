@@ -13,6 +13,27 @@ public sealed partial class WorkspaceStore
     private static void MigrateToV8(SqliteConnection db, SqliteTransaction tx)
     {
         using var migration = Command(db, tx, """
+            CREATE TABLE adaptive_question_contexts (
+                run_id TEXT NOT NULL PRIMARY KEY REFERENCES investigation_reports(run_id),
+                question_id TEXT NOT NULL UNIQUE,
+                contract_version TEXT NOT NULL
+                    CHECK(contract_version = 'r3-adaptive-question-context-v2'),
+                subject_node_id TEXT NOT NULL,
+                subject_node_kind TEXT NOT NULL
+                    CHECK(subject_node_kind IN ('http-endpoint-attribute','http-minimal-mapping')),
+                question_kind TEXT NOT NULL CHECK(question_kind='explain-http-entry-point'),
+                context_json TEXT NOT NULL CHECK(length(context_json) BETWEEN 1 AND 8192),
+                context_digest TEXT NOT NULL CHECK(length(context_digest)=64),
+                created_at_unix_ms INTEGER NOT NULL
+            );
+            CREATE TRIGGER adaptive_question_contexts_no_update
+                BEFORE UPDATE ON adaptive_question_contexts BEGIN
+                SELECT RAISE(ABORT,'adaptive question contexts are immutable');
+            END;
+            CREATE TRIGGER adaptive_question_contexts_no_delete
+                BEFORE DELETE ON adaptive_question_contexts BEGIN
+                SELECT RAISE(ABORT,'adaptive question contexts are immutable');
+            END;
             CREATE TABLE adaptive_evidence_receipts (
                 receipt_id TEXT NOT NULL PRIMARY KEY,
                 run_id TEXT NOT NULL REFERENCES investigation_reports(run_id),
@@ -49,7 +70,7 @@ public sealed partial class WorkspaceStore
 
             CREATE TABLE adaptive_gap_events (
                 event_id TEXT NOT NULL PRIMARY KEY,
-                run_id TEXT NOT NULL REFERENCES investigation_reports(run_id),
+                run_id TEXT NOT NULL REFERENCES adaptive_question_contexts(run_id),
                 attempt_id TEXT NOT NULL REFERENCES investigation_attempts(attempt_id),
                 role TEXT NOT NULL CHECK(role IN ('investigator','skeptic')),
                 gap_id TEXT NOT NULL,
