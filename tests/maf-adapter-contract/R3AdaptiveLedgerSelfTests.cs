@@ -22,8 +22,16 @@ internal static class R3AdaptiveLedgerSelfTests
                 using var owner = new ExecutionOwnershipState();
                 Expect(owner.TryAcquire(f.Store), "Test must own execution lock and epoch.");
                 var fence = owner.Fence!;
-                var admitted = f.Store.CreateInvestigation(scope, Guid.NewGuid(), fence);
+                var admitted = f.Store.CreateInvestigation(scope, Guid.NewGuid(), fence,
+                    adaptiveQuestionSubjectKind: "http-endpoint-attribute");
                 var runId = admitted.Record!.RunId;
+                var savedContext = f.Store.GetAdaptiveContext(
+                    scope.WorkspaceId, scope.RepositoryId, scope.SnapshotId, runId);
+                Expect(AdaptiveQuestionContract.Verify(savedContext) &&
+                    savedContext!.QuestionId != runId &&
+                    f.Store.GetQuestionContext(scope.WorkspaceId, scope.RepositoryId,
+                        scope.SnapshotId, runId) is null,
+                    "Adaptive v2 must be separately admitted and never masquerade as v1.");
                 var claim = f.Store.ClaimNextQueuedAttempt(fence, TimeSpan.FromMinutes(6))
                     ?? throw new InvalidOperationException("Test run was not claimed.");
                 var attemptId = claim.Attempt.AttemptId;
@@ -102,6 +110,9 @@ internal static class R3AdaptiveLedgerSelfTests
                 Expect(owner.TryAcquire(f.Store), "v7 fixture ownership required.");
                 var run = f.Store.CreateInvestigation(scope, Guid.NewGuid(), owner.Fence!,
                     "http-endpoint-attribute").Record!.RunId;
+                Expect(f.Store.GetAdaptiveContext(scope.WorkspaceId, scope.RepositoryId,
+                    scope.SnapshotId, run) is null,
+                    "Historical v1 question gained an adaptive execution identity.");
                 f.Store.Initialize();
                 f.Store.Initialize();
                 Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 8,
