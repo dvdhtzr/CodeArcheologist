@@ -4,6 +4,8 @@ import { ApiClient, ApiError, eligibleContinuation } from './api.ts';
 import type { EntryPoint, Repository, RunSummary, Scope, Snapshot, Workspace } from './api.ts';
 import { LiveRun } from './realtime.ts';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
+import { launchMatchesSelection } from './questionJourney.ts';
+import type { AtlasQuestionLaunch } from './questionJourney.ts';
 import type { LiveSnapshot } from './realtime.ts';
 
 export type LiveView = { api: ApiClient; scope: Scope; runId: string; entryPoint: string; snapshot: LiveSnapshot };
@@ -12,11 +14,14 @@ export type LiveView = { api: ApiClient; scope: Scope; runId: string; entryPoint
  * MC3 connection and command panel. Every command is an explicit button
  * press sent over REST; the live view is fed by LiveRun (SignalR + REST).
  */
-export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
+export function LiveConsole({ onView, onConnected, onFindings, onSelection, externalRun,
+  onDismissExternalRun }: {
   onView: (view: LiveView | null) => void;
   onConnected: (connected: boolean) => void;
   onFindings: () => void;
   onSelection: (selection: ExplorerSelection) => void;
+  externalRun: AtlasQuestionLaunch | null;
+  onDismissExternalRun: () => void;
 }) {
   const [address, setAddress] = useState('http://127.0.0.1:5127');
   const [code, setCode] = useState('');
@@ -148,6 +153,18 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     return () => { active = false; };
   }, [api, workspaceId, repositoryId, snapshotId]);
 
+  // The Atlas may start a question using this exact paired ApiClient and
+  // scope. Observe the newly admitted, persisted run through the existing
+  // hosted worker feed; never run a second investigation on navigation.
+  useEffect(() => {
+    if (!launchMatchesSelection(externalRun, api, scope)) return;
+    setEntryPointId(externalRun.subjectNodeId);
+    setRuns(list => list.some(run => run.runId === externalRun.run.runId)
+      ? list : [externalRun.run, ...list]);
+    setRunId(externalRun.run.runId);
+    setEditing(false);
+  }, [externalRun, api, workspaceId, repositoryId, snapshotId]);
+
   // The live feed for the selected run.
   useEffect(() => {
     void liveRun.current?.stop();
@@ -210,6 +227,7 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
     if (!api || !scope || !entryPointId) return;
     await attempt(async () => {
       const started = await api.startInvestigation(scope, entryPointId);
+      onDismissExternalRun();
       setRuns((await api.listRuns(scope)).items);
       setRunId(started.runId);
     });
@@ -274,7 +292,9 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
           {eligibleContinuation(execution ?? null) !== null &&
             <button type="button" className="primary-action" disabled={busy}
               onClick={() => void continueRun()}>Continue interrupted run</button>}
-          <button type="button" className="secondary-action" onClick={() => setRunId('')}>Close</button>
+          <button type="button" className="secondary-action" onClick={() => {
+            onDismissExternalRun(); setRunId('');
+          }}>Close</button>
         </div>
       </div>}
       {runId && !editing
@@ -330,7 +350,9 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection }: {
         </details>}
         <button type="button" className="primary-action" disabled={busy || !entryPointId} onClick={start}>Start investigation</button>
         {runs.length > 0 && <label>Or watch an earlier run
-          <select value={runId} onChange={e => setRunId(e.target.value)}>
+          <select value={runId} onChange={e => {
+            onDismissExternalRun(); setRunId(e.target.value);
+          }}>
             <option value="">Choose…</option>
             {runs.map(r => <option key={r.runId} value={r.runId}>{new Date(r.startedAtUtc).toLocaleString()} · {r.status}</option>)}
           </select>

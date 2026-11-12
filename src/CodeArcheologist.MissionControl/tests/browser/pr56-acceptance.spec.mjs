@@ -298,7 +298,7 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
   });
 
   await test.step('Snapshot coverage reveals actual captured files and policy exclusions', async () => {
-    await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+    await page.getByRole('button', { name: 'Snapshot coverage', exact: true }).click();
     await page.getByRole('button', { name: 'Load snapshot coverage' }).click();
     await expect(page.getByRole('heading', { name: 'What was actually captured?' })).toBeVisible();
     await expect(page.locator('.snapshot-coverage .deterministic-summary')).toContainText('Captured files');
@@ -319,7 +319,16 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
     expect(alternative).toBeTruthy();
     await snapshotSelect.selectOption(alternative);
     await page.getByRole('button', { name: 'Architecture Explorer' }).click();
-    await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+    // R3 PR2 retains the Explorer across page navigation, but switching saved
+    // snapshots MUST discard the entire previous Explorer state, including
+    // the previously selected Coverage tab and its verified manifest.
+    await expect(page.getByRole('button', { name: 'Architecture Atlas', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Load Architecture Atlas' })).toBeVisible();
+    await expect(page.locator('.coverage-files')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Snapshot coverage', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Snapshot coverage', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Load snapshot coverage' })).toBeVisible();
     await expect(page.locator('.coverage-files')).toHaveCount(0);
   });
@@ -347,7 +356,7 @@ test('PR3: revoked token disconnects every tab and offers re-pairing', async ({ 
   await expect(select(page, 'Snapshot')).not.toHaveValue('');
   await page.getByRole('button', { name: 'Architecture Explorer' }).click();
   await expect(page.getByRole('heading', { name: 'Explore the code you captured.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+  await page.getByRole('button', { name: 'Snapshot coverage', exact: true }).click();
 
   // Actual API revocation, not a mocked 401. The next snapshot request must
   // cause one client-wide disconnected state even though Observatory is hidden.

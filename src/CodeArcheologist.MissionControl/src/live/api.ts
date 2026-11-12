@@ -42,7 +42,8 @@ export type EntryPointList = {
 };
 export type RunSummary = {
   runId: string; status: string; diagnostic: string; startedAtUtc: string; finishedAtUtc: string | null;
-  scope: { workspaceId: string; repositoryId: string; snapshotId: string; entryPointId: string };
+  scope: { workspaceId: string; repositoryId: string; snapshotId: string; fingerprintSha256: string;
+    entryPointId: string; evidenceContractVersion: string };
 };
 export type LedgerEvent = {
   eventId: string; attemptId: string; runId: string; sequenceNumber: number; eventType: string; diagnostic: string;
@@ -66,6 +67,17 @@ export function eligibleContinuation(execution: Execution | null): number | null
     ? recovery.expectedAttemptNumber : null;
 }
 export type Scope = { workspaceId: string; repositoryId: string; snapshotId: string };
+export type QuestionContext = {
+  contractVersion: string; questionId: string; runId: string;
+  scope: RunSummary['scope']; subjectNodeId: string; subjectNodeKind: string;
+  questionKind: string; questionTemplateVersion: string; capabilityPolicyVersion: string;
+  budgetProfileVersion: string; createdAtUtc: string; contextDigest: string;
+};
+export type QuestionAdmission = { investigation: RunSummary; questionContext: QuestionContext };
+export type QuestionContextRead =
+  | { status: 'verified'; context: QuestionContext }
+  | { status: 'legacy-no-question-context'; context: null };
+
 export type SourceView = {
   contractVersion: string; snapshotId: string; fingerprintSha256: string;
   filePath: string; fileSha256: string; totalLines: number; focusLine: number;
@@ -181,6 +193,16 @@ export class ApiClient {
   listRuns(scope: Scope) { return this.#send<Page<RunSummary>>('GET', scopePath(scope) + '/investigations'); }
   startInvestigation(scope: Scope, entryPointId: string) {
     return this.#send<RunSummary>('POST', scopePath(scope) + '/investigations', { entryPointId });
+  }
+  /** R3 PR2: explicit user action. The API verifies exact saved entry-point
+   * identity; this client never infers a route from labels or relationships. */
+  startQuestion(scope: Scope, subjectNodeId: string, idempotencyKey: string) {
+    return this.#send<QuestionAdmission>('POST', scopePath(scope) + '/investigations/questions',
+      { subjectNodeId, questionKind: 'explain-http-entry-point' }, true, idempotencyKey);
+  }
+  questionContext(scope: Scope, runId: string) {
+    return this.#send<QuestionContextRead>('GET',
+      scopePath(scope) + `/investigations/${id(runId)}/question-context`);
   }
   events(scope: Scope, runId: string) { return this.#send<LedgerEvent[]>('GET', scopePath(scope) + `/investigations/${id(runId)}/events`); }
   execution(scope: Scope, runId: string) { return this.#send<Execution>('GET', scopePath(scope) + `/investigations/${id(runId)}/execution`); }

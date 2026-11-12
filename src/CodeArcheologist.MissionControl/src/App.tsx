@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { AgentAvatar } from './AgentAvatar';
 import {
@@ -10,6 +10,8 @@ import { Findings } from './live/Findings.tsx';
 import { DeterministicExplorer } from './live/DeterministicExplorer.tsx';
 import type { ExplorerSelection } from './live/DeterministicExplorer.tsx';
 import type { LiveView } from './live/LiveConsole.tsx';
+import { launchMatchesSelection, sameSnapshot, verifiedQuestionAdmission } from './live/questionJourney.ts';
+import type { AtlasQuestionLaunch } from './live/questionJourney.ts';
 import { displayEvent, liveStages } from './live/ledger.ts';
 import type { DisplayEvent, LiveStage } from './live/ledger.ts';
 
@@ -162,6 +164,54 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [liveView, setLiveView] = useState<LiveView | null>(null);
   const [explorerSelection, setExplorerSelection] = useState<ExplorerSelection>(null);
+  const [activeQuestion, setActiveQuestion] = useState<AtlasQuestionLaunch | null>(null);
+  const [startingQuestion, setStartingQuestion] = useState(false);
+  const [questionError, setQuestionError] = useState('');
+  const questionInFlight = useRef(false);
+  const questionRequest = useRef<{ identity: string; key: string } | null>(null);
+  const selectionRef = useRef<ExplorerSelection>(null);
+
+  useEffect(() => { selectionRef.current = explorerSelection; }, [explorerSelection]);
+  useEffect(() => {
+    setQuestionError('');
+    setActiveQuestion(previous => !previous ||
+      (explorerSelection && previous.api === explorerSelection.api &&
+        sameSnapshot(previous.scope, explorerSelection.scope)) ? previous : null);
+    questionRequest.current = null;
+  }, [explorerSelection?.api, explorerSelection?.scope.workspaceId,
+      explorerSelection?.scope.repositoryId, explorerSelection?.scope.snapshotId]);
+
+  async function startAtlasQuestion(nodeId: string, nodeLabel: string, fingerprintSha256: string) {
+    const selection = explorerSelection;
+    if (!selection || !connected || questionInFlight.current) return;
+    questionInFlight.current = true;
+    setStartingQuestion(true);
+    setQuestionError('');
+    const identity = [selection.scope.workspaceId, selection.scope.repositoryId,
+      selection.scope.snapshotId, fingerprintSha256, nodeId].join('/');
+    const request = questionRequest.current?.identity === identity
+      ? questionRequest.current : { identity, key: crypto.randomUUID() };
+    questionRequest.current = request;
+    try {
+      const response = await selection.api.startQuestion(selection.scope, nodeId, request.key);
+      const context = verifiedQuestionAdmission(response, selection.scope, nodeId, fingerprintSha256);
+      const current = selectionRef.current;
+      if (!current || current.api !== selection.api ||
+          !sameSnapshot(current.scope, selection.scope))
+        return; // User switched snapshot or disconnected while admission was in flight.
+      setActiveQuestion({ api: selection.api, scope: selection.scope,
+        fingerprintSha256, subjectNodeId: nodeId,
+        subjectLabel: nodeLabel, questionContext: context, run: response.investigation });
+      questionRequest.current = null; // A later explicit start is a NEW run.
+      setMode('live');
+      setPage('observatory');
+    } catch (error) {
+      setQuestionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      questionInFlight.current = false;
+      setStartingQuestion(false);
+    }
+  }
 
   useEffect(() => {
     if (!playing) return;
@@ -192,6 +242,23 @@ export function App() {
   const events = showingLive ? liveView.snapshot.events.map(displayEvent) : demoDisplay(scene);
   const acceptedCount = ROLES.filter(role => stages[role].state === 'accepted').length;
   const liveEventCount = showingLive ? liveView.snapshot.events.length : 0;
+  const activeInScope = launchMatchesSelection(activeQuestion, explorerSelection?.api ?? null,
+    explorerSelection?.scope ?? null) ? activeQuestion : null;
+  const findingsTarget = activeInScope
+    ? { api: activeInScope.api, scope: activeInScope.scope,
+        runId: activeInScope.run.runId,
+        status: liveView?.runId === activeInScope.run.runId
+          ? liveView.snapshot.execution?.runStatus : undefined }
+    : showingLive ? { api: liveView.api, scope: liveView.scope,
+        runId: liveView.runId, status: liveView.snapshot.execution?.runStatus } : null;
+  // PR2 must retain the Explorer for page navigation, but NEVER retain
+  // component state across saved snapshots. Scope changes create a new
+  // Explorer instance, discarding prior graph, source, tabs and viewport.
+  const explorerScopeKey = explorerSelection
+    ? [explorerSelection.scope.workspaceId, explorerSelection.scope.repositoryId,
+        explorerSelection.scope.snapshotId].join('/')
+    : 'no-snapshot';
+
 
   return (
     <div className="mc-shell">
@@ -278,7 +345,23 @@ export function App() {
                     onClick={() => setMode('demo')}>Demo walkthrough</button>
                 </div>
                 <div className="control-body">
-                  <div hidden={mode !== 'live'}><LiveConsole onView={setLiveView} onConnected={setConnected} onSelection={setExplorerSelection} onFindings={() => setPage('findings')} /></div>
+                  <div hidden={mode !== 'live'}><LiveConsole
+                    onView={setLiveView}
+                    onConnected={value => {
+                      setConnected(value);
+                      if (!value) { setActiveQuestion(null); setQuestionError(''); }
+                    }}
+                    onSelection={setExplorerSelection}
+                    onFindings={() => setPage('findings')}
+                    onDismissExternalRun={() => setActiveQuestion(null)}
+                    externalRun={activeInScope} /></div>
+                  {activeInScope && mode === 'live' && <div className="r3-question-summary"
+                    aria-label="Current Atlas investigation">
+                    <strong>Atlas investigation · {activeInScope.subjectLabel}</strong>
+                    <small>Question: Explain this HTTP entry-point candidate · saved snapshot {activeInScope.scope.snapshotId}</small>
+                    <button type="button" className="secondary-action"
+                      onClick={() => setPage('findings')}>View question findings</button>
+                  </div>}
                   {mode === 'demo' && <>
                     <div className="step-header"><span>PREVIEW PHASE</span><strong>{String(walkthroughStep).padStart(2, '0')} / 04</strong></div>
                     <div className="progress-track" role="progressbar" aria-label="Visual walkthrough step"
@@ -345,7 +428,14 @@ export function App() {
             </div>
           )}
 
-          {page === 'explorer' && <DeterministicExplorer selection={explorerSelection} />}
+          {/* Keep the Atlas mounted between Observatory and Findings.
+              Leaving the page must not discard its selected node, expansion
+              history, graph source panel or React Flow viewport. */}
+          <div className="r3-explorer-host" hidden={page !== 'explorer'}>
+            <DeterministicExplorer key={explorerScopeKey} selection={explorerSelection}
+              onInvestigate={(id, label, fingerprint) => void startAtlasQuestion(id, label, fingerprint)}
+              investigationBusy={startingQuestion} investigationError={questionError} />
+          </div>
           {page === 'activity' && (
             <section className="secondary-page">
               <span className="eyebrow eyebrow--accent">PREVIEW EVENT JOURNAL</span>
@@ -365,15 +455,24 @@ export function App() {
             <section className="secondary-page">
               <span className="eyebrow eyebrow--accent">{showingLive ? 'HOST-RECORDED REPORT' : 'FINDINGS'}</span>
               <h1>What the agents <em>concluded.</em></h1>
-              {showingLive
+              {findingsTarget
                 ? <>
-                    <p className="secondary-intro">{liveView.entryPoint}</p>
+                    <p className="secondary-intro">
+                      {activeInScope && findingsTarget.runId === activeInScope.run.runId
+                        ? 'Question: Explain this HTTP entry-point candidate — ' + activeInScope.subjectLabel
+                        : liveView?.entryPoint ?? 'Saved investigation'}
+                    </p>
+                    {activeInScope && findingsTarget.runId === activeInScope.run.runId &&
+                      <p className="finding-meta">Host-recorded question ID: <code>{activeInScope.questionContext.questionId}</code>.
+                        Source syntax and agent conclusions are not runtime proof.</p>}
                     <div className="secondary-panel">
-                      <Findings api={liveView.api} scope={liveView.scope} runId={liveView.runId}
-                        runStatus={liveView.snapshot.execution?.runStatus} />
+                      <Findings api={findingsTarget.api} scope={findingsTarget.scope}
+                        runId={findingsTarget.runId} runStatus={findingsTarget.status} />
                     </div>
                   </>
                 : <p className="secondary-intro">Connect under Live API on the Observatory page and start or choose a run. The demo walkthrough has no findings, because nothing in it is real.</p>}
+              {activeInScope && <button className="secondary-action" type="button"
+                onClick={() => setPage('explorer')}>Return to selected Atlas evidence <Symbol name="arrow" size={16}/></button>}
               <button className="secondary-action" type="button" onClick={() => setPage('observatory')}>Back to Observatory <Symbol name="arrow" size={16}/></button>
             </section>
           )}
