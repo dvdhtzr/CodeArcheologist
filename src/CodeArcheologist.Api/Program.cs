@@ -41,6 +41,7 @@ builder.Services.AddSingleton(InvestigationWorkerOptions.Default);
 builder.Services.AddSingleton<IGateCEvidenceSessionFactory>(services =>
     services.GetRequiredService<GateCEvidenceDiscovery>());
 builder.Services.AddSingleton<IGateCRoleStageRunner, MafRoleStageRunner>();
+builder.Services.AddSingleton<IAdaptivePromptClientFactory, OllamaAdaptivePromptClientFactory>();
 builder.Services.AddSingleton<IAdaptiveRoleStageRunner, AdaptiveMafRoleStageRunner>();
 // Continuation, coordinator and worker MUST use the same version-aware
 // revalidator; there is no unchecked adaptive checkpoint-reuse path.
@@ -57,6 +58,7 @@ builder.Services.AddSingleton<IInvestigationExecutor>(services =>
 builder.Services.AddSingleton<InvestigationContinuationService>();
 builder.Services.AddSingleton<InvestigationCancellationService>();
 builder.Services.AddSingleton<InvestigationExecutionProjectionService>();
+builder.Services.AddSingleton<AdaptiveActivityProjectionService>();
 builder.Services.AddSingleton<InvestigationAdmissionService>();
 builder.Services.AddSingleton<InvestigationWorker>();
 builder.Services.AddHostedService(services => services.GetRequiredService<InvestigationWorker>());
@@ -246,6 +248,31 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
 {
     var projection = projections.Project(workspaceId, repositoryId, snapshotId, runId, cancellationToken);
     return projection is null ? Results.NotFound() : Results.Ok(projection);
+}).RequireAuthorization();
+
+// R3 PR3d: independent, read-only adaptive evidence activity projection.
+// Every presented receipt is replayed against the original verified snapshot;
+// integrity errors never become a success-shaped empty ledger.
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/adaptive-activity",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId, Guid runId,
+     AdaptiveActivityProjectionService projections, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var projection = projections.Project(workspaceId, repositoryId, snapshotId,
+            runId, cancellationToken);
+        return projection is null ? Results.NotFound() : Results.Ok(projection);
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.Conflict(new { error = "Adaptive evidence integrity validation failed." });
+    }
+    catch (Exception error) when (error is not OperationCanceledException &&
+        error is not OutOfMemoryException)
+    {
+        return Results.Json(new { error = "Adaptive evidence history is unavailable." },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 }).RequireAuthorization();
 
 // C6b: records durable cancellation INTENT (authenticated, CSRF-guarded,

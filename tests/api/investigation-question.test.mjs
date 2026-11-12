@@ -42,6 +42,7 @@ test('R3 structured questions require auth, exact saved scope and approved kind'
     await t.test('unpaired accounts cannot read or admit questions; request guard runs before auth', async () => {
       // Read-only requests reach authentication and return 401 without a token.
       assert.equal((await get(prefix + '/' + randomUUID() + '/question-context')).status, 401);
+      assert.equal((await get(prefix + '/' + randomUUID() + '/adaptive-activity')).status, 401);
 
       // Unsafe POSTs without the anti-CSRF custom header are rejected by the
       // existing local request guard first, even when unauthenticated.
@@ -104,6 +105,11 @@ test('R3 structured questions require auth, exact saved scope and approved kind'
       }
       assert.equal((await get(prefix + '/' + randomUUID() +
         '/adaptive-context', token)).status, 404);
+      assert.equal((await get(prefix + '/' + randomUUID() +
+        '/adaptive-activity', token)).status, 404);
+      const foreignScope = prefix.replace(snap, randomUUID());
+      assert.equal((await get(foreignScope + '/' + randomUUID() +
+        '/adaptive-activity', token)).status, 404);
       // A valid adaptive request would execute real Ollama. Its successful,
       // fenced admission and host/worker path are tested model-free in C#.
     });
@@ -119,6 +125,7 @@ test('R3 structured questions require auth, exact saved scope and approved kind'
       assert.ok(doc.paths[basePath + '/questions/adaptive']?.post);
       assert.ok(doc.paths[basePath + '/{runId}/question-context']?.get);
       assert.ok(doc.paths[basePath + '/{runId}/adaptive-context']?.get);
+      assert.ok(doc.paths[basePath + '/{runId}/adaptive-activity']?.get);
     });
 
     const history = await (await get(prefix, token)).json();
