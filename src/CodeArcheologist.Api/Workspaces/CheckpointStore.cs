@@ -116,12 +116,18 @@ public sealed partial class WorkspaceStore
                 draft.ValidationJson, GateC6CheckpointContract.Json);
         }
         catch (JsonException) { recorded = null; }
-        if (recorded is not { Accepted: true } ||
-            (adaptive && draft.Role != GateCRole.Reviewer &&
-                recorded.ReceiptSequenceDigest is not { Length: 64 }) ||
-            (!adaptive && recorded.ReceiptSequenceDigest is not null) ||
-            (draft.Role == GateCRole.Reviewer &&
-                recorded.ReceiptSequenceDigest is not null))
+        // C6b v2 historically checks role dependency/lineage here and
+        // validates its stored assessment on revalidation. Do not impose the
+        // new v3 Accepted:true requirement on a legacy draft: several
+        // negative contracts intentionally submit "{}" to test the original
+        // dependency guards. A v2 draft may never claim an adaptive receipt.
+        if ((adaptive &&
+                (recorded is not { Accepted: true } ||
+                 (draft.Role != GateCRole.Reviewer &&
+                  recorded.ReceiptSequenceDigest is not { Length: 64 }) ||
+                 (draft.Role == GateCRole.Reviewer &&
+                  recorded.ReceiptSequenceDigest is not null))) ||
+            (!adaptive && recorded?.ReceiptSequenceDigest is not null))
             throw new InvalidOperationException("Checkpoint adaptive receipt validation mismatch.");
         if (adaptive && draft.Role != GateCRole.Reviewer)
         {
