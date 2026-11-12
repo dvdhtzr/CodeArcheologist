@@ -216,6 +216,66 @@ internal static class R3AdaptiveFaultSelfTests
             });
 
         await GateC6bSelfTests.ScenarioAsync(
+            "R3 PR3d: denied duplicate reaches assessment without a second tool call",
+            async f =>
+            {
+                f.Store.Initialize();
+                using var owner = new ExecutionOwnershipState();
+                Expect(owner.TryAcquire(f.Store), "Missing fenced owner.");
+                var (scope, run, attempt, session) = Seed(f.Store, owner.Fence!);
+                var prompts = new ObservingPromptClient
+                    { GapKind = "uncertain-source-relationships" };
+                prompts.WhenEvidenceDelivered = (stage, _) =>
+                {
+                    var persisted = f.Store.ListAdaptiveEvidenceReceipts(run.RunId,
+                        attempt.AttemptId, GateCRole.Investigator);
+                    Expect(persisted.Count == 1 && session.ToolCallsUsed == 1,
+                        "Duplicate proposal authorized a second evidence view.");
+                    if (stage == "R3AdaptiveIndependentAssessment")
+                    {
+                        var gaps = f.Store.ListAdaptiveGapEvents(run.RunId,
+                            attempt.AttemptId, GateCRole.Investigator);
+                        Expect(gaps.Select(e => e.EventKind).SequenceEqual(
+                            ["proposed", "denied"]),
+                            "Assessment was shown before duplicate denial committed.");
+                    }
+                };
+                var result = await new AdaptiveMafRoleStageRunner(f.Store, prompts)
+                    .RunAdaptiveAsync(session, Execution(f.Store, scope, run,
+                        attempt, owner.Fence!), CancellationToken.None);
+                Expect(result.Status == GateCRoleStatus.ValidationRejected &&
+                    prompts.EvidencePrompts == 3 &&
+                    prompts.AssessmentPrompts == 2 &&
+                    session.ToolCallsUsed == 1 &&
+                    f.Store.ListCheckpoints(run.RunId).Count == 0,
+                    "Denied gap changed evidence budget or fabricated a checkpoint.");
+            });
+
+        await GateC6bSelfTests.ScenarioAsync(
+            "R3 PR3d: unexpected host failures are never classified as provider failures",
+            async f =>
+            {
+                f.Store.Initialize();
+                using var owner = new ExecutionOwnershipState();
+                Expect(owner.TryAcquire(f.Store), "Missing fenced owner.");
+                var (scope, run, attempt, session) = Seed(f.Store, owner.Fence!);
+                var prompts = new ObservingPromptClient();
+                prompts.WhenEvidenceDelivered = (_, _) =>
+                    throw new InvalidOperationException("Injected host projection failure.");
+                try
+                {
+                    await new AdaptiveMafRoleStageRunner(f.Store, prompts)
+                        .RunAdaptiveAsync(session, Execution(f.Store, scope, run,
+                            attempt, owner.Fence!), CancellationToken.None);
+                    throw new InvalidOperationException("Unexpected host failure was swallowed.");
+                }
+                catch (StagePersistenceException) { }
+                Expect(prompts.EvidencePrompts == 1 &&
+                    f.Store.ListCheckpoints(run.RunId).Count == 0,
+                    "Unexpected host exception was accepted or checkpointed.");
+            });
+
+        await GateC6bSelfTests.ScenarioAsync(
             "R3 PR3d: unrecorded gap is not inferred model none; foreign scope is hidden",
             f =>
             {
