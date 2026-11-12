@@ -28,6 +28,7 @@ internal static class LabSelfTests
                 frozen.CaseLocks.Count == 50, "PR4 comparator order or locked census changed");
         });
         Pr4ProtocolNegativeTests(evalRoot);
+        await R3Pr4B1SelfTests.RunAsync(evalRoot, Check, CheckAsync, Expect);
 
         foreach (var loaded in corpus.Cases.Where(c => c.Case.Category == CaseCategory.Fixture))
         {
@@ -137,7 +138,8 @@ internal static class LabSelfTests
             Expect(score.IntegrityBreaches.Count == 0 && score.ObjectionCoverage == 1.0,
                 "adaptive role integrity or reviewer coverage failed");
             Expect(activity is { CheckpointReplayAccepted: true, ReceiptReplayAccepted: true,
-                EvidenceReceipts: 2, CommittedEvidenceRequests: 2, ModelCalls: null } &&
+                EvidenceReceipts: 2, CommittedEvidenceRequests: 2, ModelCalls: 2,
+                ModelCallFailures: 0 } &&
                 activity.FollowUpRequests == 0 && activity.DuplicateDenials == 0,
                 "adaptive host activity incorrectly counted or bypassed replay");
             Breach(result with { GateC = result.GateC! with { AnyVerifiedFact = true } },
@@ -766,10 +768,13 @@ internal static class LabSelfTests
                     context.Run.RunId, context.Run.Scope, role, [handle], [],
                     [new GateCConcern("S1", GateCConcernKind.InsufficientEvidence,
                         "Registration is not evidenced.", [handle])], ["Hosting unknown"]);
-            return Task.FromResult(new GateC3RoleOutcome(role,
-                GateCRoleStatus.CompletedValidated, "fixture", assessment,
-                GateCEvidenceRegistry.Relationships, session.ToolCallsUsed,
-                session.ReportLinks(), session.GraphAnalyzerVersion));
+            // A test provider-facing stub verifies that the ambient PR4
+            // meter actually flows through the managed BackgroundService.
+            return EvaluationModelCalls.ObserveAsync(() =>
+                Task.FromResult(new GateC3RoleOutcome(role,
+                    GateCRoleStatus.CompletedValidated, "fixture", assessment,
+                    GateCEvidenceRegistry.Relationships, session.ToolCallsUsed,
+                    session.ReportLinks(), session.GraphAnalyzerVersion)));
         }
     }
 
