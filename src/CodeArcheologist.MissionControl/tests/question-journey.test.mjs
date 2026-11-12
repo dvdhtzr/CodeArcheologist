@@ -57,6 +57,38 @@ test('R3 admission must bind question, run, subject and snapshot exactly', () =>
     nodeId, fingerprint), /did not match/);
 });
 
+test('R3 adaptive admissions require the explicit v2 profile without weakening stable v1', () => {
+  const adaptive = {
+    ...result,
+    questionContext: {
+      ...result.questionContext,
+      contractVersion: 'r3-adaptive-question-context-v2',
+      questionTemplateVersion: 'r3-adaptive-explain-http-candidate-v1',
+      capabilityPolicyVersion: 'r3-adaptive-capabilities-v1',
+      budgetProfileVersion: 'r3-adaptive-six-call-one-followup-v1',
+    },
+  };
+  assert.deepEqual(verifiedQuestionAdmission(adaptive, scope, nodeId, fingerprint,
+    'adaptive'), adaptive.questionContext);
+  assert.throws(() => verifiedQuestionAdmission(adaptive, scope, nodeId, fingerprint),
+    /did not match/);
+  assert.throws(() => verifiedQuestionAdmission(result, scope, nodeId, fingerprint,
+    'adaptive'), /did not match/);
+  for (const invalid of [
+    { ...adaptive.questionContext, capabilityPolicyVersion: 'gate-c-evidence-capabilities-v6' },
+    { ...adaptive.questionContext, questionTemplateVersion: 'r3-explain-http-entry-point-v1' },
+    { ...adaptive.questionContext, budgetProfileVersion: 'r3-legacy-gate-c6b-budget-v1' },
+    { ...adaptive.questionContext, scope: { ...savedScope, snapshotId: questionId } },
+    { ...adaptive.questionContext, subjectNodeId: 'another-node' },
+    { ...adaptive.questionContext, questionId: runId },
+    { ...adaptive.questionContext, contextDigest: '' },
+  ]) {
+    assert.throws(() => verifiedQuestionAdmission({
+      ...adaptive, questionContext: invalid,
+    }, scope, nodeId, fingerprint, 'adaptive'), /did not match/);
+  }
+});
+
 test('R3 launched question remains navigable only in original API session and snapshot', () => {
   const api = {};
   const launch = { api, scope, subjectNodeId: nodeId, questionContext: result.questionContext,
