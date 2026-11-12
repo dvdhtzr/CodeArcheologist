@@ -66,9 +66,11 @@ internal static class R3AdaptiveLocalRun
         return pass == trials ? 0 : 1;
     }
 
-    private static async Task<string> TrialAsync(string source)
-    {
-        await using var services = new ServiceCollection()
+    /// <summary>The exact production-dependency subset needed by the
+    /// genuine adaptive probe. Also instantiated by the model-free contract
+    /// test so missing DI registrations cannot hide until an Ollama run.</summary>
+    internal static ServiceProvider BuildEvidenceServices() =>
+        new ServiceCollection()
             .AddSingleton<WorkspaceStore>().AddSingleton<SnapshotCaptureService>()
             .AddSingleton<CSharpSyntaxInspector>().AddSingleton<CSharpInvocationSyntaxInspector>()
             .AddSingleton<CSharpProvisionalInvocationBinder>()
@@ -88,6 +90,9 @@ internal static class R3AdaptiveLocalRun
                 ValidateScopes = true
             });
 
+    private static async Task<string> TrialAsync(string source)
+    {
+        await using var services = BuildEvidenceServices();
         var store = services.GetRequiredService<WorkspaceStore>();
         store.Initialize();
         var workspace = store.Create("R3 adaptive probe", Guid.NewGuid()).Workspace;
