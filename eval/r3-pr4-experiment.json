@@ -1,0 +1,278 @@
+{
+  "schemaVersion": "r3-pr4-preregistered-comparison-v1",
+  "baselineCommit": "a0d1864c7aa6fd3eedd6996d72866f99ee7d207a",
+  "legacyLabConfigGitBlob": "ced89389dc4ea9f9b5d78bac6371e066d36f533f",
+  "comparators": [
+    "deterministic-baseline",
+    "gate-b",
+    "gate-c",
+    "gate-c-adaptive"
+  ],
+  "primaryTrials": 1,
+  "diagnosticExtraTrials": 2,
+  "totalCases": 50,
+  "investigateCases": 46,
+  "diagnosticCases": 12,
+  "primaryOutcome": "paired-material-issue-detection-difference",
+  "minimumDetectionGainPoints": 10,
+  "confidenceInterval": "paired-case-cluster-bootstrap-95-v1",
+  "confidenceLevel": 0.95,
+  "minimumAdaptiveCompletionRate": 0.9,
+  "maximumAdaptiveCompletionLagPoints": 5,
+  "minimumObjectionCoverage": 1,
+  "allowedIntegrityBreaches": 0,
+  "actionableUsefulness": "blinded-external-judgment-no-regression",
+  "verdict": "no-claim-of-gain-if-interval-includes-zero",
+  "caseLocks": [
+    {
+      "id": "C01-add-helper-call",
+      "caseGitBlob": "2a72cedebe26e9dc6c2db2119f47702aa1795392",
+      "labelsGitBlob": "24845457702e7c18bad8b18d6cf9c15085e2fc93"
+    },
+    {
+      "id": "C02-remove-only-call",
+      "caseGitBlob": "c18b25b79b83152b962282b5c0fbcbea430c377a",
+      "labelsGitBlob": "50b4a970277a573f8f1a9b8b96b66c94a9e90d59"
+    },
+    {
+      "id": "C03-rename-helper",
+      "caseGitBlob": "45a3aad6fba8ede7c8959e1f66e3fe4696b79c2d",
+      "labelsGitBlob": "99e0d1d40c9687e6606a453be96e4599ba302706"
+    },
+    {
+      "id": "C04-overload-switch",
+      "caseGitBlob": "da37fa53d2ec4c3c04791f66e7fdf8af42d6b039",
+      "labelsGitBlob": "292d71c5159816a2987a75ea5da7e75892266351"
+    },
+    {
+      "id": "C05-move-helper-file",
+      "caseGitBlob": "919727144b001ca51bcb63dd202be2bb51e180cd",
+      "labelsGitBlob": "c16e48da931bfe97639c4389c91e74128304ad66"
+    },
+    {
+      "id": "C06-direct-to-interface",
+      "caseGitBlob": "628bfb105c4b877c65bc4433251d59bb321be8aa",
+      "labelsGitBlob": "d9e852b1395687863286482c9b4ac9c98d3d16c9"
+    },
+    {
+      "id": "C07-wrap-in-lambda",
+      "caseGitBlob": "bc254c237c71b4ed296f5ea8aed2314908808277",
+      "labelsGitBlob": "567b427ae9a8d7727138a3cb16d2e5d341bb64b8"
+    },
+    {
+      "id": "C08-route-to-constant",
+      "caseGitBlob": "292fcd112e32c8f8f1a1c8e525f13bb11c62d0c8",
+      "labelsGitBlob": "0102f1ac1417fe7335d7d50f683ddc95cd6553fc"
+    },
+    {
+      "id": "C09-verb-get-to-post",
+      "caseGitBlob": "38d3a5d71948511768122a5b7651953c02f76385",
+      "labelsGitBlob": "ab99c3e36507b194eca620a1f380fa6de5e9421f"
+    },
+    {
+      "id": "C10-lambda-to-method-group",
+      "caseGitBlob": "6e3a25f787c21dc4f4a8efee5d2cc77e0e48acf3",
+      "labelsGitBlob": "7f2a3b38b59420339b4ed797ca5bc2ae1becce42"
+    },
+    {
+      "id": "C11-add-di-registration",
+      "caseGitBlob": "8c3b822cd45f8bbeb9bec2c3ff45b8097003ebfd",
+      "labelsGitBlob": "1bbca71f76f51f26ee109fa5eaff8047e30d4679"
+    },
+    {
+      "id": "C12-injected-comment",
+      "caseGitBlob": "cea08d95a24437f7b42b7ed2391a2b7f4ec1da0d",
+      "labelsGitBlob": "018b41fe4832d6aaa15e06a556e4dee764e7c3a4"
+    },
+    {
+      "id": "C13-edit-unrelated-method",
+      "caseGitBlob": "9f4300316df8390794ac0c3b1908caab06ed79d0",
+      "labelsGitBlob": "ce29b7e74e5e5f77668562c8ce028dc8ff2381ba"
+    },
+    {
+      "id": "C14-add-unrelated-controller",
+      "caseGitBlob": "77f946a3de9fae2ba205c905f0886a8ff06e0aaf",
+      "labelsGitBlob": "30e38fa5e4911da5d26564e706d4ddb418036798"
+    },
+    {
+      "id": "C15-cosmetic-edit",
+      "caseGitBlob": "835ed721fb69fb67a1f324d4c2653883d5aad8d0",
+      "labelsGitBlob": "808cf3ac81e3a3fe256398a08af3a16bfede98a5"
+    },
+    {
+      "id": "F01-attribute-private-helper",
+      "caseGitBlob": "483f04aecfe68f936c2b5ad528407c9cedd867d1",
+      "labelsGitBlob": "193b70b102782f07a838277a9e4d810b5fd1cc13"
+    },
+    {
+      "id": "F02-minimal-api-lambda-static",
+      "caseGitBlob": "d3904cb0eedfe110221102a6b652856456f41d89",
+      "labelsGitBlob": "75b1faac8110aff20697210966a8b702cd245cf4"
+    },
+    {
+      "id": "F03-injected-interface-call",
+      "caseGitBlob": "a98136d3459d58b43d6e0e0adf1bdebf2f99d730",
+      "labelsGitBlob": "24535c5b9ee29433a24e37fd2bb345cb9aa3f609"
+    },
+    {
+      "id": "F04-overload-selection",
+      "caseGitBlob": "9a7bdc68a320445ba9e5bb43d8d9060b902ca0be",
+      "labelsGitBlob": "f46e36cb97bc002ecc0a2cdb025d3fb88d0d1588"
+    },
+    {
+      "id": "F05-lambda-contained-invocation",
+      "caseGitBlob": "910340c20de023fd19d796362836322c9f992a4d",
+      "labelsGitBlob": "3ffde0c397e567201065b6c9f63a7c3362dac20e"
+    },
+    {
+      "id": "F06-local-function",
+      "caseGitBlob": "4ad3e615e95fae4b3fe600fc36dd6161b63a5c17",
+      "labelsGitBlob": "53c502bdcf41a98953fd38c48240cc6507d19305"
+    },
+    {
+      "id": "F07-nonliteral-attribute-route",
+      "caseGitBlob": "e06e3562acd4b12a84680dedf563c0f7bae52429",
+      "labelsGitBlob": "695abbad76245c0b98a0df802823dd96f482eda0"
+    },
+    {
+      "id": "F08-minimal-api-method-group",
+      "caseGitBlob": "4ad810822906ac02c30918a86ad065e68cb75dad",
+      "labelsGitBlob": "39ee199e8c0beb87504aa6722972eef29a8398af"
+    },
+    {
+      "id": "F09-di-registration-and-consumer",
+      "caseGitBlob": "a36931d99251e35c56e24eede00683146634c9be",
+      "labelsGitBlob": "5769193a6bae94b68229f59d7ac4925f25c086b7"
+    },
+    {
+      "id": "F10-prompt-injection-comment",
+      "caseGitBlob": "ac410d28c52fffc9c99208f2e5c1c901eb04b3bf",
+      "labelsGitBlob": "45f33f01107fa35ded60ed62f77f013e9bb2ce51"
+    },
+    {
+      "id": "F11-external-library-call",
+      "caseGitBlob": "e69a482a91d7967bf9796a4dc9e88bf56e63b95c",
+      "labelsGitBlob": "6990bb366d060a9d86e1b2e11f74d6b063c5567d"
+    },
+    {
+      "id": "F12-no-invocations",
+      "caseGitBlob": "cc2a49be45239ff528e3d632a415f001db861baa",
+      "labelsGitBlob": "7194c1b14998296b33b6c892462cd794705fdb86"
+    },
+    {
+      "id": "F13-multiple-verbs",
+      "caseGitBlob": "6dfec46d25887a3d3b60c8a421ba732989570a6c",
+      "labelsGitBlob": "2c24e3b9b912498e08c163f64614eaacfef284e9"
+    },
+    {
+      "id": "F14-recursion",
+      "caseGitBlob": "06a759ce4b8c8c7ea596a4bf0a0adfa2feede2eb",
+      "labelsGitBlob": "b2093e4ab639d68fbaa7d76e8bb5dd76e06972b0"
+    },
+    {
+      "id": "F15-extension-method",
+      "caseGitBlob": "b366639d5a2f434f9bfa9919eac3ade212322cc7",
+      "labelsGitBlob": "8a3d50e368d66f32158b6cc830d27c5d7be84e79"
+    },
+    {
+      "id": "F16-partial-class",
+      "caseGitBlob": "6ecb4d3ef7471671d544e6bd058509e2e6048f09",
+      "labelsGitBlob": "ebd7dc64385b04fcad1ad7f28e703a77a9a392f0"
+    },
+    {
+      "id": "F17-base-class-method",
+      "caseGitBlob": "2e92157e11d055f1c8e0450a5ba827251fd7ccdf",
+      "labelsGitBlob": "8dfada8dfecc172a35c6905d73f1466decf62c64"
+    },
+    {
+      "id": "F18-async-await",
+      "caseGitBlob": "c826eb7fbe3eb89158ec025b10bf1e7cdab56ad4",
+      "labelsGitBlob": "ab53093f62f4391dc234c996fe55b5e78758d82a"
+    },
+    {
+      "id": "F19-static-utility-other-file",
+      "caseGitBlob": "e9e203e9805a3d1582b4751fadea0c4354ade983",
+      "labelsGitBlob": "5ab79fa0563f61615206fa3b981de48fbc413b6c"
+    },
+    {
+      "id": "F20-minimal-api-nonliteral-route",
+      "caseGitBlob": "7cc3a872384cdad3c2d8b9cdfb1aee376291ecc9",
+      "labelsGitBlob": "312e80bd57cc38ee0231de85b4cf1299d9251526"
+    },
+    {
+      "id": "R01-eshoponweb-catalog-item-by-id",
+      "caseGitBlob": "a9491cea6560b84aa38f90c879ab86cac993a60b",
+      "labelsGitBlob": "d8bd7cd48ee761e92de77695982d84c94c1771da"
+    },
+    {
+      "id": "R02-realworld-create-article",
+      "caseGitBlob": "d2108a953d6333768c49dd03a3cdaebdfc085751",
+      "labelsGitBlob": "702fe6a960a78d2ad2552a5ee2d0be01b50e7152"
+    },
+    {
+      "id": "R03-modular-monolith-add-comment",
+      "caseGitBlob": "629cd3c4296e3fc570084e181c446b02e246b803",
+      "labelsGitBlob": "b7e5426be3560205729940ec2bee7aa9024bf527"
+    },
+    {
+      "id": "R04-equinox-create-customer",
+      "caseGitBlob": "7870225ac4880e5c6d235bc31c7dabb0a4f69613",
+      "labelsGitBlob": "033673cca9cfbe5b78c7c52998fe753d40ded4a7"
+    },
+    {
+      "id": "R05-todoapi-create-todo",
+      "caseGitBlob": "8b6e4f128b36a02fc61d269c4814f9738cbd1ffd",
+      "labelsGitBlob": "2cf7fecb70a5e63c6f9c460fce881050abe434e4"
+    },
+    {
+      "id": "R06-cleanarch-create-todo-item",
+      "caseGitBlob": "d7fa28801688f116287cd345042b78c2ad083687",
+      "labelsGitBlob": "2e552f7edb158533e39c261a8bb8121e06c2ba13"
+    },
+    {
+      "id": "R07-eshop-cancel-order",
+      "caseGitBlob": "e5f3f96646de3a5a7f4d80d783501a041309011a",
+      "labelsGitBlob": "0e986d58226b42f7fe9707783aa3e25fda3082de"
+    },
+    {
+      "id": "R08-podcasts-create-feed",
+      "caseGitBlob": "c8318b14b32be5c72ab8bec7f4dd23eda77864d2",
+      "labelsGitBlob": "542085a4e2a4e90259dbf831502594eeb9707aa5"
+    },
+    {
+      "id": "R09-aspire-catalog-item",
+      "caseGitBlob": "0b305f07a142ec90b8f567ba6bb3712768f7c5c0",
+      "labelsGitBlob": "b4b5d7f663534248922805ac07d67b24a0fedd86"
+    },
+    {
+      "id": "R10-ardalis-fastendpoints",
+      "caseGitBlob": "57a39751602ed709e2c464b3f6bbef409fd26a09",
+      "labelsGitBlob": "c4f5137d36049a3da6af3201bfd315613519e3da"
+    },
+    {
+      "id": "R11-aspnetrun-checkout-basket",
+      "caseGitBlob": "a347620a111ca89887a96df48c0eb30a1ac3472f",
+      "labelsGitBlob": "459bd2f5e644fd1f3702816673aa835227e0a692"
+    },
+    {
+      "id": "R12-ocelot-config-routing",
+      "caseGitBlob": "720e484f94f4934ab283df69c65f6d3fe3451268",
+      "labelsGitBlob": "c5ae5a1e206090f382dff73654c032114af7b37c"
+    },
+    {
+      "id": "R13-healthchecks-ui-resources",
+      "caseGitBlob": "b8e3ec3586bdf8d03fd998e8cc94b7f900f81022",
+      "labelsGitBlob": "3037a64cdc0aa59f515f6169f81b40068bab7bc0"
+    },
+    {
+      "id": "R14-contoso-razor-pages",
+      "caseGitBlob": "2f267f4364e4021f9fe6d008f2701c376b100e76",
+      "labelsGitBlob": "781f729c8941ba765c6db33368a1d4f51910f532"
+    },
+    {
+      "id": "R15-orchardcore-capture-limit",
+      "caseGitBlob": "956b22e545121a9dd1d342ab36727743071e6554",
+      "labelsGitBlob": "734be0abf7ebcbd1c4ed41e0b80e868ea37b1cd3"
+    }
+  ]
+}
