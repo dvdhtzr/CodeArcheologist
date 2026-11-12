@@ -430,6 +430,9 @@ public static class LabHarness
         IAdaptiveRoleStageRunner? adaptiveRoles = null)
     {
         var watch = Stopwatch.StartNew();
+        // Begin BEFORE starting the hosted worker. Its inherited async
+        // execution context carries this isolated, read-only counter.
+        using var modelCalls = observeActivity is null ? null : EvaluationModelCalls.Begin();
         var discovery = c.Services.GetRequiredService<GateCEvidenceDiscovery>();
         var revalidator = new GateC6CheckpointRevalidator(discovery, c.Store);
         using var ownership = new ExecutionOwnershipState();
@@ -513,7 +516,7 @@ public static class LabHarness
             outcome, attempt.TerminalCause ?? detail.Summary.Diagnostic, claims, facts, watch);
         if (observeActivity is not null)
             observeActivity(R3Pr4Activity.Capture(c, run, trial, adaptive,
-                watch.ElapsedMilliseconds, ct));
+                watch.ElapsedMilliseconds, ct, modelCalls?.Read()));
         return result;
     }
 
