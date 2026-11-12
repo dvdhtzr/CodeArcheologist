@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using CodeArcheologist.Api.Investigations;
 using CodeArcheologist.Api.Workspaces;
 
