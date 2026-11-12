@@ -10,6 +10,7 @@ export type AtlasQuestionLaunch = {
   subjectNodeId: string;
   subjectLabel: string;
   questionContext: QuestionContext;
+  adaptive?: boolean;
   run: RunSummary;
 };
 
@@ -23,11 +24,21 @@ export function sameSnapshot(a: Scope, b: Scope): boolean {
  * incomplete admission responses before navigating, but does not pretend
  * that a matching digest makes model-authored claims semantically verified. */
 export function verifiedQuestionAdmission(data: QuestionAdmission,
-  scope: Scope, subjectNodeId: string, fingerprintSha256: string): QuestionContext {
+  scope: Scope, subjectNodeId: string, fingerprintSha256: string,
+  executionProfile: 'stable' | 'adaptive' = 'stable'): QuestionContext {
+  const expected = executionProfile === 'adaptive'
+    ? { contextVersion: 'r3-adaptive-question-context-v2',
+        templateVersion: 'r3-adaptive-explain-http-candidate-v1',
+        capabilityVersion: 'r3-adaptive-capabilities-v1',
+        budgetVersion: 'r3-adaptive-six-call-one-followup-v1' }
+    : { contextVersion: R3_CONTEXT_VERSION,
+        templateVersion: 'r3-explain-http-entry-point-v1',
+        capabilityVersion: 'gate-c-evidence-capabilities-v6',
+        budgetVersion: 'r3-legacy-gate-c6b-budget-v1' };
   const run = data?.investigation;
   const context = data?.questionContext;
   const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!run || !context || context.contractVersion !== R3_CONTEXT_VERSION ||
+  if (!run || !context || context.contractVersion !== expected.contextVersion ||
       !guid.test(run.runId) || !guid.test(context.questionId) ||
       run.runId !== context.runId || run.runId === context.questionId ||
       !sameSnapshot(run.scope, scope) || !sameSnapshot(context.scope, scope) ||
@@ -41,9 +52,9 @@ export function verifiedQuestionAdmission(data: QuestionAdmission,
       (context.subjectNodeKind !== 'http-endpoint-attribute' &&
        context.subjectNodeKind !== 'http-minimal-mapping') ||
       context.questionKind !== R3_QUESTION_KIND ||
-      context.questionTemplateVersion !== 'r3-explain-http-entry-point-v1' ||
-      context.capabilityPolicyVersion !== 'gate-c-evidence-capabilities-v6' ||
-      context.budgetProfileVersion !== 'r3-legacy-gate-c6b-budget-v1' ||
+      context.questionTemplateVersion !== expected.templateVersion ||
+      context.capabilityPolicyVersion !== expected.capabilityVersion ||
+      context.budgetProfileVersion !== expected.budgetVersion ||
       !/^[A-F0-9]{64}$/.test(context.contextDigest) ||
       !Number.isFinite(Date.parse(context.createdAtUtc)))
     throw new Error('The question admission did not match the selected saved node and snapshot.');
