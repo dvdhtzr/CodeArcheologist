@@ -58,6 +58,7 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
   await page.getByRole('combobox', { name: 'Atlas node kind' }).selectOption('http-endpoint-attribute');
   await page.locator('.atlas-search-results button').first().click();
   await expect(page.locator('.atlas-details')).toContainText('http-endpoint-attribute');
+  const candidateLabel = await page.locator('.atlas-details .atlas-selected-label').innerText();
   await expect(page.getByRole('button', { name: 'Investigate this HTTP candidate' })).toBeVisible();
   await page.waitForTimeout(200);
   const before = await page.locator('.atlas-viewport .react-flow__viewport')
@@ -99,7 +100,7 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
 
   await page.getByRole('button', { name: 'Investigate this HTTP candidate' }).click();
   await expect(page.getByRole('heading', { name: 'Run an investigation' })).toBeVisible();
-  await expect(page.getByLabel('Current Atlas investigation')).toContainText('JourneyController');
+  await expect(page.getByLabel('Current Atlas investigation')).toContainText(candidateLabel);
   expect(admissions).toBe(1, 'a single explicit click issues one admission');
   await page.getByRole('button', { name: 'View question findings' }).click();
   await expect(page.getByText(/No report has been recorded for this run yet\./)).toBeVisible();
