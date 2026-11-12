@@ -66,6 +66,25 @@ export function eligibleContinuation(execution: Execution | null): number | null
     Number.isInteger(recovery.expectedAttemptNumber) && (recovery.expectedAttemptNumber ?? 0) > 0
     ? recovery.expectedAttemptNumber : null;
 }
+/** Host-verified adaptive history: a missing proposal is unrecorded, never inferred none. */
+export type AdaptiveActivityRequest = {
+  ordinal: number; phase: string; capability: string; receiptId: string;
+  evidenceCount: number; newItemCount: number;
+};
+export type AdaptiveActivityRole = {
+  role: string; historyStatus: string; requests: AdaptiveActivityRequest[];
+  decision: 'unrecorded' | 'recorded-proposal'; proposedGapKind: string | null;
+  requestedCapability: string | null; hostDecision: string | null;
+  evidenceOutcome: string | null; stopReason: string | null;
+  checkpointAccepted: boolean; checkpointReused: boolean;
+};
+export type AdaptiveActivity = {
+  projectionVersion: string; runId: string; snapshotId: string; status: string;
+  attempts: Array<{ attemptId: string; number: number; status: string;
+    interrupted: boolean; roles: AdaptiveActivityRole[] }>;
+  note: string;
+};
+
 export type Scope = { workspaceId: string; repositoryId: string; snapshotId: string };
 export type QuestionContext = {
   contractVersion: string; questionId: string; runId: string;
@@ -213,6 +232,10 @@ export class ApiClient {
   adaptiveContext(scope: Scope, runId: string) {
     return this.#send<{ status: 'verified' | 'not-adaptive'; context: QuestionContext | null }>(
       'GET', scopePath(scope) + `/investigations/${id(runId)}/adaptive-context`);
+  }
+  adaptiveActivity(scope: Scope, runId: string) {
+    return this.#send<AdaptiveActivity>('GET',
+      scopePath(scope) + `/investigations/${id(runId)}/adaptive-activity`);
   }
   events(scope: Scope, runId: string) { return this.#send<LedgerEvent[]>('GET', scopePath(scope) + `/investigations/${id(runId)}/events`); }
   execution(scope: Scope, runId: string) { return this.#send<Execution>('GET', scopePath(scope) + `/investigations/${id(runId)}/execution`); }
