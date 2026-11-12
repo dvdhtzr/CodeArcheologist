@@ -96,6 +96,7 @@ public sealed class GateCEvidenceSession
         new(StringComparer.Ordinal);
     private int _calls;
     private int _itemsIssued;
+    private GateCDiscoveryResponse? _lastIssuedResponse;
 
     internal GateCEvidenceSession(AgentEvidencePackage evidence,
         GateCScope scope, Guid runId, GateCRole role)
@@ -188,6 +189,7 @@ public sealed class GateCEvidenceSession
     internal AgentEvidencePackage VerifiedPackage => _package;
     internal GateCScope VerifiedScope => _scope;
     internal Guid VerifiedRunId => _runId;
+    internal GateCDiscoveryResponse? LastIssuedResponse => _lastIssuedResponse;
 
     public int ToolCallsUsed => _calls;
 
@@ -257,11 +259,12 @@ public sealed class GateCEvidenceSession
             results.Add(new GateCDiscoveredItem(handle, item.Kind,
                 item.Status, item.Label, item.FilePath, item.Line, item.Column));
         }
-        return new(GateCContractCheck.Pass(),
-            new GateCDiscoveryResponse(capability!, GateCEvidenceRegistry.Version,
-                _runId, _role, _scope.FingerprintSha256, results,
-                _package.Unknowns.Take(8).ToArray(),
-                selected.Count > results.Count, _calls));
+        var issued = new GateCDiscoveryResponse(capability!, GateCEvidenceRegistry.Version,
+            _runId, _role, _scope.FingerprintSha256, results,
+            _package.Unknowns.Take(8).ToArray(),
+            selected.Count > results.Count, _calls);
+        _lastIssuedResponse = issued;
+        return new(GateCContractCheck.Pass(), issued);
     }
 
     private sealed record Item(string Id, string Kind, GateCEvidenceKind Status,
