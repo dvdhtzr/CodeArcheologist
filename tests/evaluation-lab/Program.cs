@@ -32,6 +32,35 @@ try
                 "GREEN: PR4 frozen protocol, 50 cases and every approved label are unchanged.");
             return protocol is null ? 1 : 0;
         }
+        case "--r3-pr4-audit":
+        case "--r3-pr4-export":
+        case "--r3-pr4-import":
+        case "--r3-pr4-verdict":
+        {
+            string? Opt(string name) =>
+                Array.IndexOf(args, name) is var index and >= 0 &&
+                index + 1 < args.Length ? Path.GetFullPath(args[index + 1]) : null;
+            if (args[0] == "--r3-pr4-audit" && Opt("--runs") is { } auditRuns)
+            {
+                var audit = R3Pr4Census.Audit(evalRoot, auditRuns);
+                foreach (var error in audit.Errors) Console.Error.WriteLine("PR4 audit: " + error);
+                Console.WriteLine(audit.Valid
+                    ? $"GREEN: PR4 sealed 232-slot census, {audit.Activity.Count} role activities, 19 negative/change expectations."
+                    : "RED: PR4 scored-run census is incomplete or corrupted.");
+                return audit.Valid ? 0 : 1;
+            }
+            if (args[0] == "--r3-pr4-export" &&
+                Opt("--runs") is { } exportRuns && Opt("--out") is { } exportOut)
+                return R3Pr4Judging.Export(evalRoot, exportRuns, exportOut, Console.Out);
+            if (args[0] == "--r3-pr4-import" &&
+                Opt("--export") is { } importExport && Opt("--answers") is { } answers)
+                return R3Pr4Judging.Import(evalRoot, importExport, answers, Console.Out);
+            if (args[0] == "--r3-pr4-verdict" &&
+                Opt("--runs") is { } verdictRuns && Opt("--export") is { } verdictExport)
+                return R3Pr4Verdict.Evaluate(evalRoot, verdictRuns, verdictExport, Console.Out);
+            Console.Error.WriteLine("PR4 command missing options (see usage).");
+            return 2;
+        }
         case "--review-labels":
             return LabOwnerTools.ReviewLabels(evalRoot,
                 args.Length == 3 && args[1] == "--curated-root" ? Path.GetFullPath(args[2]) : null,
@@ -94,6 +123,10 @@ try
                   --describe <case-dir> [--curated-root <dir>]   citable evidence locations for labeling
                   --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
                   --r3-pr4-validate                   PR4 frozen protocol, case bytes and labels (model-free)
+                  --r3-pr4-audit --runs <scored-dir>   enforce sealed 232-slot census (model-free)
+                  --r3-pr4-export --runs <scored-dir> --out <new-dir>   frozen blinded judging packets (model-free)
+                  --r3-pr4-import --export <export-dir> --answers <file>  strict single PR4 judging record (model-free)
+                  --r3-pr4-verdict --runs <scored-dir> --export <export-dir> paired bootstrap verdict (model-free)
                   --r3-pr4-run --out <new-dir> [--curated-root <dir>] [--provisional --cases A,B --comparators gate-c-adaptive]
                       Full non-provisional PR4 runs require all 50 cases and all four comparators.
                   --review-labels [--curated-root <dir>]          owner label sign-off (interactive, resumable)
@@ -343,8 +376,24 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
         Console.WriteLine($"NOT ACQUIRED ({notAcquired.Count}): {string.Join(", ", notAcquired)}. Pass --curated-root after running the acquisition script.");
     var totalBreaches = scores.Sum(s => s.IntegrityBreaches.Count);
     Console.WriteLine($"agent evidence contract: {CodeArcheologist.Api.Investigations.GateCEvidenceRegistry.Version}");
-    Console.WriteLine(totalBreaches == 0 && failures.Count == 0
+    var initialGreen = totalBreaches == 0 && failures.Count == 0;
+    if (pr4 && !provisional)
+    {
+        // The full study is not complete until ALL 232 slots and 19 negative/
+        // change expectations exist and every output artifact is sealed.
+        try
+        {
+            R3Pr4Census.SealCompleteRun(evalRoot, outDir);
+            Console.WriteLine("GREEN: PR4 full census independently audited and sealed.");
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Console.Error.WriteLine("RED: PR4 scored study was NOT sealed: " + error.Message);
+            return 1;
+        }
+    }
+    Console.WriteLine(initialGreen
         ? $"{(provisional ? "PROVISIONAL" : "SCORED")} run finished: zero integrity breaches. Usefulness and issue detection pending blinded judgment."
         : $"RED: {totalBreaches} integrity breach(es), {failures.Count} case failure(s). See {outDir}.");
-    return totalBreaches == 0 && failures.Count == 0 ? 0 : 1;
+    return initialGreen ? 0 : 1;
 }

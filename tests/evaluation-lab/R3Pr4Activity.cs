@@ -16,16 +16,18 @@ public sealed record R3Pr4Activity(
     int? EvidenceReceipts, int? FollowUpRequests, int? DuplicateDenials,
     int? NewEvidenceItems, int? ModelCalls,
     bool CheckpointReplayAccepted, bool? ReceiptReplayAccepted,
-    string EvidenceAccountingBasis)
+    string EvidenceAccountingBasis, int? ModelCallFailures = null,
+    string ModelCallAccountingBasis = "not-instrumented")
 {
-    public const string Version = "r3-pr4-host-activity-v1";
+    public const string Version = "r3-pr4-host-activity-v2";
     // Host checkpoint JSON uses default .NET naming. The API's serializer
     // option is internal to its assembly, so this lab supplies an equivalent.
     private static readonly JsonSerializerOptions HostJson =
         new(JsonSerializerDefaults.General);
 
     public static R3Pr4Activity Capture(CapturedCase captured, Guid runId,
-        int trial, bool adaptive, long elapsedMs, CancellationToken ct)
+        int trial, bool adaptive, long elapsedMs, CancellationToken ct,
+        EvaluationModelCalls.Snapshot? meter = null)
     {
         var store = captured.Store;
         var scope = captured.Scope;
@@ -61,7 +63,9 @@ public sealed record R3Pr4Activity(
                 requests.Length, requests.Count(r => r.Phase == "follow-up"),
                 roles.Count(r => r.HostDecision == "denied"),
                 requests.Sum(r => r.NewItemCount),
-                null, true, true, "replayed-committed-receipts; model-call-count-unobservable");
+                meter?.Attempts, true, true,
+                "replayed-committed-receipts; evidence-item-metric-is-new-items",
+                meter?.Faults, meter is null ? "unavailable" : "opt-in-MAF-request-attempts");
         }
 
         // Historical fixed Gate C does NOT have the PR3 receipt ledger.
@@ -85,8 +89,9 @@ public sealed record R3Pr4Activity(
         return new(Version, captured.Loaded.Case.Id, global::CodeArcheologist.EvaluationLab.Comparator.GateC,
             trial, runId, attempt.AttemptId, attempt.Status, elapsedMs,
             calls, items, null, null, null, null,
-            null, true, null, rolesFixed.Length == 2
-                ? "revalidated-accepted-checkpoints-only; model-call-count-unobservable"
-                : "fixed-role-incomplete; request-count-unobservable");
+            meter?.Attempts, true, null, rolesFixed.Length == 2
+                ? "revalidated-accepted-checkpoints-only; known-items-not-cross-arm-identical"
+                : "fixed-role-incomplete; request-count-unobservable",
+            meter?.Faults, meter is null ? "unavailable" : "opt-in-MAF-request-attempts");
     }
 }
