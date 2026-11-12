@@ -55,7 +55,7 @@ public sealed record R3Pr4Activity(
                 throw new InvalidOperationException("PR4 adaptive activity is unavailable.");
             var roles = history.Attempts.SelectMany(a => a.Roles).ToArray();
             var requests = roles.SelectMany(r => r.Requests).ToArray();
-            return new(Version, captured.Loaded.Case.Id, Comparator.Adaptive,
+            return new(Version, captured.Loaded.Case.Id, global::CodeArcheologist.EvaluationLab.Comparator.Adaptive,
                 trial, runId, attempt.AttemptId, attempt.Status, elapsedMs,
                 requests.Length, requests.Sum(r => r.NewItemCount),
                 requests.Length, requests.Count(r => r.Phase == "follow-up"),
@@ -82,7 +82,7 @@ public sealed record R3Pr4Activity(
             calls = checks.Sum(c => c!.ToolCallsUsed);
             items = links.Sum(l => l!.Length);
         }
-        return new(Version, captured.Loaded.Case.Id, Comparator.GateC,
+        return new(Version, captured.Loaded.Case.Id, global::CodeArcheologist.EvaluationLab.Comparator.GateC,
             trial, runId, attempt.AttemptId, attempt.Status, elapsedMs,
             calls, items, null, null, null, null,
             null, true, null, rolesFixed.Length == 2
