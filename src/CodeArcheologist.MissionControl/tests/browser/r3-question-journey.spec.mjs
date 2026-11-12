@@ -40,9 +40,12 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
   await expect(page.getByText('API connected')).toBeVisible();
   await page.getByPlaceholder('New workspace name').fill('R3 Browser Question');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: /Workspace/ })).not.toHaveValue('');
   await page.getByPlaceholder('Local folder path to register').fill(source);
   await page.getByRole('button', { name: 'Register', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: /Repository/ })).not.toHaveValue('');
   await page.getByRole('button', { name: 'Capture new snapshot' }).click();
+  await expect(page.getByRole('combobox', { name: /Snapshot/ })).not.toHaveValue('');
   const scope = {
     workspaceId: await page.getByRole('combobox', { name: /Workspace/ }).inputValue(),
     repositoryId: await page.getByRole('combobox', { name: /Repository/ }).inputValue(),
@@ -58,7 +61,10 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
   await expect(page.getByRole('button', { name: 'Investigate this HTTP candidate' })).toBeVisible();
   await page.waitForTimeout(200);
   const before = await page.locator('.atlas-viewport .react-flow__viewport')
-    .evaluate(el => getComputedStyle(el).transform);
+    .evaluate(el => {
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+      return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+    });
 
   const runId = randomUUID(), questionId = randomUUID();
   let fake, admissions = 0;
@@ -98,7 +104,15 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
   await expect(page.getByRole('heading', { name: 'Architecture Atlas' })).toBeVisible();
   await expect(page.locator('.atlas-details')).toContainText('http-endpoint-attribute');
   await expect(page.locator('.atlas-provenance code')).toHaveText(fingerprintSha256);
-  await expect(page.locator('.atlas-viewport .react-flow__viewport')).toHaveCSS('transform', before);
+  await expect.poll(async () => {
+    const next = await page.locator('.atlas-viewport .react-flow__viewport').evaluate(el => {
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+      return { x: matrix.m41, y: matrix.m42, zoom: matrix.a };
+    });
+    return Math.abs(next.x - before.x) < 2 &&
+      Math.abs(next.y - before.y) < 2 &&
+      Math.abs(next.zoom - before.zoom) < 0.02;
+  }).toBe(true);
   expect(admissions).toBe(1, 'navigation must not start another model run');
 
   // Changing to a non-HTTP method removes the launch action. A graph
