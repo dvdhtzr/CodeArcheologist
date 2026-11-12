@@ -108,5 +108,8 @@ public static class Comparator
     public const string Baseline = "deterministic-baseline";
     public const string GateB = "gate-b";
     public const string GateC = "gate-c";
+    public const string Adaptive = "gate-c-adaptive";
+    // Historical C7 uses All, unchanged. PR4 uses a separate explicit profile.
     public static readonly string[] All = [Baseline, GateB, GateC];
+    public static readonly string[] Pr4All = [Baseline, GateB, GateC, Adaptive];
 }
