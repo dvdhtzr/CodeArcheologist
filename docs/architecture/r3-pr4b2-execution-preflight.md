@@ -42,6 +42,25 @@ Then perform the entire Phase A preflight in one command:
 
 The script writes an independent `preflight-record.json`, a provisional fixed/adaptive smoke directory, and a provisional negative-case directory under a new, timestamped output location **outside the repository**. It aborts on any mismatch and never reports GREEN if a required step failed. Keep the output, especially if RED, and share the first failure plus its preserved evidence for review. If `$curated` points somewhere else on your machine, set it to the actual existing checkout root; do not reacquire unnecessarily.
 
+## Recovering a prior passing preflight after final-record-only failure
+
+If the prior run visibly reached `VERIFIED: provisional paired smoke cannot pass the scored census.` and **then** failed to write the final provenance record, reuse its existing output rather than repeating the expensive local/model checks. This is a separate **owner-attested recovery**, not an independently rerun full preflight. The recovery validates the two trial artifacts and counters, 4 negative checks, 15 repository commits/licences, frozen protocol hash and exact Ollama identity; it also checks that executable source has not changed since the original smoke (other than these preflight scripts). The previous 14 fingerprints, full `check.ps1` and separate adaptive acceptance are expressly recorded as owner-confirmed, not rerun.
+
+```powershell
+cd C:\Users\dvdht\source\repos\CodeArcheologist
+git pull --ff-only
+$curated = Join-Path $env:TEMP 'ca-pr4-curated'
+$previous = Get-ChildItem $env:TEMP -Directory -Filter 'ca-r3-pr4b2-preflight-*' |
+    Where-Object { (Test-Path (Join-Path $_.FullName 'provisional-smoke/pr4-run-metadata.json')) -and
+                   -not (Test-Path (Join-Path $_.FullName 'preflight-record.json')) } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if ($null -eq $previous) { throw 'No previous finalization-only failed run found.' }
+.\scripts\r3-pr4b2-finalize-existing.ps1 -Out $previous.FullName -CuratedRoot $curated -ConfirmPriorGatesPassed
+```
+
+Review that the selected output folder is your failed run before invoking. No source is compiled or executed by the recovery script; no full scored study or model requests occur. If source beyond the preflight scripts changed since the earlier run or any artifact/identity check fails, repeat the normal full preflight on a fresh output directory instead.
+
 ## Acceptance criteria
 
 - All 50 frozen case/label blobs, 15 curated repository commits, licences, subtrees and applicable fingerprints match exactly; all four negative expectations including capture-limit fail closed.
