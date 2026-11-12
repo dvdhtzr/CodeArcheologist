@@ -74,6 +74,7 @@ internal static class R3AdaptiveLocalRun
             .AddSingleton<CSharpProvisionalInvocationBinder>()
             .AddSingleton<CSharpHttpAttributeInspector>()
             .AddSingleton<CSharpMinimalApiInspector>()
+            .AddSingleton<CSharpHostCautionAnalyzer>()
             .AddSingleton<CSharpDiRegistrationInspector>()
             .AddSingleton<CSharpTypeRelationshipInspector>()
             .AddSingleton<StaticCSharpProjectInspector>()
@@ -81,7 +82,11 @@ internal static class R3AdaptiveLocalRun
             .AddSingleton<CSharpEvidenceGraphBuilder>()
             .AddSingleton<SnapshotEvidenceTools>()
             .AddSingleton<GateCEvidenceDiscovery>()
-            .BuildServiceProvider();
+            .BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true
+            });
 
         var store = services.GetRequiredService<WorkspaceStore>();
         store.Initialize();
