@@ -451,9 +451,9 @@ public sealed partial class WorkspaceStore
         insert.Parameters.AddWithValue("$run", entry.RunId.ToString("D"));
         insert.Parameters.AddWithValue("$attempt", entry.AttemptId.ToString("D"));
         insert.Parameters.AddWithValue("$role", RoleName(entry.Role));
-        insert.Parameters.AddWithValue("$gap", gapId.ToString("D"));
-        insert.Parameters.AddWithValue("$ordinal", ordinal);
-        insert.Parameters.AddWithValue("$kind", eventKind);
+        insert.Parameters.AddWithValue("$gap", entry.GapId.ToString("D"));
+        insert.Parameters.AddWithValue("$ordinal", entry.Ordinal);
+        insert.Parameters.AddWithValue("$kind", entry.EventKind);
         insert.Parameters.AddWithValue("$gapKind", entry.GapKind);
         insert.Parameters.AddWithValue("$purpose", entry.Purpose);
         insert.Parameters.AddWithValue("$cap", (object?)entry.Capability ?? DBNull.Value);
