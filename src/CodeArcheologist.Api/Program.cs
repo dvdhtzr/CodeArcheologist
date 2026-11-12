@@ -41,6 +41,7 @@ builder.Services.AddSingleton(InvestigationWorkerOptions.Default);
 builder.Services.AddSingleton<IGateCEvidenceSessionFactory>(services =>
     services.GetRequiredService<GateCEvidenceDiscovery>());
 builder.Services.AddSingleton<IGateCRoleStageRunner, MafRoleStageRunner>();
+builder.Services.AddSingleton<IAdaptivePromptClientFactory, OllamaAdaptivePromptClientFactory>();
 builder.Services.AddSingleton<IAdaptiveRoleStageRunner, AdaptiveMafRoleStageRunner>();
 // Continuation, coordinator and worker MUST use the same version-aware
 // revalidator; there is no unchecked adaptive checkpoint-reuse path.
