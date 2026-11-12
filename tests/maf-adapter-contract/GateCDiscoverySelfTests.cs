@@ -157,6 +157,36 @@ internal static class GateCDiscoverySelfTests
             throw new InvalidOperationException(
                 "Unbounded canonical graph ID was accepted.");
 
+        // R3 prerequisite: E10..E12 must retain numeric issuance order on
+        // serialization AND survive a fresh session's exact replay validator.
+        // String sorting would put E10 before E2 and fail closed on recovery.
+        var manyEdges = evidence with
+        {
+            Relations = Enumerable.Range(1, 12)
+                .Select(i => Edge("relation-" + i, "contains-invocation",
+                    "observed-syntax", "method", "call")).ToArray()
+        };
+        var manyRun = Guid.NewGuid();
+        var issuing = new GateCEvidenceSession(manyEdges, scope, manyRun,
+            GateCRole.Investigator);
+        var selectedMany = Accept(issuing.Request(GateCEvidenceRegistry.Relationships,
+            CancellationToken.None));
+        var savedLinks = issuing.ReportLinks();
+        if (selectedMany.Items.Count != 12 || savedLinks.Count != 12 ||
+            !savedLinks.Select((link, i) => link.Handle == "E" + (i + 1))
+                .All(value => value))
+            throw new InvalidOperationException("E10+ links are not in numeric issuance order.");
+        var reconstructed = new GateCEvidenceSession(manyEdges, scope, manyRun,
+            GateCRole.Investigator);
+        var restoration = reconstructed.RestoreHandles(savedLinks);
+        if (!restoration.Accepted || !reconstructed.ReportLinks().SequenceEqual(savedLinks))
+            throw new InvalidOperationException("E10+ checkpoint handle reconstruction failed: " +
+                restoration.Diagnostic);
+        var foreignRole = new GateCEvidenceSession(manyEdges, scope, manyRun,
+            GateCRole.Skeptic);
+        if (foreignRole.RestoreHandles(savedLinks).Accepted)
+            throw new InvalidOperationException("Cross-role E10+ restoration was accepted.");
+
         Console.WriteLine(
             "GREEN: Gate C2 capability discovery, role independence, scope, status, " +
             "handle identity, request budgets and unauthorized-call rejection.");
