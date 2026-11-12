@@ -188,12 +188,15 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
             "Provisional results can never be relabelled as acceptance results.");
         return 2;
     }
-    var protocol = pr4 ? R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var _unused) : null;
-    if (pr4 && protocol is null)
+    R3Pr4Experiment? protocol = null;
+    if (pr4)
     {
-        _ = R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var errors);
-        foreach (var error in errors) Console.Error.WriteLine("  PR4 error: " + error);
-        return 2;
+        protocol = R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var errors);
+        if (protocol is null)
+        {
+            foreach (var error in errors) Console.Error.WriteLine("  PR4 error: " + error);
+            return 2;
+        }
     }
     var selected = Option("--cases")?.Split(',') ?? corpus.Cases.Select(c => c.Case.Id).ToArray();
     var comparators = Option("--comparators")?.Split(',') ?? (pr4 ? Comparator.Pr4All : Comparator.All);
@@ -280,7 +283,7 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
         }
         foreach (var comparator in comparators)
         {
-            var trials = comparator is Comparator.GateC or Comparator.Adaptive &&
+            var trials = (comparator is Comparator.GateC or Comparator.Adaptive) &&
                          loaded.Case.DiagnosticRepeat
                 ? corpus.Config.PrimaryTrials + corpus.Config.DiagnosticExtraTrials : corpus.Config.PrimaryTrials;
             for (var trial = 1; trial <= trials; trial++)
@@ -300,7 +303,7 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
                 var stem = Path.Combine(outDir, $"{loaded.Case.Id}.{comparator}.t{trial}");
                 await File.WriteAllTextAsync(stem + ".report.json", JsonSerializer.Serialize(report, LabSchema.Json));
                 await File.WriteAllTextAsync(stem + ".score.json", JsonSerializer.Serialize(score, LabSchema.Json));
-                if (pr4 && comparator is Comparator.GateC or Comparator.Adaptive)
+                if (pr4 && (comparator is Comparator.GateC or Comparator.Adaptive))
                 {
                     if (activity is null)
                         throw new InvalidOperationException("PR4 host activity was not recorded.");
