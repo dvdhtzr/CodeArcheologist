@@ -19,6 +19,10 @@ public sealed record R3Pr4Activity(
     string EvidenceAccountingBasis)
 {
     public const string Version = "r3-pr4-host-activity-v1";
+    // Host checkpoint JSON uses default .NET naming. The API's serializer
+    // option is internal to its assembly, so this lab supplies an equivalent.
+    private static readonly JsonSerializerOptions HostJson =
+        new(JsonSerializerDefaults.General);
 
     public static R3Pr4Activity Capture(CapturedCase captured, Guid runId,
         int trial, bool adaptive, long elapsedMs, CancellationToken ct)
@@ -69,10 +73,10 @@ public sealed record R3Pr4Activity(
         {
             var checks = rolesFixed.Select(c => JsonSerializer
                 .Deserialize<GateC6CheckpointValidation>(c.ValidationJson,
-                    GateC6CheckpointContract.Json)).ToArray();
+                    HostJson)).ToArray();
             var links = rolesFixed.Select(c => JsonSerializer
                 .Deserialize<GateC5EvidenceLink[]>(c.EvidenceLinksJson,
-                    GateC6CheckpointContract.Json)).ToArray();
+                    HostJson)).ToArray();
             if (checks.Any(c => c is not { Accepted: true }) || links.Any(l => l is null))
                 throw new InvalidOperationException("PR4 fixed role checkpoint accounting invalid.");
             calls = checks.Sum(c => c!.ToolCallsUsed);
