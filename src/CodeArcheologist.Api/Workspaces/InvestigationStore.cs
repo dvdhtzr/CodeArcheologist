@@ -28,19 +28,24 @@ public sealed partial class WorkspaceStore
     /// </summary>
     public InvestigationCreateResult CreateInvestigation(
         GateCScope scope, Guid idempotencyKey, ExecutionFence fence,
-        string? questionSubjectKind = null)
+        string? questionSubjectKind = null,
+        string? adaptiveQuestionSubjectKind = null)
     {
+        if (questionSubjectKind is not null && adaptiveQuestionSubjectKind is not null)
+            throw new ArgumentException("A run cannot have two question execution profiles.");
         // Legacy calls retain their original idempotency digest and checkpoint
         // semantics. New structured questions include the host-resolved node
         // kind and all versioned policy identities in their request digest.
-        var digest = questionSubjectKind is null
-            ? Convert.ToHexString(SHA256.HashData(
-                Encoding.UTF8.GetBytes(string.Join("\n",
-                    "gate-c5-request-v1", scope.WorkspaceId.ToString("D"),
-                    scope.RepositoryId.ToString("D"), scope.SnapshotId.ToString("D"),
-                    scope.FingerprintSha256, scope.EntryPointId,
-                    scope.EvidenceContractVersion))))
-            : InvestigationQuestionContract.RequestDigest(scope, questionSubjectKind);
+        var digest = adaptiveQuestionSubjectKind is not null
+            ? AdaptiveQuestionContract.RequestDigest(scope, adaptiveQuestionSubjectKind)
+            : questionSubjectKind is not null
+                ? InvestigationQuestionContract.RequestDigest(scope, questionSubjectKind)
+                : Convert.ToHexString(SHA256.HashData(
+                    Encoding.UTF8.GetBytes(string.Join("\n",
+                        "gate-c5-request-v1", scope.WorkspaceId.ToString("D"),
+                        scope.RepositoryId.ToString("D"), scope.SnapshotId.ToString("D"),
+                        scope.FingerprintSha256, scope.EntryPointId,
+                        scope.EvidenceContractVersion))));
         var now = DateTimeOffset.UtcNow;
         var id = Guid.NewGuid();
         var attemptId = Guid.NewGuid();
@@ -147,6 +152,29 @@ public sealed partial class WorkspaceStore
             insertContext.Parameters.AddWithValue("$created", context.CreatedAtUtc.ToUnixTimeMilliseconds());
             if (insertContext.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("Question context was not persisted with its run.");
+        }
+        if (adaptiveQuestionSubjectKind is not null)
+        {
+            var context = AdaptiveQuestionContract.Create(id, scope,
+                adaptiveQuestionSubjectKind, now);
+            using var insertAdaptive = Command(connection, tx, """
+                INSERT INTO adaptive_question_contexts
+                    (run_id,question_id,contract_version,subject_node_id,
+                     subject_node_kind,question_kind,context_json,context_digest,
+                     created_at_unix_ms)
+                VALUES($run,$question,$version,$node,$kind,$questionKind,$json,$digest,$created);
+                """);
+            insertAdaptive.Parameters.AddWithValue("$run", id.ToString("D"));
+            insertAdaptive.Parameters.AddWithValue("$question", context.QuestionId.ToString("D"));
+            insertAdaptive.Parameters.AddWithValue("$version", context.ContractVersion);
+            insertAdaptive.Parameters.AddWithValue("$node", context.SubjectNodeId);
+            insertAdaptive.Parameters.AddWithValue("$kind", context.SubjectNodeKind);
+            insertAdaptive.Parameters.AddWithValue("$questionKind", context.QuestionKind);
+            insertAdaptive.Parameters.AddWithValue("$json", JsonSerializer.Serialize(context));
+            insertAdaptive.Parameters.AddWithValue("$digest", context.ContextDigest);
+            insertAdaptive.Parameters.AddWithValue("$created", context.CreatedAtUtc.ToUnixTimeMilliseconds());
+            if (insertAdaptive.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Adaptive context was not committed with its run.");
         }
         AppendEvent(connection, tx, attemptId, "attempt-admitted", "queued",
             null, "queued", fence.Epoch);
@@ -371,6 +399,46 @@ public sealed partial class WorkspaceStore
             context.QuestionKind != reader.GetString(6) ||
             context.CreatedAtUtc.ToUnixTimeMilliseconds() != reader.GetInt64(7))
             throw new InvalidOperationException("Stored question context provenance is invalid.");
+        return context;
+    }
+
+    /// <summary>Revalidate an R3 adaptive v2 context against its original
+    /// immutable run record. Legacy and R3 v1 runs have no adaptive profile.</summary>
+    public AdaptiveQuestionContext? GetAdaptiveContext(Guid workspace, Guid repository,
+        Guid snapshot, Guid runId)
+    {
+        using var db = Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = """
+            SELECT q.context_json,q.context_digest,q.contract_version,q.question_id,
+                q.subject_node_id,q.subject_node_kind,q.question_kind,
+                q.created_at_unix_ms,r.fingerprint_sha256,r.entry_point_id,
+                r.evidence_contract_version
+            FROM adaptive_question_contexts q
+            JOIN investigation_reports r ON q.run_id=r.run_id
+            WHERE r.run_id=$run AND r.workspace_id=$ws
+                AND r.repository_id=$repo AND r.snapshot_id=$snapshot;
+            """;
+        cmd.Parameters.AddWithValue("$run", runId.ToString("D"));
+        cmd.Parameters.AddWithValue("$ws", workspace.ToString("D"));
+        cmd.Parameters.AddWithValue("$repo", repository.ToString("D"));
+        cmd.Parameters.AddWithValue("$snapshot", snapshot.ToString("D"));
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+        AdaptiveQuestionContext? context;
+        try { context = JsonSerializer.Deserialize<AdaptiveQuestionContext>(reader.GetString(0)); }
+        catch (JsonException) { throw new InvalidOperationException("Stored adaptive context JSON invalid."); }
+        var expected = new GateCScope(workspace, repository, snapshot,
+            reader.GetString(8), reader.GetString(9), reader.GetString(10));
+        if (!AdaptiveQuestionContract.Verify(context) || context!.RunId != runId ||
+            context.Scope != expected || context.ContextDigest != reader.GetString(1) ||
+            context.ContractVersion != reader.GetString(2) ||
+            context.QuestionId.ToString("D") != reader.GetString(3) ||
+            context.SubjectNodeId != reader.GetString(4) ||
+            context.SubjectNodeKind != reader.GetString(5) ||
+            context.QuestionKind != reader.GetString(6) ||
+            context.CreatedAtUtc.ToUnixTimeMilliseconds() != reader.GetInt64(7))
+            throw new InvalidOperationException("Stored adaptive context provenance invalid.");
         return context;
     }
 

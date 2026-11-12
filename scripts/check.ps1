@@ -26,7 +26,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Gate C5a model-free report and persistence che
 & dotnet run --project $adapterProject --configuration Release -- --gate-c6b-self-test
 if ($LASTEXITCODE -ne 0) { throw 'Gate C6b model-free ownership, fencing and worker checks failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --r3-question-context-self-test
-if ($LASTEXITCODE -ne 0) { throw 'R3 PR1 question context, v7 migration and idempotency checks failed.' }
+if ($LASTEXITCODE -ne 0) { throw 'R3 PR1 question context, v8 migration and idempotency checks failed.' }
+& dotnet run --project $adapterProject --configuration Release -- --r3-adaptive-ledger-self-test
+if ($LASTEXITCODE -ne 0) { throw 'R3 adaptive receipt ordering, v8 gap/receipt fencing and migration checks failed.' }
 $labProject = Join-Path $root 'tests/evaluation-lab/EvaluationLab.csproj'
 & dotnet run --project $labProject --configuration Release -- --validate-corpus
 if ($LASTEXITCODE -ne 0) { throw 'C6c evaluation corpus validation failed.' }
