@@ -86,6 +86,14 @@ internal static class R3Pr4B1SelfTests
                 expect(packets.Length > 0 && packets.All(f =>
                     !File.ReadAllText(f).Contains("gate-c-adaptive", StringComparison.Ordinal)),
                     "comparator name leaked into uploads");
+                var packet = packets[0];
+                var originalPacket = File.ReadAllBytes(packet);
+                File.AppendAllText(packet, "\nA forged instruction.\n");
+                var tamperedAnswers = Path.Combine(root, "packet-tamper.txt");
+                File.WriteAllText(tamperedAnswers, "Q001: A=n B=n\n");
+                expect(R3Pr4Judging.Import(evalRoot, export, tamperedAnswers,
+                    new StringWriter()) == 1, "post-export packet tamper accepted");
+                File.WriteAllBytes(packet, originalPacket);
                 var incomplete = Path.Combine(root, "incomplete.txt");
                 File.WriteAllText(incomplete, "Q001: A=n B=n\n");
                 expect(R3Pr4Judging.Import(evalRoot, export, incomplete, new StringWriter()) == 1 &&
