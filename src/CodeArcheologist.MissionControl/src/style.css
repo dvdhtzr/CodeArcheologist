@@ -657,7 +657,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
 
 /* R2 PR3: Atlas is a wide investigative workspace, not a 1140px form page. */
 .deterministic-explorer--atlas { max-width: none; width: 100%; }
-.page-content:has(.deterministic-explorer--atlas) { max-width: 2080px; padding-inline: clamp(14px, 2vw, 32px); }
+.page-content:has(> .r3-explorer-host:not([hidden]) .deterministic-explorer--atlas) { max-width: 2080px; padding-inline: clamp(14px, 2vw, 32px); }
 .atlas-display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 16px; margin: 8px 0 12px; color: #c4d7ec; font-size: 12px; }
 .atlas-display-controls button { padding: 9px 12px; background: #132b42; color: #d2eeff; border: 1px solid #4c7590; border-radius: 8px; min-height: 38px; }
 .atlas-display-controls label { display: inline-flex; gap: 8px; align-items: center; }
@@ -701,3 +701,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid #72dcff; outline-offs
     animation-duration: 0.01ms !important; transition-duration: 0.01ms !important;
   }
 }
+
+/* R3 PR2: the hidden Explorer remains mounted to retain the exact Atlas
+ * viewport/selection, but must not widen Observatory or Findings pages. */
+.r3-explorer-host[hidden] { display: none !important; }
+.atlas-question-action { padding: 12px; border: 1px solid #355f7b; border-radius: 9px; background: #10263b; margin: 14px 0; }
+.atlas-question-action .primary-action { width: 100%; min-height: 40px; }
+.atlas-question-action .live-help { margin: 9px 0 0; }
+.r3-question-summary { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-top: 12px; background: #10263b; border: 1px solid #355f7b; border-radius: 9px; }
+.r3-question-summary strong { font-size: 12px; color: #d1edff; }
+.r3-question-summary small { font-size: 11px; color: #b2cfe3; overflow-wrap: anywhere; }
+.r3-question-summary button { align-self: flex-start; }
