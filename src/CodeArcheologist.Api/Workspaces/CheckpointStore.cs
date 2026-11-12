@@ -91,6 +91,38 @@ public sealed partial class WorkspaceStore
         var run = LoadRun(db, tx, attempt.RunId);
         if (run is null || draft.RunId != run.RunId || draft.Scope != run.Scope)
             throw new InvalidOperationException("Checkpoint scope does not match its run.");
+        // A checkpoint's immutable version must match the run's admitted
+        // question profile. This check runs under the same fenced transaction
+        // as acceptance, not through a separate eventually consistent read.
+        bool adaptive;
+        using (var profile = Command(db, tx, """
+            SELECT COUNT(*) FROM adaptive_question_contexts WHERE run_id=$run;
+            """))
+        {
+            profile.Parameters.AddWithValue("$run", run.RunId.ToString("D"));
+            adaptive = Convert.ToInt64(profile.ExecuteScalar()) == 1;
+        }
+        var contract = adaptive ? R3AdaptiveCheckpointContract.Version :
+            GateC6CheckpointContract.Version;
+        var policy = adaptive ? AdaptiveQuestionContract.CapabilityPolicyVersion :
+            GateCEvidenceRegistry.Version;
+        if (draft.ContractVersion != contract ||
+            draft.CapabilityContractVersion != policy)
+            throw new InvalidOperationException("Checkpoint execution profile mismatch.");
+        GateC6CheckpointValidation? recorded;
+        try
+        {
+            recorded = JsonSerializer.Deserialize<GateC6CheckpointValidation>(
+                draft.ValidationJson, GateC6CheckpointContract.Json);
+        }
+        catch (JsonException) { recorded = null; }
+        if (recorded is not { Accepted: true } ||
+            (adaptive && draft.Role != GateCRole.Reviewer &&
+                recorded.ReceiptSequenceDigest is not { Length: 64 }) ||
+            (!adaptive && recorded.ReceiptSequenceDigest is not null) ||
+            (draft.Role == GateCRole.Reviewer &&
+                recorded.ReceiptSequenceDigest is not null))
+            throw new InvalidOperationException("Checkpoint adaptive receipt validation mismatch.");
         var role = GateC6CheckpointContract.RoleName(draft.Role);
         var existing = LoadCheckpoints(db, tx, run.RunId);
         if (existing.Any(c => c.Role == role))
@@ -107,8 +139,10 @@ public sealed partial class WorkspaceStore
             throw new InvalidOperationException("Independent role checkpoints cannot depend on other roles.");
 
         var stored = new GateC6StoredCheckpoint(Guid.NewGuid(), run.RunId, attemptId, role,
-            GateC6CheckpointContract.Version, draft.Scope, draft.CapabilityContractVersion,
-            draft.AnalyzerVersion, draft.ModelId, GateC6CheckpointContract.ValidatorVersion,
+            contract, draft.Scope, draft.CapabilityContractVersion,
+            draft.AnalyzerVersion, draft.ModelId,
+            adaptive ? R3AdaptiveCheckpointContract.ValidatorVersion :
+                GateC6CheckpointContract.ValidatorVersion,
             GateCContract.Version, draft.AssessmentJson, draft.EvidenceLinksJson,
             draft.ValidationJson, JsonSerializer.Serialize(draft.DependsOn, GateC6CheckpointContract.Json),
             "", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), fence.Epoch);
