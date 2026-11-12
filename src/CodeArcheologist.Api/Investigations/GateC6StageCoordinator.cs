@@ -54,7 +54,8 @@ public sealed class StagePersistenceException(Exception inner)
 /// </summary>
 public sealed class GateC6StageCoordinator(WorkspaceStore store,
     IGateCEvidenceSessionFactory evidence, IGateCRoleStageRunner roles,
-    GateC6CheckpointRevalidator revalidator) : IInvestigationExecutor
+    GateC6CheckpointRevalidator revalidator,
+    IAdaptiveRoleStageRunner? adaptiveRoles = null) : IInvestigationExecutor
 {
     public async Task<GateC4RunOutcome> ExecuteAsync(InvestigationExecutionContext context,
         CancellationToken ct)
@@ -62,6 +63,13 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
         var (snapshot, run, attempt, fence) = context;
         var runId = run.RunId;
         var scope = run.Scope;
+        // The host owns the immutable execution profile. A v1 or legacy run
+        // never calls adaptive MAF. An explicitly admitted v2 run must have a
+        // registered adaptive runner and its own v3 checkpoints.
+        var isAdaptive = store.GetAdaptiveContext(scope.WorkspaceId,
+            scope.RepositoryId, scope.SnapshotId, runId) is not null;
+        if (isAdaptive && adaptiveRoles is null)
+            throw new CheckpointRejectedException("adaptive-executor-not-registered");
 
         // Re-verify accepted checkpoints for THIS execution even though the
         // continuation request already did: the snapshot may have changed since.
@@ -115,7 +123,7 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
         }
         else
         {
-            investigator = await RunIndependentStageAsync(context, investigatorSession!, ct);
+            investigator = await RunIndependentStageAsync(context, investigatorSession!, isAdaptive, ct);
         }
         if (investigator.Status != GateCRoleStatus.CompletedValidated)
         {
@@ -133,7 +141,7 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
         }
         else
         {
-            skeptic = await RunIndependentStageAsync(context, skepticSession!, ct);
+            skeptic = await RunIndependentStageAsync(context, skepticSession!, isAdaptive, ct);
         }
         progress = Advance(progress, OutcomeEvent(GateCRole.Skeptic, skeptic.Status));
         var independent = new GateC3RunOutcome(runId, scope, progress, investigator, skeptic);
@@ -168,12 +176,15 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
                 var deps = new[] { CheckpointOf(GateCRole.Investigator, reusable, context),
                     CheckpointOf(GateCRole.Skeptic, reusable, context) };
                 Persist(() => store.AcceptCheckpoint(fence, attempt.AttemptId, new(runId,
-                    GateCRole.Reviewer, scope, GateCEvidenceRegistry.Version,
+                    GateCRole.Reviewer, scope,
+                    isAdaptive ? AdaptiveQuestionContract.CapabilityPolicyVersion :
+                        GateCEvidenceRegistry.Version,
                     GateC6CheckpointContract.ReviewerAnalyzer, GateC4ReconciliationRunner.ModelId,
                     GateC6CheckpointRevalidator.Canonical(reviewer.Assessment!), "[]",
                     GateC6CheckpointRevalidator.Canonical(new GateC6CheckpointValidation(true,
                         reviewer.Reconciliation!.Check.Diagnostic, reviewer.Diagnostic, null, 0)),
-                    deps)));
+                    deps, isAdaptive ? R3AdaptiveCheckpointContract.Version :
+                        GateC6CheckpointContract.Version)));
             }
             else
             {
@@ -194,14 +205,17 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
     }
 
     private async Task<GateC3RoleOutcome> RunIndependentStageAsync(
-        InvestigationExecutionContext context, GateCEvidenceSession session, CancellationToken ct)
+        InvestigationExecutionContext context, GateCEvidenceSession session,
+        bool isAdaptive, CancellationToken ct)
     {
         var role = session.Role;
         var stage = GateC6CheckpointContract.RoleName(role);
         var (_, run, attempt, fence) = context;
         Persist(() => store.AppendStageEvent(fence, attempt.AttemptId, "role-started", stage,
             stage + "-started"));
-        var outcome = await roles.RunIndependentAsync(session, run.RunId, run.Scope, ct);
+        var outcome = isAdaptive
+            ? await adaptiveRoles!.RunAdaptiveAsync(session, context, ct)
+            : await roles.RunIndependentAsync(session, run.RunId, run.Scope, ct);
         if (outcome.Status == GateCRoleStatus.CompletedValidated)
         {
             // Host acceptance: the issuing session revalidates the assessment
@@ -214,18 +228,38 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
                     "host-acceptance-revalidation-failed", null, outcome.SelectedCapability,
                     outcome.ToolCallsUsed);
         }
+        AdaptiveReceiptRevalidation? replay = null;
+        if (outcome.Status == GateCRoleStatus.CompletedValidated && isAdaptive)
+        {
+            // The final checkpoint is not authorized by the runner's own
+            // success verdict. Independently reopen source, replay every
+            // committed receipt and gap, and compare exact role-local links.
+            replay = new AdaptiveReceiptRevalidator(store, evidence).Revalidate(
+                context.Snapshot, run, attempt.AttemptId, role, ct);
+            if (!replay.Accepted ||
+                replay.ReceiptSequenceDigest is not { Length: 64 } ||
+                replay.ToolCallsUsed != outcome.ToolCallsUsed ||
+                outcome.EvidenceLinks is null ||
+                !replay.EvidenceLinks.SequenceEqual(outcome.EvidenceLinks))
+                outcome = new(role, GateCRoleStatus.ValidationRejected,
+                    "adaptive-receipt-host-revalidation-failed", null,
+                    outcome.SelectedCapability, outcome.ToolCallsUsed);
+        }
         if (outcome.Status == GateCRoleStatus.CompletedValidated)
         {
             var accepted = outcome;
             Persist(() => store.AcceptCheckpoint(fence, attempt.AttemptId, new(run.RunId, role,
-                run.Scope, GateCEvidenceRegistry.Version, session.GraphAnalyzerVersion,
+                run.Scope, isAdaptive ? AdaptiveQuestionContract.CapabilityPolicyVersion :
+                    GateCEvidenceRegistry.Version, session.GraphAnalyzerVersion,
                 GateC3IndependentRunner.ModelId,
                 GateC6CheckpointRevalidator.Canonical(accepted.Assessment!),
                 GateC6CheckpointRevalidator.Canonical(accepted.EvidenceLinks!.ToArray()),
                 GateC6CheckpointRevalidator.Canonical(new GateC6CheckpointValidation(true,
                     "contract-valid-not-semantic-proof", accepted.Diagnostic,
-                    accepted.SelectedCapability, accepted.ToolCallsUsed)),
-                [])));
+                    accepted.SelectedCapability, accepted.ToolCallsUsed,
+                    isAdaptive ? replay!.ReceiptSequenceDigest : null)),
+                [], isAdaptive ? R3AdaptiveCheckpointContract.Version :
+                    GateC6CheckpointContract.Version)));
         }
         else
         {
