@@ -229,6 +229,11 @@ try {
   $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $recordFile -Encoding UTF8
   Write-Host "GREEN: PR4b2 Phase A preflight passed. Record: $recordFile"
   Write-Host 'NO full scored evaluation was started. Owner authorization remains required.'
+} catch {
+  $failureLine = $_.InvocationInfo.ScriptLineNumber
+  $failureText = $_.InvocationInfo.Line
+  Write-Host "RED: PR4b2 preflight failed near script line $failureLine : $failureText"
+  throw
 }
 finally {
   Pop-Location
