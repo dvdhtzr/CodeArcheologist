@@ -84,6 +84,7 @@ public sealed partial class WorkspaceStore
             !GateCEvidenceRegistry.Supports(response.Capability) ||
             response.ContractVersion != GateCEvidenceRegistry.Version ||
             response.Role != session.Role ||
+            !ReferenceEquals(response, session.LastIssuedResponse) ||
             response.Role is not (GateCRole.Investigator or GateCRole.Skeptic) ||
             response.ToolCallsUsed != session.ToolCallsUsed ||
             response.ToolCallsUsed is < 1 or > GateCEvidenceSession.MaxToolCalls)
