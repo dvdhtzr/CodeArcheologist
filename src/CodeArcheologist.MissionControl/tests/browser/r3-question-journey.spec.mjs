@@ -68,7 +68,9 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
 
   const runId = randomUUID(), questionId = randomUUID();
   let fake, admissions = 0;
+  const mockHeaders = { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
   await page.route('**/investigations/questions', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
     admissions++;
     const body = route.request().postDataJSON();
     expect(body.questionKind).toBe('explain-http-entry-point');
@@ -85,13 +87,15 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
         budgetProfileVersion: 'r3-legacy-gate-c6b-budget-v1',
         createdAtUtc: new Date().toISOString(), contextDigest: 'A'.repeat(64) },
     };
-    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify(fake) });
+    await route.fulfill({ status: 202, contentType: 'application/json',
+      headers: mockHeaders, body: JSON.stringify(fake) });
   });
   await page.route('**/investigations/' + runId + '/events', route =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    route.fulfill({ status: 200, contentType: 'application/json',
+      headers: mockHeaders, body: '[]' }));
   await page.route('**/investigations/' + runId, route =>
     route.fulfill({ status: 200, contentType: 'application/json',
-      body: JSON.stringify({ summary: fake.investigation, report: null }) }));
+      headers: mockHeaders, body: JSON.stringify({ summary: fake.investigation, report: null }) }));
 
   await page.getByRole('button', { name: 'Investigate this HTTP candidate' }).click();
   await expect(page.getByRole('heading', { name: 'Run an investigation' })).toBeVisible();
