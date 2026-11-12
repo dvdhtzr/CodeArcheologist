@@ -139,19 +139,27 @@ public static class R3Pr4Verdict
         var draws = new double[Iterations];
         for (var iteration = 0; iteration < draws.Length; iteration++)
         {
-            var denominator = 0;
-            var difference = 0;
-            for (var i = 0; i < clusters.Count; i++)
+            // Sample the whole 46-case cluster universe. A rare resample
+            // containing only cases with zero labelled issues has no defined
+            // detection rate: redraw it (with the same fixed RNG), NEVER
+            // silently turn its undefined denominator into zero gain.
+            var accepted = false;
+            for (var retry = 0; retry < 1000 && !accepted; retry++)
             {
-                var cluster = clusters[random.Next(clusters.Count)];
-                denominator += cluster.MaterialIssues;
-                difference += cluster.AdaptiveDetected - cluster.FixedDetected;
+                var denominator = 0;
+                var difference = 0;
+                for (var i = 0; i < clusters.Count; i++)
+                {
+                    var cluster = clusters[random.Next(clusters.Count)];
+                    denominator += cluster.MaterialIssues;
+                    difference += cluster.AdaptiveDetected - cluster.FixedDetected;
+                }
+                if (denominator == 0) continue;
+                draws[iteration] = 100.0 * difference / denominator;
+                accepted = true;
             }
-            // If all resampled cases lack labelled issues, detection is
-            // undefined. Never replace this with fabricated zero certainty.
-            if (denominator == 0) throw new InvalidOperationException(
-                "Bootstrap sample has no issue denominator.");
-            draws[iteration] = 100.0 * difference / denominator;
+            if (!accepted) throw new InvalidOperationException(
+                "Bootstrap could not draw an issue-bearing 46-case sample.");
         }
         Array.Sort(draws);
         var lower = draws[(int)Math.Floor(0.025 * (Iterations - 1))];
