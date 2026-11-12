@@ -204,6 +204,16 @@ export class ApiClient {
     return this.#send<QuestionContextRead>('GET',
       scopePath(scope) + `/investigations/${id(runId)}/question-context`);
   }
+  /** Explicit experimental opt-in only. Never the default question route. */
+  startAdaptiveQuestion(scope: Scope, subjectNodeId: string, idempotencyKey: string) {
+    return this.#send<QuestionAdmission>('POST',
+      scopePath(scope) + '/investigations/questions/adaptive',
+      { subjectNodeId, questionKind: 'explain-http-entry-point' }, true, idempotencyKey);
+  }
+  adaptiveContext(scope: Scope, runId: string) {
+    return this.#send<{ status: 'verified' | 'not-adaptive'; context: QuestionContext | null }>(
+      'GET', scopePath(scope) + `/investigations/${id(runId)}/adaptive-context`);
+  }
   events(scope: Scope, runId: string) { return this.#send<LedgerEvent[]>('GET', scopePath(scope) + `/investigations/${id(runId)}/events`); }
   execution(scope: Scope, runId: string) { return this.#send<Execution>('GET', scopePath(scope) + `/investigations/${id(runId)}/execution`); }
   run<T>(scope: Scope, runId: string) { return this.#send<T>('GET', scopePath(scope) + `/investigations/${id(runId)}`); }
