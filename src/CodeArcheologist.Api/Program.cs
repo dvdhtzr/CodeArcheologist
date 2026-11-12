@@ -538,8 +538,17 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     {
         var saved = store.GetQuestionContext(workspaceId, repositoryId, snapshotId, runId);
         if (saved is null)
+        {
+            // v2 runs do NOT pretend to be legacy runs; clients can follow
+            // the explicit /adaptive-context API without mixing validators.
+            var adaptive = store.GetAdaptiveContext(workspaceId, repositoryId,
+                snapshotId, runId);
+            if (adaptive is not null)
+                return Results.Ok(new { status = "adaptive-separate-context",
+                    context = (InvestigationQuestionContext?)null });
             return Results.Ok(new { status = "legacy-no-question-context",
                 context = (InvestigationQuestionContext?)null });
+        }
         return Results.Ok(new { status = "verified", context = saved });
     }
     catch (InvalidOperationException)
