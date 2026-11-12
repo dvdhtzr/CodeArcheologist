@@ -164,6 +164,19 @@ internal static class R3AdaptiveLedgerSelfTests
                 }
                 catch (InvalidOperationException error)
                     when (error.Message == "Checkpoint execution profile mismatch.") { }
+                // Negative contract: the C6b legacy relaxation must NEVER
+                // permit an adaptive v3 assessment without an accepted,
+                // receipt-bound validation record.
+                try
+                {
+                    f.Store.AcceptCheckpoint(fence, attemptId,
+                        Draft(GateCRole.Investigator, investigatorAssessment,
+                            replayedInvestigator) with { ValidationJson = "{}" });
+                    throw new InvalidOperationException("Unvalidated adaptive checkpoint accepted.");
+                }
+                catch (InvalidOperationException error)
+                    when (error.Message == "Checkpoint adaptive receipt validation mismatch.") { }
+
                 var checkpointA = f.Store.AcceptCheckpoint(fence, attemptId,
                     Draft(GateCRole.Investigator, investigatorAssessment,
                         replayedInvestigator));
