@@ -98,6 +98,32 @@ internal static class R3AdaptiveLedgerSelfTests
                     skepticReceipt.Role == GateCRole.Skeptic,
                     "Skeptic must have a separate, independently numbered request ledger.");
 
+                var actualSnapshot = f.Store.GetSnapshot(scope.WorkspaceId,
+                    scope.RepositoryId, scope.SnapshotId)!;
+                var validator = new AdaptiveReceiptRevalidator(f.Store, factory);
+                var replayedInvestigator = validator.Revalidate(actualSnapshot,
+                    admitted.Record!, attemptId, GateCRole.Investigator,
+                    CancellationToken.None);
+                var replayedSkeptic = validator.Revalidate(actualSnapshot,
+                    admitted.Record!, attemptId, GateCRole.Skeptic,
+                    CancellationToken.None);
+                Expect(replayedInvestigator.Accepted &&
+                    replayedInvestigator.ToolCallsUsed == 2 &&
+                    replayedInvestigator.EvidenceLinks.SequenceEqual(investigator.ReportLinks()) &&
+                    replayedInvestigator.ReceiptSequenceDigest is { Length: 64 },
+                    "Investigator's persisted receipts must independently replay from source: " +
+                    replayedInvestigator.Diagnostic);
+                Expect(replayedSkeptic.Accepted &&
+                    replayedSkeptic.ToolCallsUsed == 1 &&
+                    replayedSkeptic.EvidenceLinks.SequenceEqual(skeptic.ReportLinks()) &&
+                    replayedSkeptic.ReceiptSequenceDigest !=
+                        replayedInvestigator.ReceiptSequenceDigest,
+                    "Skeptic must receive independently replayable, role-local receipts.");
+                Expect(!validator.Revalidate(actualSnapshot with
+                    { FingerprintSha256 = new string('f', 64) }, admitted.Record!, attemptId,
+                    GateCRole.Investigator, CancellationToken.None).Accepted,
+                    "Foreign snapshot fingerprint must be rejected before replay.");
+
                 var third = investigator.Request(GateCEvidenceRegistry.DirectInvocations,
                     CancellationToken.None).Response!;
                 try
@@ -153,6 +179,48 @@ internal static class R3AdaptiveLedgerSelfTests
                     "Migration fabricated adaptive evidence.");
                 return Task.CompletedTask;
             });
+        await GateC6bSelfTests.ScenarioAsync(
+            "R3 replay: missing gap event fails closed despite surviving receipt",
+            f =>
+            {
+                var scope = GateC6bSelfTests.SeedSnapshot(f.Store);
+                using var owner = new ExecutionOwnershipState();
+                Expect(owner.TryAcquire(f.Store), "Fixture needs an owner.");
+                var run = f.Store.CreateInvestigation(scope, Guid.NewGuid(), owner.Fence!,
+                    adaptiveQuestionSubjectKind: "http-endpoint-attribute").Record!;
+                var attempt = f.Store.ClaimNextQueuedAttempt(owner.Fence!,
+                    TimeSpan.FromMinutes(6))!.Attempt.AttemptId;
+                var factory = new GateC6bCheckpointSelfTests.Evidence();
+                var snapshot = f.Store.GetSnapshot(scope.WorkspaceId,
+                    scope.RepositoryId, scope.SnapshotId)!;
+                var session = factory.OpenVerified(snapshot, scope, run.RunId,
+                    GateCRole.Investigator, CancellationToken.None);
+                var first = session.Request(GateCEvidenceRegistry.Relationships,
+                    CancellationToken.None).Response!;
+                f.Store.RecordAdaptiveEvidenceReceipt(owner.Fence!, attempt, session, first,
+                    "initial", "Baseline verified relationships");
+                var second = session.Request(GateCEvidenceRegistry.EntryPoint,
+                    CancellationToken.None).Response!;
+                f.Store.RecordAdaptiveEvidenceReceipt(owner.Fence!, attempt, session, second,
+                    "follow-up", "Verify candidate binding", "unknown-entry-point-binding");
+                var validator = new AdaptiveReceiptRevalidator(f.Store, factory);
+                Expect(validator.Revalidate(snapshot, run, attempt,
+                    GateCRole.Investigator, CancellationToken.None).Accepted,
+                    "Intact ledger should be replayable.");
+                // Fault injection deliberately bypasses the immutable SQL trigger
+                // in a disposable DB. Revalidation still detects the missing row.
+                GateC6bSelfTests.Exec(f.Store,
+                    "DROP TRIGGER adaptive_gap_events_no_delete;");
+                GateC6bSelfTests.Exec(f.Store, """
+                    DELETE FROM adaptive_gap_events
+                    WHERE event_kind='allowed';
+                    """);
+                Expect(!validator.Revalidate(snapshot, run, attempt,
+                    GateCRole.Investigator, CancellationToken.None).Accepted,
+                    "Missing gap event was silently ignored.");
+                return Task.CompletedTask;
+            });
+
         Console.WriteLine("GREEN: R3 additive v8 receipt/gap ledger, fencing, role independence, " +
             "overlap budget, migration preservation and immutable history.");
     }
