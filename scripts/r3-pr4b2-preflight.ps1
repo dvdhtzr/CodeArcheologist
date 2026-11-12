@@ -202,8 +202,11 @@ try {
     throw 'Cannot compute PR4 protocol digest.'
   }
   $protocolSha = ([string]$protocolHashResult.Hash).ToLowerInvariant()
-  $architecture = [string][System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-  $osDescription = [string][System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+  # Use the already validated .NET 10 runner's actual environment.
+  # Windows PowerShell 5.1 runs on .NET Framework, where these static
+  # RuntimeInformation properties can resolve differently or return empty.
+  $architecture = [string]$runMetadata.executionIdentity.processArchitecture
+  $osDescription = [string]$runMetadata.executionIdentity.operatingSystem
   if ([string]::IsNullOrWhiteSpace($architecture) -or
       [string]::IsNullOrWhiteSpace($osDescription)) {
     throw 'Runtime architecture/OS provenance is unavailable.'
