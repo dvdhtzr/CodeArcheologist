@@ -68,7 +68,7 @@ public sealed class OllamaAdaptivePromptClientFactory : IAdaptivePromptClientFac
         {
             try
             {
-                return await promptClient.AskAsync(prompt,
+                return await GateC3IndependentRunner.AskAsync(agent, prompt,
                     schema, schemaName, ct);
             }
             catch (OperationCanceledException) { throw; }
