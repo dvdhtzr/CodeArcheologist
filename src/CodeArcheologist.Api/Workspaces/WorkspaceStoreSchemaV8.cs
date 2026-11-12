@@ -36,7 +36,7 @@ public sealed partial class WorkspaceStore
             END;
             CREATE TABLE adaptive_evidence_receipts (
                 receipt_id TEXT NOT NULL PRIMARY KEY,
-                run_id TEXT NOT NULL REFERENCES investigation_reports(run_id),
+                run_id TEXT NOT NULL REFERENCES adaptive_question_contexts(run_id),
                 attempt_id TEXT NOT NULL REFERENCES investigation_attempts(attempt_id),
                 role TEXT NOT NULL CHECK(role IN ('investigator','skeptic')),
                 ordinal INTEGER NOT NULL CHECK(ordinal BETWEEN 1 AND 6),
