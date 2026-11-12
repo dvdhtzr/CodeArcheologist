@@ -183,6 +183,12 @@ public sealed class GateCEvidenceSession
         return GateCContractCheck.Pass();
     }
 
+    // Host-only verified context for fenced adaptive receipt persistence.
+    // Never include canonical IDs, paths or this package in model prompts.
+    internal AgentEvidencePackage VerifiedPackage => _package;
+    internal GateCScope VerifiedScope => _scope;
+    internal Guid VerifiedRunId => _runId;
+
     public int ToolCallsUsed => _calls;
 
     /// <summary>Host-only links for persisted, role-scoped references.
