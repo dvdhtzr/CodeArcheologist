@@ -183,8 +183,8 @@ public sealed class GateC4ReconciliationRunner(GateC3IndependentRunner independe
             var prompt = basePrompt;
             for (var attempt = 0; attempt < AssessmentAttempts; attempt++)
             {
-                var response = await EvaluationModelCalls.ObserveAsync(() =>
-                    reviewer.RunAsync(prompt, options: options, cancellationToken: timeout.Token));
+                var response = await EvaluationModelCalls.ObserveAsync(async () =>
+                    await reviewer.RunAsync(prompt, options: options, cancellationToken: timeout.Token));
                 var text = response.Text ?? "";
                 var parsed = ParseReview(text, runId, scope);
                 var diagnostic = parsed is null
