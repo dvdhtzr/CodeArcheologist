@@ -70,6 +70,12 @@ if (args.Length > 0 && args[0] == "--gate-c6b-run")
     return;
 }
 
+if (args.Length == 1 && args[0] == "--r3-adaptive-ledger-self-test")
+{
+    await R3AdaptiveLedgerSelfTests.RunAsync();
+    return;
+}
+
 if (args.Length == 1 && args[0] == "--r3-question-context-self-test")
 {
     await R3QuestionContextSelfTests.RunAsync();
