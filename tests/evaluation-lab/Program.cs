@@ -23,6 +23,15 @@ try
             return await SurveyAsync(Path.GetFullPath(args[1]), Path.GetFullPath(args[3]));
         case "--self-test":
             return await LabSelfTests.RunAsync(evalRoot);
+        case "--r3-pr4-validate":
+        {
+            if (!Validate(evalRoot, out var corpus)) return 1;
+            var protocol = R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var errors);
+            foreach (var error in errors) Console.Error.WriteLine("  PR4 error: " + error);
+            Console.WriteLine(protocol is null ? "RED: PR4 preregistration changed." :
+                "GREEN: PR4 frozen protocol, 50 cases and every approved label are unchanged.");
+            return protocol is null ? 1 : 0;
+        }
         case "--review-labels":
             return LabOwnerTools.ReviewLabels(evalRoot,
                 args.Length == 3 && args[1] == "--curated-root" ? Path.GetFullPath(args[2]) : null,
@@ -74,6 +83,8 @@ try
         }
         case "--run":
             return await RunAsync(evalRoot, args[1..]);
+        case "--r3-pr4-run":
+            return await RunAsync(evalRoot, args[1..], pr4: true);
         default:
             Console.Error.WriteLine("""
                 Usage:
@@ -82,6 +93,9 @@ try
                   --survey <dir>                       read-only capture survey: fingerprint, size, HTTP candidates
                   --describe <case-dir> [--curated-root <dir>]   citable evidence locations for labeling
                   --run --out <dir> [--curated-root <dir>] [--cases A,B] [--comparators deterministic-baseline,gate-b,gate-c] [--provisional]
+                  --r3-pr4-validate                   PR4 frozen protocol, case bytes and labels (model-free)
+                  --r3-pr4-run --out <new-dir> [--curated-root <dir>] [--provisional --cases A,B --comparators gate-c-adaptive]
+                      Full non-provisional PR4 runs require all 50 cases and all four comparators.
                   --review-labels [--curated-root <dir>]          owner label sign-off (interactive, resumable)
                   --checklist --runs <dir> [--max 5 | --every-problem | --single gate-c | --single host-cautions | --single gate-c+host] [--out <file>]   short blinded material-issue checklist (interactive, resumable)
                   --export-judging --runs <scored-dir> --out <new-dir> [--calibration-checklist-runs <dir> --calibration-checklist <file>] [--calibration-judge-runs <dir> --calibration-judgments <file>]
@@ -160,7 +174,7 @@ static async Task<int> SurveyAsync(string source, string? manifestOut)
     }
 }
 
-static async Task<int> RunAsync(string evalRoot, string[] options)
+static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = false)
 {
     string? Option(string name) => Array.IndexOf(options, name) is var i and >= 0 && i + 1 < options.Length
         ? options[i + 1] : null;
@@ -174,11 +188,55 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
             "Provisional results can never be relabelled as acceptance results.");
         return 2;
     }
+    R3Pr4Experiment? protocol = null;
+    if (pr4)
+    {
+        protocol = R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var errors);
+        if (protocol is null)
+        {
+            foreach (var error in errors) Console.Error.WriteLine("  PR4 error: " + error);
+            return 2;
+        }
+    }
     var selected = Option("--cases")?.Split(',') ?? corpus.Cases.Select(c => c.Case.Id).ToArray();
-    var comparators = Option("--comparators")?.Split(',') ?? Comparator.All;
-    if (comparators.Any(c => !Comparator.All.Contains(c))) { Console.Error.WriteLine("Unknown comparator."); return 2; }
-    Directory.CreateDirectory(outDir);
+    var comparators = Option("--comparators")?.Split(',') ?? (pr4 ? Comparator.Pr4All : Comparator.All);
+    var allowed = pr4 ? Comparator.Pr4All : Comparator.All;
+    if (comparators.Any(c => !allowed.Contains(c)) ||
+        selected.Any(c => !corpus.Cases.Any(x => x.Case.Id == c)) ||
+        selected.Distinct(StringComparer.Ordinal).Count() != selected.Length ||
+        comparators.Distinct(StringComparer.Ordinal).Count() != comparators.Length)
+    {
+        Console.Error.WriteLine("Unknown or repeated comparator/case.");
+        return 2;
+    }
     var curatedRoot = Option("--curated-root") is { } cr ? Path.GetFullPath(cr) : null;
+    if (pr4 && !provisional &&
+        (!comparators.SequenceEqual(Comparator.Pr4All, StringComparer.Ordinal) ||
+         selected.Length != corpus.Cases.Count ||
+         !selected.ToHashSet(StringComparer.Ordinal).SetEquals(corpus.Cases.Select(c => c.Case.Id)) ||
+         curatedRoot is null))
+    {
+        Console.Error.WriteLine("Scored PR4 requires all 50 locked cases, all four comparators and --curated-root.");
+        return 2;
+    }
+    if (pr4 && Directory.Exists(outDir) && Directory.EnumerateFileSystemEntries(outDir).Any())
+    {
+        Console.Error.WriteLine("PR4 output must be a new empty directory; earlier trials cannot be overwritten.");
+        return 2;
+    }
+    Directory.CreateDirectory(outDir);
+    if (pr4)
+        await File.WriteAllTextAsync(Path.Combine(outDir, "pr4-run-metadata.json"),
+            JsonSerializer.Serialize(new
+            {
+                schemaVersion = R3Pr4Protocol.Version,
+                baselineCommit = protocol!.BaselineCommit,
+                protocolSha256 = LabSchema.Sha256(File.ReadAllBytes(
+                    Path.Combine(evalRoot, R3Pr4Protocol.FileName))),
+                comparators, selectedCases = selected, provisional,
+                recordedAtUtc = DateTimeOffset.UtcNow,
+                judgmentStatus = "pending-blinded-adjudication"
+            }, LabSchema.Json));
     var scores = new List<CaseScore>();
     var failures = new List<string>();
     var expectations = new List<LabHarness.ExpectationResult>();
@@ -225,22 +283,33 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
         }
         foreach (var comparator in comparators)
         {
-            var trials = comparator == Comparator.GateC && loaded.Case.DiagnosticRepeat
+            var trials = (comparator is Comparator.GateC or Comparator.Adaptive) &&
+                         loaded.Case.DiagnosticRepeat
                 ? corpus.Config.PrimaryTrials + corpus.Config.DiagnosticExtraTrials : corpus.Config.PrimaryTrials;
             for (var trial = 1; trial <= trials; trial++)
             {
+                R3Pr4Activity? activity = null;
                 var report = comparator switch
                 {
                     Comparator.Baseline => LabHarness.Baseline(captured, trial),
                     Comparator.GateB => await LabHarness.GateBAsync(captured, trial, CancellationToken.None),
                     _ => await LabHarness.GateCAsync(captured, trial, new MafRoleStageRunner(),
-                        TimeSpan.FromMinutes(8), CancellationToken.None)
+                        TimeSpan.FromMinutes(8), CancellationToken.None,
+                        adaptive: comparator == Comparator.Adaptive,
+                        observeActivity: pr4 ? (Action<R3Pr4Activity>)(a => activity = a) : null)
                 };
                 var score = LabScoring.Score(report, captured);
                 scores.Add(score);
                 var stem = Path.Combine(outDir, $"{loaded.Case.Id}.{comparator}.t{trial}");
                 await File.WriteAllTextAsync(stem + ".report.json", JsonSerializer.Serialize(report, LabSchema.Json));
                 await File.WriteAllTextAsync(stem + ".score.json", JsonSerializer.Serialize(score, LabSchema.Json));
+                if (pr4 && (comparator is Comparator.GateC or Comparator.Adaptive))
+                {
+                    if (activity is null)
+                        throw new InvalidOperationException("PR4 host activity was not recorded.");
+                    await File.WriteAllTextAsync(stem + ".pr4-activity.json",
+                        JsonSerializer.Serialize(activity, LabSchema.Json));
+                }
                 Console.WriteLine($"{loaded.Case.Id} {comparator} t{trial}: {report.Outcome} " +
                     $"breaches={score.IntegrityBreaches.Count} anchors={score.CitedObservationAnchors}/{score.RequiredObservations}" +
                     (score.ObjectionCoverage is { } cov ? $" coverage={cov:P0}" : "") +
@@ -250,7 +319,7 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
     }
     var summary = new
     {
-        schemaVersion = LabSchema.Score + "-summary",
+        schemaVersion = pr4 ? "r3-pr4-lab-summary-v1" : LabSchema.Score + "-summary",
         provisional,
         draftLabels = corpus.DraftLabels,
         thresholdStatus = corpus.Config.ThresholdStatus,
@@ -260,7 +329,9 @@ static async Task<int> RunAsync(string evalRoot, string[] options)
         comparators = LabScoring.Summarize(scores),
         expectations,
         notAcquired,
-        pendingJudgment = new[] { "material-issue-detection", "actionable-usefulness (blinded owner A/B, C6c-3)" },
+        pendingJudgment = pr4
+            ? new[] { "paired-material-issue-detection", "blinded-actionable-usefulness", "paired-uncertainty" }
+            : new[] { "material-issue-detection", "actionable-usefulness (blinded owner A/B, C6c-3)" },
         failures
     };
     await File.WriteAllTextAsync(Path.Combine(outDir, "summary.json"), JsonSerializer.Serialize(summary, LabSchema.Json));

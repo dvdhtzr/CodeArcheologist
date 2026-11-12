@@ -20,6 +20,14 @@ internal static class LabSelfTests
         NegativeCorpusCases(evalRoot);
         await HostCautionSelfTests.RunAsync(evalRoot);
         var corpus = CorpusValidator.Validate(evalRoot);
+        Check("R3 PR4: frozen 50-case protocol and every approved label validate", () =>
+        {
+            var frozen = R3Pr4Protocol.ReadAndValidate(evalRoot, corpus, out var errors);
+            Expect(frozen is not null, string.Join("; ", errors));
+            Expect(frozen!.Comparators.SequenceEqual(Comparator.Pr4All) &&
+                frozen.CaseLocks.Count == 50, "PR4 comparator order or locked census changed");
+        });
+        Pr4ProtocolNegativeTests(evalRoot);
 
         foreach (var loaded in corpus.Cases.Where(c => c.Case.Category == CaseCategory.Fixture))
         {
@@ -111,6 +119,32 @@ internal static class LabSelfTests
                 var json = JsonSerializer.Serialize(report, LabSchema.Json);
                 Expect(JsonSerializer.Deserialize<LabReport>(json, LabSchema.Json) is not null, "report not round-trippable");
             });
+
+        await CheckAsync("R3 PR4: production adaptive admission and replay score (model-free roles)", async () =>
+        {
+            var loaded = corpus.Cases.Single(c => c.Case.Id == "F01-attribute-private-helper");
+            await using var captured = await LabHarness.CaptureAsync(loaded, CancellationToken.None);
+            R3Pr4Activity? activity = null;
+            var result = await LabHarness.GateCAsync(captured, 1, new FixtureRoles(),
+                TimeSpan.FromMinutes(1), CancellationToken.None, adaptive: true,
+                observeActivity: a => activity = a,
+                adaptiveRoles: new FixtureAdaptiveRoles(captured.Store));
+            var score = LabScoring.Score(result, captured);
+            Expect(result.Comparator == Comparator.Adaptive &&
+                result.Outcome == "completed" && result.GateC?.CheckpointCount == 3,
+                "adaptive fixture did not finish with three replayed v3 checkpoints: " +
+                result.Outcome + "/" + result.Diagnostic);
+            Expect(score.IntegrityBreaches.Count == 0 && score.ObjectionCoverage == 1.0,
+                "adaptive role integrity or reviewer coverage failed");
+            Expect(activity is { CheckpointReplayAccepted: true, ReceiptReplayAccepted: true,
+                EvidenceReceipts: 2, CommittedEvidenceRequests: 2, ModelCalls: null } &&
+                activity.FollowUpRequests == 0 && activity.DuplicateDenials == 0,
+                "adaptive host activity incorrectly counted or bypassed replay");
+            Breach(result with { GateC = result.GateC! with { AnyVerifiedFact = true } },
+                captured, IntegrityBreach.FactPromotion);
+            Breach(result with { GateC = result.GateC! with { CheckpointCount = 2 } },
+                captured, IntegrityBreach.FalseCompletion);
+        });
 
         await CheckAsync("UTF-8 BOM project and source files capture (regression)", async () =>
         {
@@ -645,6 +679,57 @@ internal static class LabSelfTests
             "case id must equal directory name");
     }
 
+    private static void Pr4ProtocolNegativeTests(string evalRoot)
+    {
+        void Mutate(string name, Action<string> change, string expected) =>
+            Check("R3 PR4 rejects " + name, () =>
+            {
+                var root = Path.Combine(Path.GetTempPath(),
+                    "code-archeologist-r3-pr4-locked-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Copy(evalRoot, root);
+                    change(root);
+                    var corpus = CorpusValidator.Validate(root);
+                    var protocol = R3Pr4Protocol.ReadAndValidate(root, corpus, out var errors);
+                    Expect(protocol is null && errors.Any(e => e.Contains(expected, StringComparison.Ordinal)),
+                        "PR4 did not reject " + name + ": " + string.Join("; ", errors));
+                }
+                finally { Directory.Delete(root, recursive: true); }
+            });
+
+        Mutate("changed approved label bytes", root =>
+            File.AppendAllText(Path.Combine(root, "cases", "F01-attribute-private-helper",
+                "labels.json"), "\n"), "case/approved-label bytes changed");
+        Mutate("changed case definition bytes", root =>
+            File.AppendAllText(Path.Combine(root, "cases", "F01-attribute-private-helper",
+                "case.json"), "\n"), "case/approved-label bytes changed");
+        Mutate("changed C7 configuration bytes", root =>
+            File.AppendAllText(Path.Combine(root, "lab-config.json"), "\n"),
+            "configuration is no longer the pinned baseline");
+        Mutate("extra comparator", root =>
+        {
+            var file = Path.Combine(root, R3Pr4Protocol.FileName);
+            var json = JsonNode.Parse(File.ReadAllText(file))!;
+            json["comparators"]!.AsArray().Add("unregistered");
+            File.WriteAllText(file, json.ToJsonString());
+        }, "comparators changed");
+        Mutate("post-registration threshold change", root =>
+        {
+            var file = Path.Combine(root, R3Pr4Protocol.FileName);
+            var json = JsonNode.Parse(File.ReadAllText(file))!;
+            json["minimumDetectionGainPoints"] = 0;
+            File.WriteAllText(file, json.ToJsonString());
+        }, "thresholds or outcome changed");
+        Mutate("missing locked case", root =>
+        {
+            var file = Path.Combine(root, R3Pr4Protocol.FileName);
+            var json = JsonNode.Parse(File.ReadAllText(file))!;
+            json["caseLocks"]!.AsArray().RemoveAt(0);
+            File.WriteAllText(file, json.ToJsonString());
+        }, "identities are missing");
+    }
+
     private static void Copy(string from, string to)
     {
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
@@ -652,6 +737,39 @@ internal static class LabSelfTests
             var target = Path.Combine(to, Path.GetRelativePath(from, file));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target);
+        }
+    }
+
+    /// <summary>Model-free independent roles exercise real adaptive host
+    /// admission, saved receipt writes, checkpoint v3 acceptance and replay.
+    /// This never pretends to be a real local model; PR4 scored runs use MAF.</summary>
+    private sealed class FixtureAdaptiveRoles(WorkspaceStore store) : IAdaptiveRoleStageRunner
+    {
+        public Task<GateC3RoleOutcome> RunAdaptiveAsync(GateCEvidenceSession session,
+            InvestigationExecutionContext context, CancellationToken ct)
+        {
+            var issued = session.Request(GateCEvidenceRegistry.Relationships, ct);
+            if (!issued.Check.Accepted || issued.Response is null ||
+                issued.Response.Items.Count == 0)
+                throw new InvalidOperationException("PR4 fixture could not issue saved evidence.");
+            store.RecordAdaptiveEvidenceReceipt(context.Fence,
+                context.Attempt.AttemptId, session, issued.Response,
+                "initial", "Host-approved initial evidence view");
+            var handle = issued.Response.Items[0].Handle;
+            var role = session.Role;
+            var assessment = role == GateCRole.Investigator
+                ? new GateCIndependentAssessment(GateCContract.Version,
+                    context.Run.RunId, context.Run.Scope, role, [handle],
+                    [new GateCHypothesis("H1", "The candidate may route to this method.",
+                        [handle], "Not runtime proof")], [], ["Runtime registration unknown"])
+                : new GateCIndependentAssessment(GateCContract.Version,
+                    context.Run.RunId, context.Run.Scope, role, [handle], [],
+                    [new GateCConcern("S1", GateCConcernKind.InsufficientEvidence,
+                        "Registration is not evidenced.", [handle])], ["Hosting unknown"]);
+            return Task.FromResult(new GateC3RoleOutcome(role,
+                GateCRoleStatus.CompletedValidated, "fixture", assessment,
+                GateCEvidenceRegistry.Relationships, session.ToolCallsUsed,
+                session.ReportLinks(), session.GraphAnalyzerVersion));
         }
     }
 

@@ -425,24 +425,30 @@ public static class LabHarness
     /// MAF in real runs; a model-free fixture only in self-tests).
     /// </summary>
     public static async Task<LabReport> GateCAsync(CapturedCase c, int trial, IGateCRoleStageRunner roles,
-        TimeSpan timeout, CancellationToken ct)
+        TimeSpan timeout, CancellationToken ct, bool adaptive = false,
+        Action<R3Pr4Activity>? observeActivity = null,
+        IAdaptiveRoleStageRunner? adaptiveRoles = null)
     {
         var watch = Stopwatch.StartNew();
         var discovery = c.Services.GetRequiredService<GateCEvidenceDiscovery>();
-        var revalidator = new GateC6CheckpointRevalidator(discovery);
+        var revalidator = new GateC6CheckpointRevalidator(discovery, c.Store);
         using var ownership = new ExecutionOwnershipState();
         if (!ownership.TryAcquire(c.Store))
             throw new InvalidOperationException("Lab could not acquire execution ownership: " + ownership.Diagnostic);
         var signal = new InvestigationWorkSignal();
         var worker = new InvestigationWorker(c.Store, ownership, signal,
-            new GateC6StageCoordinator(c.Store, discovery, roles, revalidator),
+            new GateC6StageCoordinator(c.Store, discovery, roles, revalidator,
+                adaptive ? adaptiveRoles ?? new AdaptiveMafRoleStageRunner(c.Store) : null),
             InvestigationWorkerOptions.Default, NullLogger<InvestigationWorker>.Instance,
             c.Services.GetRequiredService<SnapshotEvidenceTools>());
         await worker.StartAsync(ct);
         Guid run;
         try
         {
-            var admitted = new InvestigationAdmissionService(c.Store, ownership, signal).Admit(c.Scope, Guid.NewGuid());
+            var admission = new InvestigationAdmissionService(c.Store, ownership, signal);
+            var admitted = adaptive
+                ? admission.AdmitAdaptive(c.Scope, Guid.NewGuid(), c.Package.EntryPointKind)
+                : admission.Admit(c.Scope, Guid.NewGuid());
             if (admitted.Outcome != InvestigationAdmissionOutcome.Admitted)
                 throw new InvalidOperationException("Lab admission refused: " + admitted.Outcome);
             run = admitted.Record!.RunId;
@@ -503,8 +509,12 @@ public static class LabHarness
             "running" => "timed-out-in-lab",
             var s => s
         };
-        return Report(c, Comparator.GateC, trial, outcome, attempt.TerminalCause ?? detail.Summary.Diagnostic,
-            claims, facts, watch);
+        var result = Report(c, adaptive ? Comparator.Adaptive : Comparator.GateC, trial,
+            outcome, attempt.TerminalCause ?? detail.Summary.Diagnostic, claims, facts, watch);
+        if (observeActivity is not null)
+            observeActivity(R3Pr4Activity.Capture(c, run, trial, adaptive,
+                watch.ElapsedMilliseconds, ct));
+        return result;
     }
 
     private static LabReport Report(CapturedCase c, string comparator, int trial, string outcome, string diagnostic,

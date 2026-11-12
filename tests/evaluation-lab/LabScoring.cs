@@ -61,7 +61,7 @@ public static partial class LabScoring
             breaches.Add(IntegrityBreach.ForeignCitation);
 
         double? coverage = null;
-        if (report.Comparator == Comparator.GateC)
+        if (report.Comparator is Comparator.GateC or Comparator.Adaptive)
         {
             var facts = report.GateC;
             var completed = report.Outcome == "completed";
@@ -105,7 +105,7 @@ public static partial class LabScoring
 
     /// <summary>Aggregates with fixed denominators: every evaluation counts, completed or not.</summary>
     public static IReadOnlyList<ComparatorSummary> Summarize(IReadOnlyList<CaseScore> scores) =>
-        scores.GroupBy(s => s.Comparator).OrderBy(g => Array.IndexOf(Comparator.All, g.Key)).Select(g =>
+        scores.GroupBy(s => s.Comparator).OrderBy(g => Array.IndexOf(Comparator.Pr4All, g.Key)).Select(g =>
         {
             var required = g.Sum(s => s.RequiredObservations);
             var coverage = g.Where(s => s.ObjectionCoverage is not null).Select(s => s.ObjectionCoverage!.Value).ToArray();
