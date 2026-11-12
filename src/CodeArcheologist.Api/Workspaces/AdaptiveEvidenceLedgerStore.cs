@@ -51,6 +51,17 @@ public static class AdaptiveGapPolicy
     public static bool Supports(string? kind) => kind is
         "missing-direct-invocations" or "unresolved-callee" or
         "uncertain-source-relationships" or "unknown-entry-point-binding";
+    // A gap is a model proposal, not a tool invocation. Only the host maps
+    // approved categories to the four existing, read-only capabilities.
+    public static string? CapabilityFor(string? kind) => kind switch
+    {
+        "missing-direct-invocations" => GateCEvidenceRegistry.DirectInvocations,
+        "unresolved-callee" => GateCEvidenceRegistry.CandidateCallees,
+        "uncertain-source-relationships" => GateCEvidenceRegistry.Relationships,
+        "unknown-entry-point-binding" => GateCEvidenceRegistry.EntryPoint,
+        _ => null
+    };
+
     public static bool ValidPurpose(string? value) =>
         value is { Length: > 0 and <= 600 } && !value.Any(char.IsControl);
 }
@@ -80,7 +91,8 @@ public sealed partial class WorkspaceStore
         if (phase is not ("initial" or "follow-up") ||
             !AdaptiveGapPolicy.ValidPurpose(purpose) ||
             (phase == "initial" && gapKind is not null) ||
-            (phase == "follow-up" && !AdaptiveGapPolicy.Supports(gapKind)) ||
+            (phase == "follow-up" &&
+                AdaptiveGapPolicy.CapabilityFor(gapKind) != response.Capability) ||
             !GateCEvidenceRegistry.Supports(response.Capability) ||
             response.ContractVersion != GateCEvidenceRegistry.Version ||
             response.Role != session.Role ||
@@ -143,7 +155,8 @@ public sealed partial class WorkspaceStore
             if (reader.Read()) prior = ReadAdaptiveReceipt(reader);
         }
         if (response.ToolCallsUsed != (prior?.Ordinal ?? 0) + 1 ||
-            (phase == "follow-up" && (prior is null || prior.Phase == "follow-up")))
+            (prior?.Phase == "follow-up") ||
+            (phase == "follow-up" && prior is null))
             throw new InvalidOperationException("Out of order or duplicate adaptive evidence request.");
         GateC5EvidenceLink[] previousLinks = prior is null ? [] :
             JsonSerializer.Deserialize<GateC5EvidenceLink[]>(prior.EvidenceLinksJson)
@@ -238,6 +251,50 @@ public sealed partial class WorkspaceStore
             results.Add(receipt);
         }
         return results;
+    }
+
+    /// <summary>Read and verify immutable gap history. Never silently
+    /// drop an event or accept a row whose canonical digest differs.</summary>
+    public IReadOnlyList<AdaptiveGapEvent> ListAdaptiveGapEvents(
+        Guid runId, Guid attemptId, GateCRole role)
+    {
+        using var db = Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = """
+            SELECT event_id,run_id,attempt_id,role,gap_id,ordinal,event_kind,
+                gap_kind,purpose,capability,receipt_id,diagnostic,ownership_epoch,
+                created_at_unix_ms,content_sha256
+            FROM adaptive_gap_events
+            WHERE run_id=$run AND attempt_id=$attempt AND role=$role
+            ORDER BY created_at_unix_ms, rowid;
+            """;
+        cmd.Parameters.AddWithValue("$run", runId.ToString("D"));
+        cmd.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+        cmd.Parameters.AddWithValue("$role", RoleName(role));
+        using var reader = cmd.ExecuteReader();
+        var result = new List<AdaptiveGapEvent>();
+        while (reader.Read())
+        {
+            var storedRole = reader.GetString(3) switch
+            {
+                "investigator" => GateCRole.Investigator,
+                "skeptic" => GateCRole.Skeptic,
+                _ => throw new InvalidOperationException("Unknown gap-event role.")
+            };
+            var entry = new AdaptiveGapEvent(Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)), Guid.Parse(reader.GetString(2)),
+                storedRole, Guid.Parse(reader.GetString(4)), reader.GetInt32(5),
+                reader.GetString(6), reader.GetString(7), reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.IsDBNull(10) ? null : Guid.Parse(reader.GetString(10)),
+                reader.GetString(11), reader.GetInt64(12), reader.GetInt64(13),
+                reader.GetString(14));
+            if (entry.RunId != runId || entry.AttemptId != attemptId ||
+                entry.Role != role || entry.ComputeDigest() != entry.ContentSha256)
+                throw new InvalidOperationException("Adaptive gap-event provenance failed.");
+            result.Add(entry);
+        }
+        return result;
     }
 
     private static AdaptiveEvidenceReceipt ReadAdaptiveReceipt(SqliteDataReader reader)
