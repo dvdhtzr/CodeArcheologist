@@ -123,6 +123,19 @@ public sealed partial class WorkspaceStore
             (draft.Role == GateCRole.Reviewer &&
                 recorded.ReceiptSequenceDigest is not null))
             throw new InvalidOperationException("Checkpoint adaptive receipt validation mismatch.");
+        if (adaptive && draft.Role != GateCRole.Reviewer)
+        {
+            using var receipts = Command(db, tx, """
+                SELECT COUNT(*) FROM adaptive_evidence_receipts
+                WHERE run_id=$run AND attempt_id=$attempt AND role=$role;
+                """);
+            receipts.Parameters.AddWithValue("$run", run.RunId.ToString("D"));
+            receipts.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            receipts.Parameters.AddWithValue("$role",
+                GateC6CheckpointContract.RoleName(draft.Role));
+            if (Convert.ToInt64(receipts.ExecuteScalar()) is < 1 or > GateCEvidenceSession.MaxToolCalls)
+                throw new InvalidOperationException("Adaptive checkpoint has no bounded evidence receipt chain.");
+        }
         var role = GateC6CheckpointContract.RoleName(draft.Role);
         var existing = LoadCheckpoints(db, tx, run.RunId);
         if (existing.Any(c => c.Role == role))
