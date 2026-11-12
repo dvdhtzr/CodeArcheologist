@@ -93,6 +93,21 @@ internal static class R3AdaptiveExecutionSelfTests
         ProposalContract();
 
         await GateC6bSelfTests.ScenarioAsync(
+            "R3 adaptive: genuine probe's evidence service graph resolves without Ollama",
+            _ =>
+            {
+                // Build the EXACT same DI container as --r3-adaptive-run.
+                // Previously this omitted CSharpHostCautionAnalyzer, which
+                // passed check.ps1 but failed before the first model call.
+                using var services = R3AdaptiveLocalRun.BuildEvidenceServices();
+                if (services.GetRequiredService<SnapshotEvidenceTools>() is null ||
+                    services.GetRequiredService<GateCEvidenceDiscovery>() is null)
+                    throw new InvalidOperationException(
+                        "Genuine adaptive probe evidence service graph is incomplete.");
+                return Task.CompletedTask;
+            });
+
+        await GateC6bSelfTests.ScenarioAsync(
             "R3 adaptive: real managed worker commits v3 roles and gap decisions without Ollama",
             async fixture =>
             {
