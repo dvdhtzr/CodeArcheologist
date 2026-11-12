@@ -256,7 +256,39 @@ public sealed partial class WorkspaceStore
             if (Convert.ToInt64(context.ExecuteScalar()) != 1)
                 throw new InvalidOperationException("Gap proposal lacks adaptive question.");
         }
-        var issued = ListAdaptiveEvidenceReceipts(run.RunId, attemptId, session.Role);
+        // Read the complete role receipt chain in THIS fenced SQLite
+        // transaction; do not open a second connection while holding the
+        // immediate writer lock.
+        var issued = new List<AdaptiveEvidenceReceipt>();
+        using (var history = Command(db, tx, """
+            SELECT receipt_id,run_id,attempt_id,role,ordinal,phase,capability,
+                target_node_id,gap_id,gap_kind,purpose,request_json,response_json,
+                response_sha256,evidence_links_json,evidence_links_sha256,
+                new_item_count,ownership_epoch,created_at_unix_ms,content_sha256
+            FROM adaptive_evidence_receipts
+            WHERE run_id=$run AND attempt_id=$attempt AND role=$role
+            ORDER BY ordinal;
+            """))
+        {
+            history.Parameters.AddWithValue("$run", run.RunId.ToString("D"));
+            history.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            history.Parameters.AddWithValue("$role", RoleName(session.Role));
+            using var reader = history.ExecuteReader();
+            while (reader.Read())
+            {
+                var receipt = ReadAdaptiveReceipt(reader);
+                if (receipt.ComputeDigest() != receipt.ContentSha256 ||
+                    receipt.ResponseSha256 != AdaptiveLedgerDigest(
+                        "response-v1", receipt.ResponseJson) ||
+                    receipt.EvidenceLinksSha256 != AdaptiveLedgerDigest(
+                        "links-v1", receipt.EvidenceLinksJson) ||
+                    receipt.Ordinal != issued.Count + 1 ||
+                    receipt.RunId != run.RunId || receipt.AttemptId != attemptId ||
+                    receipt.Role != session.Role)
+                    throw new InvalidOperationException("Existing adaptive receipt chain invalid.");
+                issued.Add(receipt);
+            }
+        }
         if (issued.Count is < 1 or > GateC3IndependentRunner.MaxViewsPerRole ||
             issued.Any(x => x.Phase != "initial") ||
             !issued.Any(x => x.Capability == capability) ||
