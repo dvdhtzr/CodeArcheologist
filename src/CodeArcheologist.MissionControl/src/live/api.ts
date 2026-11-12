@@ -76,7 +76,7 @@ export type QuestionContext = {
 export type QuestionAdmission = { investigation: RunSummary; questionContext: QuestionContext };
 export type QuestionContextRead =
   | { status: 'verified'; context: QuestionContext }
-  | { status: 'legacy-no-question-context'; context: null };
+  | { status: 'legacy-no-question-context' | 'adaptive-separate-context'; context: null };
 
 export type SourceView = {
   contractVersion: string; snapshotId: string; fingerprintSha256: string;
