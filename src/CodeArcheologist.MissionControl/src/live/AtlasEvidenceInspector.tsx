@@ -21,6 +21,7 @@ type Props = {
   onExpand: () => void;
   onImpact: (nodeId: string) => void;
   onInvestigate: (nodeId: string, label: string) => void;
+  onInvestigateAdaptive: (nodeId: string, label: string) => void;
   investigationBusy: boolean;
 };
 
@@ -40,7 +41,7 @@ function CandidateGroup({ title, items }: { title: string; items: ProjectCandida
 
 export function AtlasEvidenceInspector({
   selection, fingerprint, index, node, edge, mode, centerId, expandedIds, visibleIds,
-  onNavigate, onExpand, onImpact, onInvestigate, investigationBusy,
+  onNavigate, onExpand, onImpact, onInvestigate, onInvestigateAdaptive, investigationBusy,
 }: Props) {
   const [sourceAnchor, setSourceAnchor] = useState<EvidenceAnchor | null>(null);
   const [source, setSource] = useState<SourceView | null>(null);
@@ -95,6 +96,11 @@ export function AtlasEvidenceInspector({
             {investigationBusy ? 'Starting verified investigation…' : 'Investigate this HTTP candidate'}
           </button>
           <p className="live-help">Runs the existing read-only, fixed-question Investigator / Skeptic / Reviewer workflow on this saved candidate. Source syntax is not proof of runtime registration.</p>
+          <button type="button" className="secondary-action" disabled={investigationBusy}
+            onClick={() => onInvestigateAdaptive(node.id, node.label)}>
+            {investigationBusy ? 'Starting investigation…' : 'Investigate experimentally (adaptive)'}
+          </button>
+          <p className="live-help">Experimental: each independent role can propose one additional read-only, snapshot-scoped evidence view. The host authorizes and records the request before use. This is not runtime proof and is not the default workflow.</p>
         </div>}
       {node.kind === 'syntax-declaration' && node.detail?.startsWith('method syntax declaration') &&
         <button type="button" className="secondary-action"
