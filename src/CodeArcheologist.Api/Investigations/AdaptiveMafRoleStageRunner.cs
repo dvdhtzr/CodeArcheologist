@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CodeArcheologist.Api.Workspaces;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using OllamaSharp;
 
 namespace CodeArcheologist.Api.Investigations;
