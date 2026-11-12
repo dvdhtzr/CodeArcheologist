@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { ApiClient, ApiError, eligibleContinuation } from './api.ts';
 import type { EntryPoint, Repository, RunSummary, Scope, Snapshot, Workspace } from './api.ts';
 import { LiveRun } from './realtime.ts';
+import { AdaptiveEvidenceActivity } from './AdaptiveEvidenceActivity.tsx';
 import type { ExplorerSelection } from './DeterministicExplorer.tsx';
 import { launchMatchesSelection } from './questionJourney.ts';
 import type { AtlasQuestionLaunch } from './questionJourney.ts';
@@ -286,6 +287,8 @@ export function LiveConsole({ onView, onConnected, onFindings, onSelection, exte
           <p>{execution.recovery?.diagnostic ?? 'No host recovery eligibility has been recorded.'}</p>
           <small>Only the host verifies saved checkpoints and admits a new attempt. Nothing resumes automatically.</small>
         </div>}
+        {api && scope && <AdaptiveEvidenceActivity api={api} scope={scope} runId={runId}
+          revision={live?.events.length ?? 0} />}
         <div className="control-actions">
           <button type="button" className="primary-action" onClick={onFindings}>View findings</button>
           <button type="button" className="secondary-action" disabled={busy || !execution?.cancellable} onClick={cancel}>Cancel</button>
