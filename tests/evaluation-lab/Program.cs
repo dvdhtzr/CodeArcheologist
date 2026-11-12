@@ -296,7 +296,7 @@ static async Task<int> RunAsync(string evalRoot, string[] options, bool pr4 = fa
                     _ => await LabHarness.GateCAsync(captured, trial, new MafRoleStageRunner(),
                         TimeSpan.FromMinutes(8), CancellationToken.None,
                         adaptive: comparator == Comparator.Adaptive,
-                        observeActivity: pr4 ? a => activity = a : null)
+                        observeActivity: pr4 ? (Action<R3Pr4Activity>)(a => activity = a) : null)
                 };
                 var score = LabScoring.Score(report, captured);
                 scores.Add(score);
