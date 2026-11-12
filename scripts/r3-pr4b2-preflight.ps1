@@ -102,6 +102,29 @@ try {
       [string]::IsNullOrWhiteSpace("$($version.version)")) {
     throw 'Ollama model tag, exact digest, or server version could not be observed.'
   }
+  # All four negative curated cases must preserve their expected outcomes.
+  # This is provisional and model-free: it does not run or judge a scored study.
+  $negative = @(
+    'R10-ardalis-fastendpoints', 'R12-ocelot-config-routing',
+    'R14-contoso-razor-pages', 'R15-orchardcore-capture-limit'
+  )
+  $negativeRun = Join-Path $outFull 'negative-expectations'
+  Invoke-Checked 'Four curated negative expectations, including fail-closed capture limit' 'dotnet' @(
+    'run', '--project', $lab, '--configuration', 'Release', '--',
+    '--r3-pr4-run', '--out', $negativeRun, '--curated-root', $curated,
+    '--cases', ($negative -join ','), '--comparators', 'deterministic-baseline', '--provisional'
+  )
+  $negativeSummary = Get-Content -Raw -LiteralPath (Join-Path $negativeRun 'summary.json') | ConvertFrom-Json
+  if (@($negativeSummary.expectations).Count -ne 4 -or
+      @($negativeSummary.expectations | Where-Object { -not $_.confirmed }).Count -gt 0 -or
+      @($negativeSummary.failures).Count -gt 0) {
+    throw 'Curated negative expectations did not all pass.'
+  }
+  $audit = & dotnet run --project $lab --configuration Release -- --r3-pr4-audit --runs $negativeRun 2>&1
+  if ($LASTEXITCODE -eq 0) {
+    throw 'ERROR: a provisional incomplete 4-case run was accepted as a sealed scored study.'
+  }
+  Write-Host 'VERIFIED: provisional/incomplete negative-case run is rejected by scored census.'
   Invoke-Checked 'Genuine adaptive MAF/Ollama acceptance' 'dotnet' @(
     'run', '--project', $adapter, '--configuration', 'Release', '--', '--r3-adaptive-run', '1'
   )
@@ -128,6 +151,11 @@ try {
     }
     Write-Host "VERIFIED: $arm completed; provider attempts=$($activity.modelCalls); failures=0"
   }
+  $smokeAudit = & dotnet run --project $lab --configuration Release -- --r3-pr4-audit --runs $smoke 2>&1
+  if ($LASTEXITCODE -eq 0) {
+    throw 'ERROR: provisional paired smoke was accepted as a sealed scored study.'
+  }
+  Write-Host 'VERIFIED: provisional paired smoke cannot pass the scored census.'
   $runMetadata = Get-Content -Raw -LiteralPath (Join-Path $smoke 'pr4-run-metadata.json') | ConvertFrom-Json
   if ($runMetadata.executionIdentity.gitCommit -cne $commit -or
       $runMetadata.executionIdentity.modelDigest -cne "$($model[0].digest)".ToLowerInvariant() -or
