@@ -191,7 +191,11 @@ public sealed class GateCEvidenceSession
     {
         var references = _package.References.ToDictionary(x => x.Id, StringComparer.Ordinal);
         var relations = _package.Relations.ToDictionary(x => x.Id, StringComparer.Ordinal);
-        return _handles.Values.OrderBy(x => x.Handle, StringComparer.Ordinal)
+        // Handles are minted E1..E48. Lexical ordering puts E10 before E2,
+        // making an accepted checkpoint impossible to restore after 9 items.
+        // Order by the issued ordinal, independent of Dictionary enumeration.
+        return _handles.Values.OrderBy(x => int.Parse(x.Handle.AsSpan(1),
+                System.Globalization.CultureInfo.InvariantCulture))
             .Select(handle =>
             {
                 if (references.TryGetValue(handle.CanonicalId, out var node))
