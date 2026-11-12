@@ -102,7 +102,7 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
   await expect(page.getByLabel('Current Atlas investigation')).toContainText('JourneyController');
   expect(admissions).toBe(1, 'a single explicit click issues one admission');
   await page.getByRole('button', { name: 'View question findings' }).click();
-  await expect(page.getByText('No report has been recorded for this run yet.')).toBeVisible();
+  await expect(page.getByText(/No report has been recorded for this run yet\./)).toBeVisible();
   await expect(page.getByText('Host-recorded question ID:')).toContainText(questionId);
   await page.getByRole('button', { name: 'Return to selected Atlas evidence' }).click();
   await expect(page.getByRole('heading', { name: 'Architecture Atlas' })).toBeVisible();
