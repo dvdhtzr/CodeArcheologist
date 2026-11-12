@@ -41,8 +41,19 @@ builder.Services.AddSingleton(InvestigationWorkerOptions.Default);
 builder.Services.AddSingleton<IGateCEvidenceSessionFactory>(services =>
     services.GetRequiredService<GateCEvidenceDiscovery>());
 builder.Services.AddSingleton<IGateCRoleStageRunner, MafRoleStageRunner>();
-builder.Services.AddSingleton<GateC6CheckpointRevalidator>();
-builder.Services.AddSingleton<IInvestigationExecutor, GateC6StageCoordinator>();
+builder.Services.AddSingleton<IAdaptiveRoleStageRunner, AdaptiveMafRoleStageRunner>();
+// Continuation, coordinator and worker MUST use the same version-aware
+// revalidator; there is no unchecked adaptive checkpoint-reuse path.
+builder.Services.AddSingleton<GateC6CheckpointRevalidator>(services =>
+    new(services.GetRequiredService<IGateCEvidenceSessionFactory>(),
+        services.GetRequiredService<WorkspaceStore>()));
+builder.Services.AddSingleton<IInvestigationExecutor>(services =>
+    new GateC6StageCoordinator(
+        services.GetRequiredService<WorkspaceStore>(),
+        services.GetRequiredService<IGateCEvidenceSessionFactory>(),
+        services.GetRequiredService<IGateCRoleStageRunner>(),
+        services.GetRequiredService<GateC6CheckpointRevalidator>(),
+        services.GetRequiredService<IAdaptiveRoleStageRunner>()));
 builder.Services.AddSingleton<InvestigationContinuationService>();
 builder.Services.AddSingleton<InvestigationCancellationService>();
 builder.Services.AddSingleton<InvestigationExecutionProjectionService>();
@@ -417,6 +428,104 @@ app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gu
     };
 }).RequireAuthorization();
 
+// R3 PR3c: deliberate experimental admission only. The existing
+// /investigations/questions route is *always* the stable Gate C v1 path.
+// The browser must explicitly POST this separate endpoint to opt in.
+// All candidate and saved-source checks are re-run by the API before
+// establishing a distinct v2 context; no model-proposed target is admitted.
+app.MapPost("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/questions/adaptive",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     InvestigationQuestionCreateRequest request, HttpContext context,
+     WorkspaceStore store, SnapshotEvidenceTools tools,
+     InvestigationAdmissionService admissions) =>
+{
+    var snapshot = store.GetSnapshot(workspaceId, repositoryId, snapshotId);
+    if (snapshot is null) return Results.NotFound();
+    if (!Guid.TryParseExact(context.Request.Headers["Idempotency-Key"].ToString(),
+            "D", out var key) || key == Guid.Empty)
+        return Results.BadRequest(new { error = "A nonempty UUID Idempotency-Key is required." });
+    if (request.QuestionKind != AdaptiveQuestionContract.QuestionKind ||
+        string.IsNullOrWhiteSpace(request.SubjectNodeId) ||
+        request.SubjectNodeId.Length > 1024 ||
+        request.SubjectNodeId.Any(char.IsControl))
+        return Results.BadRequest(new { error = "Unsupported adaptive question or subject." });
+
+    AgentEvidencePackage evidence;
+    try
+    {
+        evidence = tools.ReadEntryPoint(snapshot, request.SubjectNodeId, context.RequestAborted);
+    }
+    catch (SnapshotCaptureException error)
+    {
+        return Results.Json(new { error = "Saved adaptive subject evidence unavailable." },
+            statusCode: error.StatusCode);
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(408);
+    }
+    catch (IOException)
+    {
+        return Results.Conflict(new { error = "Saved snapshot evidence is unavailable." });
+    }
+    if (!InvestigationQuestionContract.Supports(request.QuestionKind, evidence.EntryPointKind))
+        return Results.BadRequest(new { error = "Unsupported saved question subject kind." });
+
+    var scope = new GateCScope(workspaceId, repositoryId, snapshotId,
+        snapshot.FingerprintSha256, evidence.EntryPointId, SnapshotEvidenceTools.Version);
+    var admission = admissions.AdmitAdaptive(scope, key, evidence.EntryPointKind);
+    if (admission.Outcome is InvestigationAdmissionOutcome.Admitted or
+        InvestigationAdmissionOutcome.Replayed)
+    {
+        AdaptiveQuestionContext? saved;
+        try
+        {
+            saved = store.GetAdaptiveContext(workspaceId, repositoryId, snapshotId,
+                admission.Record!.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            return Results.Conflict(new { error = "Adaptive question provenance invalid." });
+        }
+        if (saved is null)
+            return Results.Conflict(new { error = "Adaptive question context unavailable." });
+        var location =
+            $"/api/v1/workspaces/{workspaceId:D}/repositories/{repositoryId:D}/snapshots/{snapshotId:D}/investigations/{admission.Record!.RunId:D}";
+        if (admission.Outcome == InvestigationAdmissionOutcome.Admitted)
+            return Results.Accepted(location,
+                new { investigation = admission.Record, questionContext = saved });
+        return Results.Ok(new { investigation = admission.Record, questionContext = saved });
+    }
+    return admission.Outcome switch
+    {
+        InvestigationAdmissionOutcome.Conflict =>
+            Results.Conflict(new { error = "Idempotency-Key already belongs to another request." }),
+        InvestigationAdmissionOutcome.Busy =>
+            Results.Conflict(new { error = "A local investigation is already running." }),
+        _ => Results.Json(new { error = "Adaptive execution is unavailable in this process." },
+            statusCode: StatusCodes.Status503ServiceUnavailable)
+    };
+}).RequireAuthorization();
+
+app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/adaptive-context",
+    (Guid workspaceId, Guid repositoryId, Guid snapshotId,
+     Guid runId, WorkspaceStore store) =>
+{
+    if (store.GetInvestigation(workspaceId, repositoryId, snapshotId, runId) is null)
+        return Results.NotFound();
+    try
+    {
+        var saved = store.GetAdaptiveContext(workspaceId, repositoryId, snapshotId, runId);
+        if (saved is null)
+            return Results.Ok(new { status = "not-adaptive", context = (AdaptiveQuestionContext?)null });
+        return Results.Ok(new { status = "verified", context = saved });
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.Conflict(new { error = "Adaptive context failed verification." });
+    }
+}).RequireAuthorization();
+
 // Context is an independently verified immutable run record. Existing Gate C
 // runs have no R3 question context and are never retrospectively relabelled.
 app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:guid}/snapshots/{snapshotId:guid}/investigations/{runId:guid}/question-context",
@@ -429,8 +538,17 @@ app.MapGet("/api/v1/workspaces/{workspaceId:guid}/repositories/{repositoryId:gui
     {
         var saved = store.GetQuestionContext(workspaceId, repositoryId, snapshotId, runId);
         if (saved is null)
+        {
+            // v2 runs do NOT pretend to be legacy runs; clients can follow
+            // the explicit /adaptive-context API without mixing validators.
+            var adaptive = store.GetAdaptiveContext(workspaceId, repositoryId,
+                snapshotId, runId);
+            if (adaptive is not null)
+                return Results.Ok(new { status = "adaptive-separate-context",
+                    context = (InvestigationQuestionContext?)null });
             return Results.Ok(new { status = "legacy-no-question-context",
                 context = (InvestigationQuestionContext?)null });
+        }
         return Results.Ok(new { status = "verified", context = saved });
     }
     catch (InvalidOperationException)

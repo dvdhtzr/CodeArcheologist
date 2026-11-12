@@ -158,6 +158,16 @@ public sealed partial class WorkspaceStore
             (prior?.Phase == "follow-up") ||
             (phase == "follow-up" && prior is null))
             throw new InvalidOperationException("Out of order or duplicate adaptive evidence request.");
+        using (var gapCheck = Command(db, tx, """
+            SELECT COUNT(*) FROM adaptive_gap_events
+            WHERE attempt_id=$attempt AND role=$role;
+            """))
+        {
+            gapCheck.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            gapCheck.Parameters.AddWithValue("$role", RoleName(response.Role));
+            if (Convert.ToInt64(gapCheck.ExecuteScalar()) != 0)
+                throw new InvalidOperationException("Adaptive gap already decided for this role.");
+        }
         GateC5EvidenceLink[] previousLinks = prior is null ? [] :
             JsonSerializer.Deserialize<GateC5EvidenceLink[]>(prior.EvidenceLinksJson)
                 ?? throw new InvalidOperationException("Prior receipt mappings invalid.");
@@ -216,6 +226,98 @@ public sealed partial class WorkspaceStore
         }
         tx.Commit();
         return receipt;
+    }
+
+    /// <summary>
+    /// A bounded model-proposed gap mapped to an already served initial
+    /// capability is not a second retrieval authorization. Persist its
+    /// proposal and denial atomically under the current owner's fence.
+    /// There is no new receipt or tool-call charge because no call occurred.
+    /// </summary>
+    public void RecordAdaptiveDuplicateGap(ExecutionFence fence, Guid attemptId,
+        GateCEvidenceSession session, string gapKind, string purpose)
+    {
+        var capability = AdaptiveGapPolicy.CapabilityFor(gapKind);
+        if (capability is null || !AdaptiveGapPolicy.ValidPurpose(purpose) ||
+            session.Role is not (GateCRole.Investigator or GateCRole.Skeptic))
+            throw new ArgumentException("Invalid adaptive duplicate-gap proposal.");
+        using var db = Open();
+        using var tx = db.BeginTransaction(deferred: false);
+        var attempt = RequireActiveAttemptOwner(db, tx, fence, attemptId, "running");
+        var run = LoadRun(db, tx, attempt.RunId)
+            ?? throw new InvalidOperationException("Adaptive gap run missing.");
+        if (run.RunId != session.VerifiedRunId || run.Scope != session.VerifiedScope)
+            throw new InvalidOperationException("Foreign gap proposal scope.");
+        using (var context = Command(db, tx, """
+            SELECT COUNT(*) FROM adaptive_question_contexts WHERE run_id=$run;
+            """))
+        {
+            context.Parameters.AddWithValue("$run", run.RunId.ToString("D"));
+            if (Convert.ToInt64(context.ExecuteScalar()) != 1)
+                throw new InvalidOperationException("Gap proposal lacks adaptive question.");
+        }
+        // Read the complete role receipt chain in THIS fenced SQLite
+        // transaction; do not open a second connection while holding the
+        // immediate writer lock.
+        var issued = new List<AdaptiveEvidenceReceipt>();
+        using (var history = Command(db, tx, """
+            SELECT receipt_id,run_id,attempt_id,role,ordinal,phase,capability,
+                target_node_id,gap_id,gap_kind,purpose,request_json,response_json,
+                response_sha256,evidence_links_json,evidence_links_sha256,
+                new_item_count,ownership_epoch,created_at_unix_ms,content_sha256
+            FROM adaptive_evidence_receipts
+            WHERE run_id=$run AND attempt_id=$attempt AND role=$role
+            ORDER BY ordinal;
+            """))
+        {
+            history.Parameters.AddWithValue("$run", run.RunId.ToString("D"));
+            history.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            history.Parameters.AddWithValue("$role", RoleName(session.Role));
+            using var reader = history.ExecuteReader();
+            while (reader.Read())
+            {
+                var receipt = ReadAdaptiveReceipt(reader);
+                if (receipt.ComputeDigest() != receipt.ContentSha256 ||
+                    receipt.ResponseSha256 != AdaptiveLedgerDigest(
+                        "response-v1", receipt.ResponseJson) ||
+                    receipt.EvidenceLinksSha256 != AdaptiveLedgerDigest(
+                        "links-v1", receipt.EvidenceLinksJson) ||
+                    receipt.Ordinal != issued.Count + 1 ||
+                    receipt.RunId != run.RunId || receipt.AttemptId != attemptId ||
+                    receipt.Role != session.Role)
+                    throw new InvalidOperationException("Existing adaptive receipt chain invalid.");
+                issued.Add(receipt);
+            }
+        }
+        if (issued.Count is < 1 or > GateC3IndependentRunner.MaxViewsPerRole ||
+            issued.Any(x => x.Phase != "initial") ||
+            !issued.Any(x => x.Capability == capability) ||
+            issued.Count != session.ToolCallsUsed)
+            throw new InvalidOperationException("Denied gap was not a duplicate initial view.");
+        using (var prior = Command(db, tx, """
+            SELECT COUNT(*) FROM adaptive_gap_events
+            WHERE attempt_id=$attempt AND role=$role;
+            """))
+        {
+            prior.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
+            prior.Parameters.AddWithValue("$role", RoleName(session.Role));
+            if (Convert.ToInt64(prior.ExecuteScalar()) != 0)
+                throw new InvalidOperationException("Gap decision was already recorded.");
+        }
+        var gapId = Guid.NewGuid();
+        var at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (var (ordinal, kind, diagnostic) in new[]
+        {
+            (1, "proposed", "model-proposed-not-proof"),
+            (2, "denied", "duplicate-initial-capability")
+        })
+        {
+            var entry = new AdaptiveGapEvent(Guid.NewGuid(), run.RunId, attemptId,
+                session.Role, gapId, ordinal, kind, gapKind, purpose, capability,
+                null, diagnostic, fence.Epoch, at, "");
+            InsertGapRecord(db, tx, entry with { ContentSha256 = entry.ComputeDigest() });
+        }
+        tx.Commit();
     }
 
     /// <summary>Read-only receipt projection for the future exact-replay
@@ -331,7 +433,12 @@ public sealed partial class WorkspaceStore
             receipt.GapKind!, receipt.Purpose, receipt.Capability,
             receipt.ReceiptId, diagnostic, receipt.OwnershipEpoch,
             receipt.CreatedAtUnixMs, "");
-        entry = entry with { ContentSha256 = entry.ComputeDigest() };
+        InsertGapRecord(db, tx, entry with { ContentSha256 = entry.ComputeDigest() });
+    }
+
+    private static void InsertGapRecord(SqliteConnection db, SqliteTransaction tx,
+        AdaptiveGapEvent entry)
+    {
         using var insert = Command(db, tx, """
             INSERT INTO adaptive_gap_events
               (event_id,run_id,attempt_id,role,gap_id,ordinal,event_kind,gap_kind,
@@ -344,9 +451,9 @@ public sealed partial class WorkspaceStore
         insert.Parameters.AddWithValue("$run", entry.RunId.ToString("D"));
         insert.Parameters.AddWithValue("$attempt", entry.AttemptId.ToString("D"));
         insert.Parameters.AddWithValue("$role", RoleName(entry.Role));
-        insert.Parameters.AddWithValue("$gap", gapId.ToString("D"));
-        insert.Parameters.AddWithValue("$ordinal", ordinal);
-        insert.Parameters.AddWithValue("$kind", eventKind);
+        insert.Parameters.AddWithValue("$gap", entry.GapId.ToString("D"));
+        insert.Parameters.AddWithValue("$ordinal", entry.Ordinal);
+        insert.Parameters.AddWithValue("$kind", entry.EventKind);
         insert.Parameters.AddWithValue("$gapKind", entry.GapKind);
         insert.Parameters.AddWithValue("$purpose", entry.Purpose);
         insert.Parameters.AddWithValue("$cap", (object?)entry.Capability ?? DBNull.Value);

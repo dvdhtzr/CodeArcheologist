@@ -51,10 +51,10 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
     private const string Model = ModelId;
     private static readonly Uri LocalProvider = new("http://127.0.0.1:11434/");
     private const int MaxModelText = 8192;
-    private const int MaxInputText = 16000;
+    internal const int MaxInputText = 16000;
     /// <summary>E2: at most this many distinct evidence views per role (within the 6-call budget).</summary>
     public const int MaxViewsPerRole = 3;
-    private const string SelectionSchema = """
+    internal const string SelectionSchema = """
         {
           "type":"object","additionalProperties":false,
           "properties":{"capabilities":{"type":"array","minItems":1,"maxItems":3,"uniqueItems":true,
@@ -65,7 +65,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
           "required":["capabilities"]
         }
         """;
-    private const string InvestigatorSchema = """
+    internal const string InvestigatorSchema = """
         {
           "type":"object","additionalProperties":false,
           "properties":{
@@ -81,7 +81,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
           "required":["hypotheses","unknown"]
         }
         """;
-    private const string SkepticSchema = """
+    internal const string SkepticSchema = """
         {
           "type":"object","additionalProperties":false,
           "properties":{
@@ -301,7 +301,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 null, capability, session.ToolCallsUsed);
     }
 
-    private static async Task<string> AskAsync(AIAgent agent, string prompt,
+    internal static async Task<string> AskAsync(AIAgent agent, string prompt,
         string schema, string schemaName, CancellationToken ct)
     {
         using var json = JsonDocument.Parse(schema);

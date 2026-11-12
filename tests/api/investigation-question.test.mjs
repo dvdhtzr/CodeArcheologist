@@ -85,6 +85,29 @@ test('R3 structured questions require auth, exact saved scope and approved kind'
       assert.equal((await post(foreign + '/questions', token, valid)).status, 404);
     });
 
+    await t.test('adaptive mode is explicit, authenticated and rejects unsafe requests before MAF', async () => {
+      const adaptiveRoute = prefix + '/questions/adaptive';
+      assert.equal((await post(adaptiveRoute, null, valid)).status, 403);
+      assert.equal((await post(adaptiveRoute, token, valid, { key: null })).status, 400);
+      assert.equal((await post(adaptiveRoute, token, valid, { key: 'not-a-uuid' })).status, 400);
+      assert.equal((await post(adaptiveRoute, token, valid,
+        { origin: 'https://evil.example' })).status, 403);
+      for (const payload of [
+        { ...valid, questionKind: 'unrestricted-free-text' },
+        { ...valid, subjectNodeId: 'not-a-saved-node' },
+        { ...valid, subjectNodeId: '' },
+        { ...valid, subjectNodeId: 'x'.repeat(1025) },
+      ]) {
+        const response = await post(adaptiveRoute, token, payload);
+        assert.ok([400, 404].includes(response.status),
+          'unsupported adaptive request must never admit a model run');
+      }
+      assert.equal((await get(prefix + '/' + randomUUID() +
+        '/adaptive-context', token)).status, 404);
+      // A valid adaptive request would execute real Ollama. Its successful,
+      // fenced admission and host/worker path are tested model-free in C#.
+    });
+
     await t.test('legacy or unknown context is never invented', async () => {
       assert.equal((await get(prefix + '/' + randomUUID() + '/question-context', token)).status, 404);
     });
@@ -93,7 +116,9 @@ test('R3 structured questions require auth, exact saved scope and approved kind'
       const doc = await (await get('/api/v1/openapi.json')).json();
       const basePath = '/api/v1/workspaces/{workspaceId}/repositories/{repositoryId}/snapshots/{snapshotId}/investigations';
       assert.ok(doc.paths[basePath + '/questions']?.post);
+      assert.ok(doc.paths[basePath + '/questions/adaptive']?.post);
       assert.ok(doc.paths[basePath + '/{runId}/question-context']?.get);
+      assert.ok(doc.paths[basePath + '/{runId}/adaptive-context']?.get);
     });
 
     const history = await (await get(prefix, token)).json();

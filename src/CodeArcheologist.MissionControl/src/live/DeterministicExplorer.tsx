@@ -20,9 +20,10 @@ type Impact = {
 };
 const VERSION = 'code-archeologist-capabilities-v1';
 
-export function DeterministicExplorer({ selection, onInvestigate, investigationBusy, investigationError }: {
+export function DeterministicExplorer({ selection, onInvestigate, onInvestigateAdaptive, investigationBusy, investigationError }: {
   selection: ExplorerSelection;
   onInvestigate: (nodeId: string, label: string, fingerprintSha256: string) => void;
+  onInvestigateAdaptive: (nodeId: string, label: string, fingerprintSha256: string) => void;
   investigationBusy: boolean;
   investigationError: string;
 }) {
@@ -129,7 +130,8 @@ export function DeterministicExplorer({ selection, onInvestigate, investigationB
       {view !== 'coverage' && view !== 'atlas' && error && <p className="live-error" role="alert">{error}</p>}
       {view === 'atlas' && <ArchitectureAtlas selection={selection}
         onMethod={id => { setSelectedMethod(id); setView('inventory'); }}
-        onInvestigate={onInvestigate} investigationBusy={investigationBusy}
+        onInvestigate={onInvestigate} onInvestigateAdaptive={onInvestigateAdaptive}
+        investigationBusy={investigationBusy}
         investigationError={investigationError} />}
       {view === 'coverage' && <SnapshotCoverage selection={selection} />}
       {view === 'graph' && <EvidenceGraphExplorer selection={selection}

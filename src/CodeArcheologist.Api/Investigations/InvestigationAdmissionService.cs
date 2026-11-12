@@ -18,7 +18,17 @@ public sealed class InvestigationAdmissionService(WorkspaceStore store,
     ExecutionOwnershipState ownership, InvestigationWorkSignal signal)
 {
     public InvestigationAdmission Admit(GateCScope scope, Guid idempotencyKey,
-        string? questionSubjectKind = null)
+        string? questionSubjectKind = null) =>
+        AdmitCore(scope, idempotencyKey, questionSubjectKind, null);
+
+    /// <summary>Explicit experimental profile. Never inferred from a legacy
+    /// request or from model output; has a separate idempotency digest.</summary>
+    public InvestigationAdmission AdmitAdaptive(GateCScope scope, Guid idempotencyKey,
+        string verifiedSubjectKind) =>
+        AdmitCore(scope, idempotencyKey, null, verifiedSubjectKind);
+
+    private InvestigationAdmission AdmitCore(GateCScope scope, Guid idempotencyKey,
+        string? questionSubjectKind, string? adaptiveQuestionSubjectKind)
     {
         var fence = ownership.Fence;
         if (fence is null)
@@ -26,7 +36,8 @@ public sealed class InvestigationAdmissionService(WorkspaceStore store,
         InvestigationCreateResult result;
         try
         {
-            result = store.CreateInvestigation(scope, idempotencyKey, fence, questionSubjectKind);
+            result = store.CreateInvestigation(scope, idempotencyKey, fence,
+                questionSubjectKind, adaptiveQuestionSubjectKind);
         }
         catch (ExecutionFenceException error)
         {

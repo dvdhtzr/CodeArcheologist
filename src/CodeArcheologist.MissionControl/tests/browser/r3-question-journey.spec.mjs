@@ -120,10 +120,72 @@ test('R3 PR2: explicit Atlas question survives Observatory and Findings without 
   }).toBe(true);
   expect(admissions).toBe(1, 'navigation must not start another model run');
 
+  // R3 PR3c: a separate explicit action is required for adaptive v2.
+  // Only this new admission is intercepted; actual API pairing, capture,
+  // Atlas graph and node selection above remain real and verified. No Ollama
+  // work is dispatched by this browser-only acceptance.
+  const adaptiveRunId = randomUUID(), adaptiveQuestionId = randomUUID();
+  let adaptiveAdmissions = 0;
+  let adaptiveFake;
+  await page.route('**/investigations/questions/adaptive', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    adaptiveAdmissions++;
+    const body = route.request().postDataJSON();
+    expect(body.questionKind).toBe('explain-http-entry-point');
+    expect(body.subjectNodeId).toBe(fake.questionContext.subjectNodeId);
+    const savedScope = { ...scope, fingerprintSha256,
+      entryPointId: body.subjectNodeId,
+      evidenceContractVersion: 'snapshot-agent-evidence-tools-v2' };
+    adaptiveFake = {
+      investigation: {
+        ...fake.investigation, runId: adaptiveRunId, scope: savedScope,
+      },
+      questionContext: {
+        ...fake.questionContext,
+        contractVersion: 'r3-adaptive-question-context-v2',
+        questionId: adaptiveQuestionId, runId: adaptiveRunId,
+        scope: savedScope,
+        questionTemplateVersion: 'r3-adaptive-explain-http-candidate-v1',
+        capabilityPolicyVersion: 'r3-adaptive-capabilities-v1',
+        budgetProfileVersion: 'r3-adaptive-six-call-one-followup-v1',
+      },
+    };
+    await route.fulfill({ status: 202, contentType: 'application/json',
+      headers: mockHeaders, body: JSON.stringify(adaptiveFake) });
+  });
+  await page.route('**/investigations/' + adaptiveRunId + '/events', route =>
+    route.fulfill({ status: 200, contentType: 'application/json',
+      headers: mockHeaders, body: '[]' }));
+  await page.route('**/investigations/' + adaptiveRunId, route =>
+    route.fulfill({ status: 200, contentType: 'application/json',
+      headers: mockHeaders, body: JSON.stringify({
+        summary: adaptiveFake.investigation, report: null,
+      }) }));
+  await expect(page.getByRole('button', {
+    name: 'Investigate experimentally (adaptive)',
+  })).toBeVisible();
+  await page.getByRole('button', {
+    name: 'Investigate experimentally (adaptive)',
+  }).click();
+  await expect(page.getByLabel('Current Atlas investigation'))
+    .toContainText('Experimental adaptive investigation');
+  await expect(page.getByLabel('Current Atlas investigation'))
+    .toContainText('one host-governed follow-up per role');
+  expect(adaptiveAdmissions).toBe(1);
+  expect(admissions).toBe(1, 'adaptive mode must not submit a stable admission');
+  await page.getByRole('button', { name: 'View question findings' }).click();
+  await expect(page.getByText('Host-recorded question ID:'))
+    .toContainText(adaptiveQuestionId);
+  await page.getByRole('button', { name: 'Return to selected Atlas evidence' }).click();
+  await expect(page.locator('.atlas-details')).toContainText('http-endpoint-attribute');
+  expect(adaptiveAdmissions).toBe(1, 'adaptive navigation must never re-admit');
+
   // Changing to a non-HTTP method removes the launch action. A graph
   // relationship or a similar spelling must not silently authorize it.
   await page.getByRole('combobox', { name: 'Atlas node kind' }).selectOption('syntax-declaration');
   await page.getByPlaceholder('Name, file, or declaration').fill('Helper');
   await page.locator('.atlas-search-results button').first().click();
   await expect(page.getByRole('button', { name: 'Investigate this HTTP candidate' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Investigate experimentally (adaptive)' }))
+    .toHaveCount(0);
 });

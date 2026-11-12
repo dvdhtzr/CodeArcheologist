@@ -76,7 +76,7 @@ export type QuestionContext = {
 export type QuestionAdmission = { investigation: RunSummary; questionContext: QuestionContext };
 export type QuestionContextRead =
   | { status: 'verified'; context: QuestionContext }
-  | { status: 'legacy-no-question-context'; context: null };
+  | { status: 'legacy-no-question-context' | 'adaptive-separate-context'; context: null };
 
 export type SourceView = {
   contractVersion: string; snapshotId: string; fingerprintSha256: string;
@@ -203,6 +203,16 @@ export class ApiClient {
   questionContext(scope: Scope, runId: string) {
     return this.#send<QuestionContextRead>('GET',
       scopePath(scope) + `/investigations/${id(runId)}/question-context`);
+  }
+  /** Explicit experimental opt-in only. Never the default question route. */
+  startAdaptiveQuestion(scope: Scope, subjectNodeId: string, idempotencyKey: string) {
+    return this.#send<QuestionAdmission>('POST',
+      scopePath(scope) + '/investigations/questions/adaptive',
+      { subjectNodeId, questionKind: 'explain-http-entry-point' }, true, idempotencyKey);
+  }
+  adaptiveContext(scope: Scope, runId: string) {
+    return this.#send<{ status: 'verified' | 'not-adaptive'; context: QuestionContext | null }>(
+      'GET', scopePath(scope) + `/investigations/${id(runId)}/adaptive-context`);
   }
   events(scope: Scope, runId: string) { return this.#send<LedgerEvent[]>('GET', scopePath(scope) + `/investigations/${id(runId)}/events`); }
   execution(scope: Scope, runId: string) { return this.#send<Execution>('GET', scopePath(scope) + `/investigations/${id(runId)}/execution`); }

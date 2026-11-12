@@ -181,27 +181,33 @@ export function App() {
   }, [explorerSelection?.api, explorerSelection?.scope.workspaceId,
       explorerSelection?.scope.repositoryId, explorerSelection?.scope.snapshotId]);
 
-  async function startAtlasQuestion(nodeId: string, nodeLabel: string, fingerprintSha256: string) {
+  async function startAtlasQuestion(nodeId: string, nodeLabel: string,
+    fingerprintSha256: string, adaptive = false) {
     const selection = explorerSelection;
     if (!selection || !connected || questionInFlight.current) return;
     questionInFlight.current = true;
     setStartingQuestion(true);
     setQuestionError('');
     const identity = [selection.scope.workspaceId, selection.scope.repositoryId,
-      selection.scope.snapshotId, fingerprintSha256, nodeId].join('/');
+      selection.scope.snapshotId, fingerprintSha256, nodeId,
+      adaptive ? 'adaptive-v2' : 'stable-v1'].join('/');
     const request = questionRequest.current?.identity === identity
       ? questionRequest.current : { identity, key: crypto.randomUUID() };
     questionRequest.current = request;
     try {
-      const response = await selection.api.startQuestion(selection.scope, nodeId, request.key);
-      const context = verifiedQuestionAdmission(response, selection.scope, nodeId, fingerprintSha256);
+      const response = adaptive
+        ? await selection.api.startAdaptiveQuestion(selection.scope, nodeId, request.key)
+        : await selection.api.startQuestion(selection.scope, nodeId, request.key);
+      const context = verifiedQuestionAdmission(response, selection.scope, nodeId,
+        fingerprintSha256, adaptive ? 'adaptive' : 'stable');
       const current = selectionRef.current;
       if (!current || current.api !== selection.api ||
           !sameSnapshot(current.scope, selection.scope))
         return; // User switched snapshot or disconnected while admission was in flight.
       setActiveQuestion({ api: selection.api, scope: selection.scope,
         fingerprintSha256, subjectNodeId: nodeId,
-        subjectLabel: nodeLabel, questionContext: context, run: response.investigation });
+        subjectLabel: nodeLabel, questionContext: context, adaptive,
+        run: response.investigation });
       questionRequest.current = null; // A later explicit start is a NEW run.
       setMode('live');
       setPage('observatory');
@@ -357,8 +363,8 @@ export function App() {
                     externalRun={activeInScope} /></div>
                   {activeInScope && mode === 'live' && <div className="r3-question-summary"
                     aria-label="Current Atlas investigation">
-                    <strong>Atlas investigation · {activeInScope.subjectLabel}</strong>
-                    <small>Question: Explain this HTTP entry-point candidate · saved snapshot {activeInScope.scope.snapshotId}</small>
+                    <strong>{activeInScope.adaptive ? 'Experimental adaptive investigation' : 'Atlas investigation'} · {activeInScope.subjectLabel}</strong>
+                    <small>Question: Explain this HTTP entry-point candidate · {activeInScope.adaptive ? 'one host-governed follow-up per role, not a runtime proof' : 'stable Gate C'} · saved snapshot {activeInScope.scope.snapshotId}</small>
                     <button type="button" className="secondary-action"
                       onClick={() => setPage('findings')}>View question findings</button>
                   </div>}
@@ -434,6 +440,7 @@ export function App() {
           <div className="r3-explorer-host" hidden={page !== 'explorer'}>
             <DeterministicExplorer key={explorerScopeKey} selection={explorerSelection}
               onInvestigate={(id, label, fingerprint) => void startAtlasQuestion(id, label, fingerprint)}
+              onInvestigateAdaptive={(id, label, fingerprint) => void startAtlasQuestion(id, label, fingerprint, true)}
               investigationBusy={startingQuestion} investigationError={questionError} />
           </div>
           {page === 'activity' && (
@@ -459,7 +466,8 @@ export function App() {
                 ? <>
                     <p className="secondary-intro">
                       {activeInScope && findingsTarget.runId === activeInScope.run.runId
-                        ? 'Question: Explain this HTTP entry-point candidate — ' + activeInScope.subjectLabel
+                        ? (activeInScope.adaptive ? 'Experimental adaptive question: ' : 'Question: ') +
+                            'Explain this HTTP entry-point candidate — ' + activeInScope.subjectLabel
                         : liveView?.entryPoint ?? 'Saved investigation'}
                     </p>
                     {activeInScope && findingsTarget.runId === activeInScope.run.runId &&
