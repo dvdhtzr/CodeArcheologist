@@ -104,8 +104,35 @@ public sealed class AdaptiveReceiptRevalidator(
                 beforeCount = restoredLinks.Count;
             }
 
-            if (followup is null && gaps.Count != 0)
-                return AdaptiveReceiptRevalidation.Reject("adaptive-unlinked-gap-events");
+            if (followup is null)
+            {
+                // A model may request a capability already served in its
+                // initial batch. Host records proposal + denial; no tool
+                // call, new evidence handle or follow-up receipt is minted.
+                if (gaps.Count != 0)
+                {
+                    if (gaps.Count != 2 ||
+                        gaps[0].EventKind != "proposed" ||
+                        gaps[1].EventKind != "denied" ||
+                        gaps[0].Ordinal != 1 || gaps[1].Ordinal != 2 ||
+                        gaps[0].GapId != gaps[1].GapId ||
+                        gaps[0].GapId == Guid.Empty ||
+                        gaps[0].GapKind != gaps[1].GapKind ||
+                        gaps[0].Purpose != gaps[1].Purpose ||
+                        gaps[0].Capability != gaps[1].Capability ||
+                        gaps[0].ReceiptId is not null || gaps[1].ReceiptId is not null ||
+                        gaps[0].OwnershipEpoch != gaps[1].OwnershipEpoch ||
+                        gaps[0].CreatedAtUnixMs != gaps[1].CreatedAtUnixMs ||
+                        gaps[0].Diagnostic != "model-proposed-not-proof" ||
+                        gaps[1].Diagnostic != "duplicate-initial-capability" ||
+                        !AdaptiveGapPolicy.ValidPurpose(gaps[0].Purpose) ||
+                        AdaptiveGapPolicy.CapabilityFor(gaps[0].GapKind) != gaps[0].Capability ||
+                        !initialCapabilities.Contains(gaps[0].Capability!) ||
+                        gaps.Any(g => g.RunId != run.RunId ||
+                            g.AttemptId != attemptId || g.Role != role))
+                        return AdaptiveReceiptRevalidation.Reject("adaptive-denied-gap-invalid");
+                }
+            }
             if (followup is not null)
             {
                 if (gaps.Count != 3 || followup.GapId is null)
