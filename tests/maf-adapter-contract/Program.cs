@@ -64,6 +64,12 @@ if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose" or "--ga
     return;
 }
 
+if (args.Length > 0 && args[0] == "--r3-adaptive-run")
+{
+    Environment.ExitCode = await R3AdaptiveLocalRun.RunAsync(args);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--gate-c6b-run")
 {
     Environment.ExitCode = await GateC6bLocalRun.RunAsync(args);
