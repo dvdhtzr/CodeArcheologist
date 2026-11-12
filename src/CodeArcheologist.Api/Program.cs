@@ -41,8 +41,19 @@ builder.Services.AddSingleton(InvestigationWorkerOptions.Default);
 builder.Services.AddSingleton<IGateCEvidenceSessionFactory>(services =>
     services.GetRequiredService<GateCEvidenceDiscovery>());
 builder.Services.AddSingleton<IGateCRoleStageRunner, MafRoleStageRunner>();
-builder.Services.AddSingleton<GateC6CheckpointRevalidator>();
-builder.Services.AddSingleton<IInvestigationExecutor, GateC6StageCoordinator>();
+builder.Services.AddSingleton<IAdaptiveRoleStageRunner, AdaptiveMafRoleStageRunner>();
+// Continuation, coordinator and worker MUST use the same version-aware
+// revalidator; there is no unchecked adaptive checkpoint-reuse path.
+builder.Services.AddSingleton<GateC6CheckpointRevalidator>(services =>
+    new(services.GetRequiredService<IGateCEvidenceSessionFactory>(),
+        services.GetRequiredService<WorkspaceStore>()));
+builder.Services.AddSingleton<IInvestigationExecutor>(services =>
+    new GateC6StageCoordinator(
+        services.GetRequiredService<WorkspaceStore>(),
+        services.GetRequiredService<IGateCEvidenceSessionFactory>(),
+        services.GetRequiredService<IGateCRoleStageRunner>(),
+        services.GetRequiredService<GateC6CheckpointRevalidator>(),
+        services.GetRequiredService<IAdaptiveRoleStageRunner>()));
 builder.Services.AddSingleton<InvestigationContinuationService>();
 builder.Services.AddSingleton<InvestigationCancellationService>();
 builder.Services.AddSingleton<InvestigationExecutionProjectionService>();
