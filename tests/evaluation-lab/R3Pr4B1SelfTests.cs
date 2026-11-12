@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CodeArcheologist.Api.Investigations;
 
 namespace CodeArcheologist.EvaluationLab;
@@ -71,6 +72,16 @@ internal static class R3Pr4B1SelfTests
                     "unsealed study accepted");
                 R3Pr4Census.SealCompleteRun(evalRoot, runs);
                 expect(R3Pr4Census.Audit(evalRoot, runs).Valid, "valid synthetic sealed census refused");
+                var metadataFile = Path.Combine(runs, "pr4-run-metadata.json");
+                var originalMetadata = File.ReadAllBytes(metadataFile);
+                var noIdentity = JsonNode.Parse(File.ReadAllText(metadataFile))!.AsObject();
+                noIdentity.Remove("executionIdentity");
+                File.WriteAllText(metadataFile, noIdentity.ToJsonString(LabSchema.Json));
+                expect(!R3Pr4Census.Audit(evalRoot, runs).Valid,
+                    "sealed study without observed execution identity accepted");
+                File.WriteAllBytes(metadataFile, originalMetadata);
+                expect(R3Pr4Census.Audit(evalRoot, runs).Valid,
+                    "restored execution identity did not recover sealed census");
 
                 var output = new StringWriter();
                 expect(R3Pr4Judging.Export(evalRoot, runs, export, output) == 0,
@@ -187,6 +198,10 @@ internal static class R3Pr4B1SelfTests
                 comparators = Comparator.Pr4All,
                 selectedCases = allCases,
                 provisional = false,
+                executionIdentity = new R3Pr4ExecutionIdentity(
+                    GateC3IndependentRunner.ModelId, new string('a', 64),
+                    "synthetic-ollama-only", new string('b', 40),
+                    "synthetic-.NET", "synthetic-OS", "x64", Guid.NewGuid(), Guid.NewGuid()),
                 recordedAtUtc = DateTimeOffset.UtcNow,
                 judgmentStatus = "pending-blinded-adjudication"
             }, LabSchema.Json));
