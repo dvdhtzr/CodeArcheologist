@@ -18,6 +18,7 @@ internal static class R3AdaptiveExecutionSelfTests
     {
         public int InvestigatorCalls;
         public int SkepticCalls;
+        public bool FailSkepticOnce;
         public readonly List<(GateCRole Role, int Calls, int Handles)> EntryStates = [];
 
         public Task<GateC3RoleOutcome> RunAdaptiveAsync(
@@ -27,7 +28,17 @@ internal static class R3AdaptiveExecutionSelfTests
             var role = session.Role;
             EntryStates.Add((role, session.ToolCallsUsed, session.HostCatalog().Count));
             if (role == GateCRole.Investigator) InvestigatorCalls++;
-            else SkepticCalls++;
+            else
+            {
+                SkepticCalls++;
+                if (FailSkepticOnce)
+                {
+                    FailSkepticOnce = false;
+                    return Task.FromResult(new GateC3RoleOutcome(role,
+                        GateCRoleStatus.TimedOut, "model-deadline-exceeded",
+                        null, null, session.ToolCallsUsed));
+                }
+            }
             var run = context.Run;
             var first = session.Request(GateCEvidenceRegistry.Relationships, ct);
             Expect(first.Check.Accepted && first.Response is not null,
@@ -153,6 +164,76 @@ internal static class R3AdaptiveExecutionSelfTests
                     "Completed adaptive report has non-replayable checkpoints: " +
                     replay.Diagnostic);
                 await host.Worker.StopAsync(CancellationToken.None);
+            });
+
+        await GateC6bSelfTests.ScenarioAsync(
+            "R3 adaptive: explicit continuation reuses receipt-verified Investigator v3 checkpoint",
+            async fixture =>
+            {
+                var store = fixture.Store;
+                store.Initialize();
+                var scope = GateC6bSelfTests.SeedSnapshot(store);
+                var evidence = new GateC6bCheckpointSelfTests.Evidence();
+                var legacy = new GateC6bCheckpointSelfTests.Roles();
+                var adaptive = new FakeAdaptiveRoles(store) { FailSkepticOnce = true };
+                var revalidator = new GateC6CheckpointRevalidator(evidence, store);
+                var coordinator = new GateC6StageCoordinator(
+                    store, evidence, legacy, revalidator, adaptive);
+                Guid runId;
+                using (var first = GateC6bSelfTests.StartHost(store, coordinator))
+                {
+                    await first.Worker.StartAsync(CancellationToken.None);
+                    var result = first.Admission.AdmitAdaptive(scope, Guid.NewGuid(),
+                        "http-endpoint-attribute");
+                    Expect(result.Record is not null &&
+                        result.Outcome == InvestigationAdmissionOutcome.Admitted,
+                        "Initial adaptive admission rejected.");
+                    runId = result.Record!.RunId;
+                    await GateC6bSelfTests.Until(() => store.GetInvestigation(
+                        scope.WorkspaceId, scope.RepositoryId, scope.SnapshotId,
+                        runId)?.Summary.Status == "interrupted",
+                        "adaptive Skeptic role interruption");
+                    Expect(store.ListCheckpoints(runId).Count == 1 &&
+                        store.ListCheckpoints(runId)[0].Role == "investigator",
+                        "Timed-out Skeptic must not acquire a checkpoint.");
+                    await first.Worker.StopAsync(CancellationToken.None);
+                }
+                // A new owner never automatically resumes or calls Ollama.
+                using (var second = GateC6bSelfTests.StartHost(store, coordinator))
+                {
+                    await second.Worker.StartAsync(CancellationToken.None);
+                    Expect(adaptive.InvestigatorCalls == 1 && adaptive.SkepticCalls == 1,
+                        "Restart invoked an agent before explicit continuation.");
+                    var continuation = new InvestigationContinuationService(
+                        store, second.Ownership, revalidator, second.Signal);
+                    var current = store.GetInvestigation(scope.WorkspaceId,
+                        scope.RepositoryId, scope.SnapshotId, runId)!.Summary;
+                    Expect(continuation.Evaluate(current, CancellationToken.None).Eligible,
+                        "Exact v3 receipt replay should permit manual continuation.");
+                    var resumed = continuation.Continue(scope.WorkspaceId,
+                        scope.RepositoryId, scope.SnapshotId, runId,
+                        Guid.NewGuid(), 1, CancellationToken.None);
+                    Expect(resumed.Outcome == ContinuationOutcome.Admitted,
+                        "Host refused explicit adaptive continuation: " + resumed.Diagnostic);
+                    await GateC6bSelfTests.Until(() => store.GetInvestigation(
+                        scope.WorkspaceId, scope.RepositoryId, scope.SnapshotId,
+                        runId)?.Summary.Status == "completed",
+                        "adaptive manual continuation completion");
+                    Expect(adaptive.InvestigatorCalls == 1 &&
+                        adaptive.SkepticCalls == 2 &&
+                        legacy.ReviewerCalls == 1,
+                        "Continuation reran a validated role or missed the Reviewer.");
+                    var attempts = store.ListAttempts(runId);
+                    var checkpoints = store.ListCheckpoints(runId);
+                    Expect(attempts.Count == 2 && checkpoints.Count == 3 &&
+                        store.ListLineage(runId).Any(l =>
+                            l.AttemptId == attempts[1].AttemptId &&
+                            l.Relation == "reused" &&
+                            l.CheckpointId == checkpoints.Single(
+                                cp => cp.Role == "investigator").CheckpointId),
+                        "Adaptive v3 Investigator checkpoint was not explicitly reused.");
+                    await second.Worker.StopAsync(CancellationToken.None);
+                }
             });
 
         Console.WriteLine("GREEN: R3 adaptive schema parser, fenced worker dispatch, " +
