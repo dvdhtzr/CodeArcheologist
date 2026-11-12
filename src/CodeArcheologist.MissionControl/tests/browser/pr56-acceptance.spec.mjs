@@ -45,10 +45,6 @@ test.afterAll(async () => {
 
 test('PR #56: real browser acceptance of verified evidence graph and snapshot isolation', async ({ page }) => {
   test.setTimeout(120_000);
-  // Diagnostic for the R3 PR2 Explorer disappearing after a snapshot switch:
-  // report the actual accessibility/DOM state and any runtime exception.
-  const browserErrors = [];
-  page.on('pageerror', error => browserErrors.push(error.stack || error.message));
 
   await test.step('Pair and choose an isolated workspace, repository, and snapshot', async () => {
     await page.goto('/');
@@ -302,7 +298,7 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
   });
 
   await test.step('Snapshot coverage reveals actual captured files and policy exclusions', async () => {
-    await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+    await page.getByRole('button', { name: 'Snapshot coverage', exact: true }).click();
     await page.getByRole('button', { name: 'Load snapshot coverage' }).click();
     await expect(page.getByRole('heading', { name: 'What was actually captured?' })).toBeVisible();
     await expect(page.locator('.snapshot-coverage .deterministic-summary')).toContainText('Captured files');
@@ -330,30 +326,9 @@ test('PR #56: real browser acceptance of verified evidence graph and snapshot is
       .toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Load Architecture Atlas' })).toBeVisible();
     await expect(page.locator('.coverage-files')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Snapshot coverage' }).click();
-    try {
-      await expect(page.getByRole('button', { name: 'Snapshot coverage' }))
-        .toHaveAttribute('aria-pressed', 'true');
-    } catch (originalError) {
-      const state = await page.evaluate(() => ({
-        title: document.title,
-        breadcrumb: document.querySelector('.breadcrumb')?.textContent,
-        explorerHosts: [...document.querySelectorAll('.r3-explorer-host')].map(host => ({
-          hidden: host.hidden,
-          display: getComputedStyle(host).display,
-          tabCount: host.querySelectorAll('.graph-tabs button').length,
-          tabs: [...host.querySelectorAll('.graph-tabs button')].map(button => ({
-            label: button.textContent?.trim(), pressed: button.getAttribute('aria-pressed'),
-            disabled: button.disabled,
-          })),
-          textPreview: host.textContent?.slice(0, 350),
-        })),
-        rootText: document.querySelector('#root')?.textContent?.slice(0, 600),
-        rootHtmlLength: document.querySelector('#root')?.innerHTML.length,
-      }));
-      throw new Error('R3 PR2 snapshot coverage tab disappeared after click. ' +
-        JSON.stringify({ state, browserErrors, original: String(originalError) }));
-    }
+    await page.getByRole('button', { name: 'Snapshot coverage', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Snapshot coverage', exact: true }))
+      .toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Load snapshot coverage' })).toBeVisible();
     await expect(page.locator('.coverage-files')).toHaveCount(0);
   });
@@ -381,7 +356,7 @@ test('PR3: revoked token disconnects every tab and offers re-pairing', async ({ 
   await expect(select(page, 'Snapshot')).not.toHaveValue('');
   await page.getByRole('button', { name: 'Architecture Explorer' }).click();
   await expect(page.getByRole('heading', { name: 'Explore the code you captured.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Snapshot coverage' }).click();
+  await page.getByRole('button', { name: 'Snapshot coverage', exact: true }).click();
 
   // Actual API revocation, not a mocked 401. The next snapshot request must
   // cause one client-wide disconnected state even though Observatory is hidden.
