@@ -1,5 +1,10 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using CodeArcheologist.Api.Investigations;
+using CodeArcheologist.EvaluationLab;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Data.Sqlite;
 
 namespace CodeArcheologist.EvaluationLab.V2;
 
@@ -178,10 +183,144 @@ public static class V2AnswerabilityPreflightTests
         {
             if (Directory.Exists(temp)) Directory.Delete(temp, recursive: true);
         }
-        await Task.CompletedTask;
+        try
+        {
+            await HostIntegrationAsync();
+            Console.WriteLine("PASS: V2 PR3a genuine host snapshot + PR2 review + preflight");
+            passed++;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("FAIL: V2 PR3a genuine host integration: " + e.Message);
+            failed++;
+        }
         Console.WriteLine(failed == 0
             ? $"GREEN: {passed} V2 PR3a model-free answerability tests; NOT READY FOR SCORING."
             : $"RED: {failed} of {passed + failed} V2 PR3a answerability tests failed.");
         return failed == 0 ? 0 : 1;
+    }
+
+    private static async Task HostIntegrationAsync()
+    {
+        var originalEnv = Environment.GetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR");
+        var temp = Path.Combine(Path.GetTempPath(), "ca-v2-pr3a-host-" +
+            Guid.NewGuid().ToString("N"));
+        const string id = "V2-host-evidence";
+        var root = Path.Combine(temp, "eval");
+        var sources = Path.Combine(temp, "sources");
+        var sourceDir = Path.Combine(sources, id, "after");
+        var source = Path.Combine(sourceDir, "ItemsController.cs");
+        var caseDir = Path.Combine(root, "cases", id);
+        var reviewDir = Path.Combine(temp, "review");
+        var output = Path.Combine(temp, "preflight.json");
+        Microsoft.Extensions.DependencyInjection.ServiceProvider? services = null;
+        try
+        {
+            Directory.CreateDirectory(sourceDir);
+            Directory.CreateDirectory(caseDir);
+            var sourceBytes = Encoding.UTF8.GetBytes("""
+                using Microsoft.AspNetCore.Mvc;
+                [ApiController]
+                [Route("api/items")]
+                public class ItemsController : ControllerBase
+                {
+                    [HttpGet("{id}")]
+                    public int Get(int id)
+                    {
+                        return id;
+                    }
+                }
+                """);
+            File.WriteAllBytes(source, sourceBytes);
+            var digest = Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant();
+            var capture = await LabHarness.CaptureSourceAsync(sourceDir,
+                Path.Combine(temp, "capture-data"), "V2 PR3a synthetic source", CancellationToken.None);
+            services = capture.Item1;
+            var graph = capture.Item6;
+            var entry = graph.Nodes.SingleOrDefault(x => x.Kind == "http-endpoint-attribute");
+            if (entry is null)
+                throw new InvalidOperationException("synthetic HTTP endpoint was not detected");
+            var scope = new GateCScope(capture.Item5.WorkspaceId, capture.Item5.RepositoryId,
+                capture.Item5.Id, capture.Item5.FingerprintSha256, entry.Id,
+                SnapshotEvidenceTools.Version);
+            var discovery = services.GetRequiredService<GateCEvidenceDiscovery>();
+            var session = discovery.OpenVerified(capture.Item5, scope, Guid.NewGuid(),
+                GateCRole.Investigator, CancellationToken.None);
+            foreach (var capability in GateCEvidenceRegistry.Discover().Select(c => c.Identifier))
+            {
+                var issued = session.Request(capability, CancellationToken.None);
+                if (!issued.Check.Accepted)
+                    throw new InvalidOperationException("synthetic host capability rejected");
+            }
+            var anchor = session.ReportLinks().FirstOrDefault(x =>
+                x.FilePath == "ItemsController.cs" && x.Line is >= 1 &&
+                x.FileSha256 == digest && x.Kind == GateCEvidenceKind.ObservedSyntax);
+            if (anchor is null)
+                throw new InvalidOperationException("synthetic host did not return an observed-syntax anchor");
+            // The chosen anchor was returned by the real read-only evidence session.
+            var after = new V2SourceIdentity(capture.Item5.FingerprintSha256,
+                new Dictionary<string, string> { ["ItemsController.cs"] = digest });
+            var item = new V2Case(V2Schemas.Case, id, V2TaskFamily.CurrentCode,
+                "Which observed source declaration is present?", "C# developer",
+                V2CorpusPartition.Diagnostic, after, null,
+                ["ItemsController.cs"], ["OBS-01"]);
+            var proof = new V2SourceProof(V2SnapshotSide.After,
+                "ItemsController.cs", digest, anchor.Line!.Value, anchor.Line.Value);
+            var criterion = new V2Criterion("OBS-01", V2CriterionKind.SourceObservation,
+                "The pinned source includes this observed syntax anchor.",
+                V2Materiality.Material, [proof], ["EVD-01"], V2ReviewStatus.Draft);
+            var truth = new V2GroundTruth(V2Schemas.GroundTruth, id, "synthetic-author",
+                V2ReviewStatus.Draft, [], [criterion]);
+            File.WriteAllText(Path.Combine(caseDir, "case.json"),
+                JsonSerializer.Serialize(item, V2Schemas.Json));
+            File.WriteAllText(Path.Combine(caseDir, "ground-truth.json"),
+                JsonSerializer.Serialize(truth, V2Schemas.Json));
+            if (V2SourceReview.Export(root, sources, reviewDir, TextWriter.Null) != 0)
+                throw new InvalidOperationException("synthetic independent source export refused");
+            var manifest = Path.Combine(reviewDir, "manifest.json");
+            var manifestHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(manifest)))
+                .ToLowerInvariant();
+            var answers = new V2SourceReviewAnswers(V2SourceReviewSchemas.Answers, manifestHash,
+                "synthetic-reviewer", [new V2SourceCaseAnswer(id,
+                    [new V2SourceCriterionAnswer("OBS-01", V2SourceVerdict.Supported,
+                        "The pinned source anchor is present at the cited line.", ["OBS-01:P1"])])]);
+            var answersPath = Path.Combine(temp, "answers.json");
+            File.WriteAllText(answersPath, JsonSerializer.Serialize(answers, V2Schemas.Json));
+            if (V2SourceReview.Import(reviewDir, answersPath, TextWriter.Null) != 0)
+                throw new InvalidOperationException("synthetic source review import refused");
+            var receiptHash = Convert.ToHexString(SHA256.HashData(
+                File.ReadAllBytes(Path.Combine(reviewDir, "review-import.json")))).ToLowerInvariant();
+            var plan = new V2AnswerabilityPreflight.Plan(
+                V2AnswerabilityPreflight.PlanSchema, id, "gate-c", GateCRole.Investigator,
+                entry.Kind, entry.FilePath!, entry.Line!.Value, receiptHash,
+                [new("OBS-01", "EVD-01", 0)]);
+            var planPath = Path.Combine(temp, "plan.json");
+            File.WriteAllText(planPath, JsonSerializer.Serialize(plan, V2Schemas.Json));
+            await services.DisposeAsync();
+            services = null;
+            SqliteConnection.ClearAllPools();
+            if (await V2AnswerabilityPreflight.RunAsync(root, sources,
+                    reviewDir, planPath, output, TextWriter.Null) != 0)
+                throw new InvalidOperationException("real model-free host preflight rejected");
+            var readErrors = new List<string>();
+            var result = V2CorpusValidator.ReadStrict<V2AnswerabilityPreflight.Record>(output, readErrors);
+            if (result?.Answerability.Criteria is not { Count: 1 } criteria ||
+                criteria[0].State != V2AnswerabilityState.Retrievable ||
+                result.QualificationStatus != "not-ready-for-scoring")
+                throw new InvalidOperationException("host preflight did not establish bounded retrievability: " +
+                    string.Join("; ", readErrors));
+            if (await V2AnswerabilityPreflight.RunAsync(root, sources,
+                    reviewDir, planPath, output, TextWriter.Null) == 0)
+                throw new InvalidOperationException("preflight overwrote its frozen first result");
+        }
+        finally
+        {
+            if (services is not null) await services.DisposeAsync();
+            SqliteConnection.ClearAllPools();
+            Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR", originalEnv);
+            try { if (Directory.Exists(temp)) Directory.Delete(temp, recursive: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 }
