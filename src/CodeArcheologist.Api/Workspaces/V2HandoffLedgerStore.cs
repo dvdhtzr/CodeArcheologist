@@ -258,7 +258,9 @@ public sealed partial class WorkspaceStore
                    event_kind,prompt_sha256,evidence_links_json,receipt_ids_json,
                    snapshot_fingerprint,ownership_epoch,created_at_unix_ms,content_sha256
             FROM v2_handoff_events WHERE run_id=$run AND attempt_id=$attempt
-            ORDER BY role,call_ordinal,created_at_unix_ms,event_kind;
+            ORDER BY role,call_ordinal,
+                CASE event_kind WHEN 'prepared' THEN 1
+                    WHEN 'adapter-entered' THEN 2 ELSE 3 END;
             """;
         cmd.Parameters.AddWithValue("$run", runId.ToString("D"));
         cmd.Parameters.AddWithValue("$attempt", attemptId.ToString("D"));
