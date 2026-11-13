@@ -70,7 +70,7 @@ public static class V2ModelHandoff
         var (store, execution, role, session) = (
             current.Store, current.Execution, current.Role, current.Session);
         var callId = Guid.NewGuid();
-        var ordinal = ++current.CallOrdinal;
+        var ordinal = current.CallOrdinal + 1;
         string promptHash;
         string linksJson;
         string receiptIdsJson;
@@ -97,6 +97,7 @@ public static class V2ModelHandoff
                 execution.Run.RunId, role, callId, ordinal, stage,
                 V2HandoffContract.Prepared, promptHash, linksJson, receiptIdsJson,
                 execution.Run.Scope.FingerprintSha256);
+            current.CallOrdinal = ordinal;
             // This is recorded immediately before calling the adapter.
             // "adapter-entered" is still NOT provider acknowledgement.
             store.RecordV2Handoff(execution.Fence, execution.Attempt.AttemptId,
