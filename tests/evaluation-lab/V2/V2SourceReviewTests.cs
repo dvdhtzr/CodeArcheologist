@@ -155,7 +155,8 @@ public static class V2SourceReviewTests
                     packet.Contains("4 |     void Run()", StringComparison.Ordinal) &&
                     packet.Contains("OBS-01:P1", StringComparison.Ordinal),
                     "source evidence or review reference missing");
-                Require(!V2SourceReview.Preflight(root, sources).ReadyForScoring(),
+                Require(File.ReadAllText(Path.Combine(export, "INSTRUCTIONS.txt"))
+                    .Contains("NOT READY FOR SCORING", StringComparison.Ordinal),
                     "review package implies score eligibility");
             });
             Check("export cannot overwrite existing package", () =>
@@ -249,9 +250,4 @@ public static class V2SourceReviewTests
             : $"RED: {failed}/{passed + failed} V2 PR2 source-review tests failed.");
         return failed == 0 ? 0 : 1;
     }
-}
-
-internal static class V2SourcePreflightTestExtensions
-{
-    public static bool ReadyForScoring(this V2SourcePreflight _) => false;
 }
