@@ -167,7 +167,7 @@ public static class V2ModelHandoff
             var root = document.RootElement.GetProperty("discovery");
             if (!Guid.TryParse(root.GetProperty("RunId").GetString(), out var observedRun) ||
                 observedRun != execution.Run.RunId ||
-                root.GetProperty("Role").GetString() != role.ToString() ||
+                root.GetProperty("Role").GetInt32() != (int)role ||
                 root.GetProperty("EvidenceFingerprint").GetString() !=
                     execution.Run.Scope.FingerprintSha256)
                 return false;
@@ -176,9 +176,8 @@ public static class V2ModelHandoff
             var host = session.ReportLinks().Select(link => link.Handle).ToArray();
             if (!reported.SequenceEqual(host, StringComparer.Ordinal))
                 return false;
-            return session.ValidateAssessment(new GateCIndependentAssessment(
-                GateCContract.Version, execution.Run.RunId, execution.Run.Scope, role,
-                host, [], [], [])).Accepted;
+            return GateCContractValidator.ValidateHostCatalog(
+                session.VerifiedPackage, session.VerifiedScope, session.HostCatalog()).Accepted;
         }
         catch (Exception failure) when (failure is JsonException or KeyNotFoundException or
             InvalidOperationException or FormatException)
