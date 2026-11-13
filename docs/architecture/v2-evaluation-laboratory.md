@@ -1,7 +1,7 @@
 # Evaluation Laboratory V2 — Approved Design and PR1 Boundary
 
 Status: V2-D1, D2, D3 and D4 architecture approved by the repository owner.
-Implementation status: **PR1 merged; PR2 source-first proof verification and review proposed**. This document
+Implementation status: **PR1 and PR2 merged; PR3a answerability preflight proposed in a draft PR**. This document
 does not attest that a V2 corpus is semantically reviewed or ready for scoring.
 
 ## Why V2 exists
@@ -163,3 +163,84 @@ typed and immutable evidence, work in disposable isolated data directories.
 The complete Windows `scripts/check.ps1` verification and owner-local GREEN
 are mandatory before merging. Real Ollama regression is separate. This project
 does not use GitHub CI as a substitute for local verification.
+
+## PR3a — before-outcome host answerability preflight (diagnostic only)
+
+PR3a creates an isolated, deterministic evidence **retrievability preflight** for
+fixed Gate C Investigator or Skeptic, before any agent output is examined.
+
+Inputs (all are owner-supplied, and must come from frozen source-first review):
+
+- The V2 diagnostic case directory and ground-truth document (PR1 schema).
+- Owner-acquired `<sources>/<case-id>/after/<relative file>` (PR2 verified).
+- The frozen PR2 `review-import.json` and its original manifest, source packet
+  and instruction files. All relevant source criteria must have independently
+  reviewed **supported** verdicts.
+- A strict `v2-answerability-plan-v1` with `caseId`, `comparator:
+  "gate-c"`, `role: "investigator" | "skeptic"`, an `entryKind`,
+  `entryPath`, `entryLine`, `sourceReviewImportSha256` and an
+  explicit `bindings` array of `criterionId`, `evidenceId` and
+  zero-based `proofIndex`. The plan must cover every required evidence ID;
+  unknown/incomplete mappings cannot establish positive availability.
+  The input case itself must pin the *actual host snapshot fingerprint*.
+
+Example **synthetic mapping shape only**, not a ready-to-run case:
+
+```json
+{
+  "schemaVersion": "v2-answerability-plan-v1",
+  "caseId": "V2-example-diagnostic",
+  "comparator": "gate-c",
+  "role": "investigator",
+  "entryKind": "http-minimal-mapping",
+  "entryPath": "Api/Routes.cs",
+  "entryLine": 12,
+  "sourceReviewImportSha256": "REPLACE_WITH_ACTUAL_LOWERCASE_64_HEX_SHA256",
+  "bindings": [{"criterionId":"OBS-01","evidenceId":"EVD-01","proofIndex":0}]
+}
+```
+
+```powershell
+dotnet run --project .\tests\evaluation-lab\EvaluationLab.csproj --configuration Release -- --v2-answerability-self-test
+dotnet run --project .\tests\evaluation-lab\EvaluationLab.csproj --configuration Release -- --v2-answerability-preflight --root <v2-root> --sources <owner-source-root> --review <PR2-review-dir> --plan <plan.json> --out <new-preflight.json>
+```
+
+**Mechanism:** The evaluator recaptures the owner's read-only after-source
+through the trusted local snapshot host into disposable data, requires the
+captured fingerprint to exactly match the V2 case, and resolves an exact
+HTTP-entry node. It opens *fresh, isolated Gate C evidence sessions* and
+deterministically probes all combinations of 1–3 registered capabilities
+without invoking Ollama. A positive `retrievable` result requires a single
+allowed combination to expose **every** required after-snapshot source anchor
+as an observed-syntax, SHA-256-matching, role-local evidence link, within
+existing view/tool/item and model-input-size limits. No handles from different
+sessions may be combined. The original source, approved reviews and historical
+labels remain untouched.
+
+A failure to find matching evidence is **undetermined**, not automatically
+`unavailable`; evidence can exist in excerpts or other context even when a
+specific proof anchor is not found. Boundary and negative criteria also remain
+undetermined pending source-specific interpretation. No `initially-available`
+claim is currently made for fixed Gate C because it first asks the model to
+choose capabilities. Nothing in PR3a proves what any particular agent selected,
+requested, saw or processed.
+
+The output is one non-overwriting, locally created
+`v2-answerability-preflight-record-v1` with exact case, ground truth, reviewed
+receipt, plan, host fingerprint, contract identities and computed classifications,
+plus a digest binding the classifications and inputs. **It is not a
+model-delivery ledger or a scored verdict.** An independent actor can still
+forge local JSON or an external reviewer ID; digest and filename checks are
+corruption detectors, not signatures/authentication. PR3b will review and
+instrument real provider-adapter handoff boundaries separately. No provider
+call, production checkpoint, agent prompt or budget is changed by PR3a.
+
+**Safety:** This diagnostic workflow operates on owner-acquired source copies
+and uses the existing trusted snapshot capture services. It does not execute
+imported source or call an external model. It uses process-local, disposable
+workspace state; do not run it concurrently with another in-process lab capture.
+It never writes to the original source copies or frozen review input directory.
+No held-out or historical change-impact cases are eligible at PR3a. Passing
+`check.ps1` does not certify a real corpus's answerability; the synthetic
+self-tests verify the contracts while case-level preflight must be run separately.
+All outputs remain **NOT READY FOR SCORING**.
