@@ -31,6 +31,8 @@ if ($LASTEXITCODE -ne 0) { throw 'R3 PR1 question context, v8 migration and idem
 if ($LASTEXITCODE -ne 0) { throw 'R3 adaptive receipt ordering, v8 gap/receipt fencing and migration checks failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --r3-adaptive-fault-self-test
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& dotnet run --project $adapterProject --configuration Release -- --v2-handoff-self-test
+if ($LASTEXITCODE -ne 0) { throw 'V2 PR3b fenced model-handoff self-tests failed.' }
 & dotnet run --project $adapterProject --configuration Release -- --r3-adaptive-execution-self-test
 if ($LASTEXITCODE -ne 0) { throw 'R3 bounded adaptive managed-worker and v3 checkpoint contracts failed.' }
 $labProject = Join-Path $root 'tests/evaluation-lab/EvaluationLab.csproj'
