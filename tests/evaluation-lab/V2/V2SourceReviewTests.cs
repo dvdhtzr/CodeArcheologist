@@ -224,6 +224,19 @@ public static class V2SourceReviewTests
                 }
                 finally { File.WriteAllBytes(path, original); }
             });
+            Check("modified review instructions cannot be imported", () =>
+            {
+                var path = Path.Combine(export, "INSTRUCTIONS.txt");
+                var original = File.ReadAllBytes(path);
+                try
+                {
+                    File.AppendAllText(path, "\nCHANGED REVIEW POLICY");
+                    WriteAnswers(complete);
+                    Require(V2SourceReview.Import(export, answerPath, TextWriter.Null) != 0,
+                        "changed review policy accepted");
+                }
+                finally { File.WriteAllBytes(path, original); }
+            });
             Check("modified manifest cannot be imported", () =>
             {
                 var original = File.ReadAllBytes(manifestFile);
