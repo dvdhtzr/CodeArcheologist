@@ -79,6 +79,14 @@ public sealed partial class WorkspaceStore
     public bool IsV2HandoffEnabled(Guid runId)
     {
         using var db = Open();
+        // Older disposable migration fixtures deliberately run before v9.
+        // Observation is strictly opt-in; those schemas must stay inert.
+        using (var version = db.CreateCommand())
+        {
+            version.CommandText = "PRAGMA user_version;";
+            if (Convert.ToInt32(version.ExecuteScalar()) < 9)
+                return false;
+        }
         using var cmd = db.CreateCommand();
         cmd.CommandText = """
             SELECT COUNT(*) FROM v2_handoff_optins
@@ -299,5 +307,6 @@ public sealed partial class WorkspaceStore
     }
 
     private static bool HexDigest(string value) =>
-        value.Length == 64 && value.All(c => char.IsAsciiHexDigitLower(c));
+        value.Length == 64 && value.All(c =>
+            (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
 }
