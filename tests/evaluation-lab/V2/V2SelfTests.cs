@@ -135,6 +135,10 @@ public static class V2SelfTests
                 (c, _) => c["criterionIds"] = new JsonArray("OBS-01", "OBS-01"));
             Reject("criterion IDs must match ground truth",
                 (c, _) => c["criterionIds"] = new JsonArray("ALT-01"));
+            Reject("null ground-truth criterion rejected without exception",
+                (_, gt) => gt["criteria"] = new JsonArray((JsonNode?)null));
+            Reject("historical criterion rejected in current-code case",
+                (_, gt) => gt["criteria"]![0]!["kind"] = "change-observation");
             Reject("source-proof hash must match declared revision",
                 (_, gt) => gt["criteria"]![0]!["sourceProofs"]![0]!["fileSha256"] = a64);
             Reject("unknown ground-truth property rejected",
