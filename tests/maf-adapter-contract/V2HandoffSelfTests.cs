@@ -193,6 +193,88 @@ internal static class V2HandoffSelfTests
                 "Foreign evidence reached the model or the immutable record");
             await Task.CompletedTask;
         });
+        await SetupAsync(async (store, fence, execution, session) =>
+        {
+            // An adaptive prompt cannot precede its authoritative receipt.
+            var issued = session.Request(GateCEvidenceRegistry.Relationships,
+                CancellationToken.None);
+            Require(issued.Check.Accepted && issued.Response is not null,
+                "Adaptive test evidence acquisition denied");
+            var prompt = EvidencePrompt(session, issued.Response!);
+            var calls = 0;
+            using var observer = V2ModelHandoff.BeginIfEnabled(
+                store, execution, session.Role, session);
+            try
+            {
+                await V2ModelHandoff.InvokeAsync(prompt,
+                    "R3AdaptiveGapProposal", () =>
+                    {
+                        calls++;
+                        return Task.FromResult("{}");
+                    });
+                throw new InvalidOperationException("Uncommitted adaptive evidence reached model");
+            }
+            catch (StagePersistenceException) { }
+            Require(calls == 0, "Adaptive evidence was dispatched without receipt");
+            Require(store.ListV2HandoffEvents(execution.Run.RunId,
+                execution.Attempt.AttemptId).Count == 0,
+                "Uncommitted adaptive model call got a durable handoff event");
+
+            var receipt = store.RecordAdaptiveEvidenceReceipt(
+                fence, execution.Attempt.AttemptId, session, issued.Response!,
+                "initial", "Host-approved initial evidence view");
+            await V2ModelHandoff.InvokeAsync(prompt, "R3AdaptiveGapProposal", () =>
+            {
+                calls++;
+                return Task.FromResult("{}");
+            });
+            var rows = store.ListV2HandoffEvents(execution.Run.RunId,
+                execution.Attempt.AttemptId);
+            Require(calls == 1 && rows.Count == 3 &&
+                rows.All(e => e.ReceiptIdsJson.Contains(
+                    receipt.ReceiptId.ToString("D"), StringComparison.OrdinalIgnoreCase)),
+                "Committed adaptive receipt ID was not bound to model boundary");
+        }, adaptive: true);
+
+        await SetupAsync(async (store, _, execution, session) =>
+        {
+            // Reviewer sees derived assessments, never direct source handles.
+            using (V2ModelHandoff.BeginIfEnabled(store, execution,
+                GateCRole.Reviewer, null))
+            {
+                var result = await V2ModelHandoff.InvokeAsync(
+                    "Review material.\\n<untrusted-assessments-json>\\n{}\\n</untrusted-assessments-json>",
+                    "GateCReviewerReconciliation", () => Task.FromResult("review"));
+                Require(result == "review", "Reviewer model result changed");
+            }
+            var rows = store.ListV2HandoffEvents(execution.Run.RunId,
+                execution.Attempt.AttemptId);
+            Require(rows.Count == 3 && rows.All(e =>
+                e.Role == "reviewer" && e.EvidenceLinksJson == "[]" &&
+                e.ReceiptIdsJson == "[]"),
+                "Reviewer received source-only evidence credit");
+            await Task.CompletedTask;
+        });
+
+        await SetupAsync(async (store, _, execution, session) =>
+        {
+            using var observer = V2ModelHandoff.BeginIfEnabled(store, execution,
+                GateCRole.Investigator, session);
+            try
+            {
+                await V2ModelHandoff.InvokeAsync("selection",
+                    "GateCDiscoverySelection",
+                    () => Task.FromException<string>(new IOException("synthetic provider timeout")));
+                throw new InvalidOperationException("Synthetic provider failure was swallowed");
+            }
+            catch (IOException) { }
+            var rows = store.ListV2HandoffEvents(execution.Run.RunId,
+                execution.Attempt.AttemptId);
+            Require(rows.Count == 3 &&
+                rows[2].EventKind == V2HandoffContract.Faulted,
+                "Provider failure was not recorded distinctly from adapter entry");
+        });
+
         Console.WriteLine("GREEN: V2 PR3b fixed model-boundary tests: immutable events, " +
             "fenced precommit, unknown after failure, role/snapshot integrity.");
     }
