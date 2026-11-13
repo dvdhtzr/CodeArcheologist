@@ -95,6 +95,16 @@ public static class V2SourceReviewTests
                 }
                 finally { File.WriteAllBytes(sourcePath, sourceBytes); }
             });
+            Check("invalid UTF-8 source bytes fail preflight", () =>
+            {
+                try
+                {
+                    File.WriteAllBytes(sourcePath, [0xC3, 0x28]);
+                    Require(!V2SourceReview.Preflight(root, sources).Valid,
+                        "invalid UTF-8 was accepted");
+                }
+                finally { File.WriteAllBytes(sourcePath, sourceBytes); }
+            });
             Check("out-of-range source proof fails preflight", () =>
             {
                 try
