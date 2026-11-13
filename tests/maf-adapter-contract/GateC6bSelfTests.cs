@@ -267,7 +267,7 @@ internal static class GateC6bSelfTests
             ("$a", runningAttempt.ToString("D")));
 
         store.Initialize();
-        Expect(Scalar(store, "PRAGMA user_version;") == 8, "Not migrated through v6 to v8.");
+        Expect(Scalar(store, "PRAGMA user_version;") == 9, "Not migrated through v6 to v9.");
         Expect(Scalar(store, "SELECT COUNT(*) FROM investigation_reports;") == 3, "Reports lost.");
         Expect(Scalar(store, "SELECT COUNT(*) FROM investigation_events;") == 2, "Events lost.");
         Expect(Scalar(store, "SELECT COUNT(*) FROM investigation_events WHERE event_contract_version='gate-c6-investigation-event-v1' AND ownership_epoch IS NULL;") == 2,
