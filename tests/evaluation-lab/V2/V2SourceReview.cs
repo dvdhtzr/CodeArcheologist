@@ -180,7 +180,8 @@ public static class V2SourceReview
                 {
                     errors.Add($"packet missing or unreadable: {entry.CaseId}: {e.Message}");
                 }
-                var answer = answers.Cases.SingleOrDefault(c => c?.CaseId == entry.CaseId);
+                var matchingCases = answers.Cases.Where(c => c?.CaseId == entry.CaseId).Take(2).ToArray();
+                var answer = matchingCases.Length == 1 ? matchingCases[0] : null;
                 if (answer is null || !answered.Add(entry.CaseId))
                 {
                     errors.Add($"missing or duplicate answer for {entry.CaseId}");
@@ -198,7 +199,9 @@ public static class V2SourceReview
                 var used = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var criterion in entry.Criteria)
                 {
-                    var judgement = answer.Criteria.SingleOrDefault(c => c?.CriterionId == criterion.CriterionId);
+                    var matchingCriteria = answer.Criteria.Where(c => c?.CriterionId == criterion.CriterionId)
+                        .Take(2).ToArray();
+                    var judgement = matchingCriteria.Length == 1 ? matchingCriteria[0] : null;
                     if (judgement is null || !used.Add(criterion.CriterionId))
                     {
                         errors.Add($"missing or duplicate criterion {entry.CaseId}/{criterion.CriterionId}");
