@@ -156,6 +156,7 @@ public static class V2SourceReview
             errors.Add("reviewer identity required");
         if (manifest.Cases is null || manifest.Cases.Count == 0 || answers.Cases is null ||
             answers.Cases.Count != manifest.Cases.Count ||
+            manifest.Cases.Any(c => c is null || string.IsNullOrWhiteSpace(c.CaseId)) ||
             manifest.Cases.Select(c => c.CaseId).Distinct(StringComparer.Ordinal).Count() != manifest.Cases.Count)
             errors.Add("missing, duplicate or foreign review cases");
         else
@@ -191,6 +192,7 @@ public static class V2SourceReview
                     errors.Add($"reviewer cannot self-review {entry.CaseId}");
                 if (entry.Criteria is null || answer.Criteria is null ||
                     answer.Criteria.Count != entry.Criteria.Count ||
+                    entry.Criteria.Any(c => c is null || string.IsNullOrWhiteSpace(c.CriterionId) || c.ProofRefs is null) ||
                     entry.Criteria.Select(c => c.CriterionId).Distinct(StringComparer.Ordinal).Count() != entry.Criteria.Count)
                 {
                     errors.Add($"incomplete or duplicated criteria: {entry.CaseId}");
@@ -213,7 +215,7 @@ public static class V2SourceReview
                         judgement.ProofRefs.Any(p => !criterion.ProofRefs.Contains(p, StringComparer.Ordinal)))
                         errors.Add($"invalid evidence-bound review: {entry.CaseId}/{criterion.CriterionId}");
                     if (judgement.Verdict == V2SourceVerdict.Supported &&
-                        judgement.ProofRefs.Count == 0)
+                        (judgement.ProofRefs is null || judgement.ProofRefs.Count == 0))
                         errors.Add($"supported criterion lacks a cited source proof: {entry.CaseId}/{criterion.CriterionId}");
                 }
             }
