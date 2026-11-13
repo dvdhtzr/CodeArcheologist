@@ -61,3 +61,19 @@ Windows GREEN and owner merge approval.
 
 See `docs/architecture/v2-evaluation-laboratory.md` for command examples
 and acceptance boundaries.
+
+## PR3a: Host-probed answerability, no model
+
+New diagnostic commands are `--v2-answerability-self-test` and
+`--v2-answerability-preflight --root <dir> --sources <dir> --review <dir>
+--plan <file> --out <new-file>`. A plan binds reviewed atomic criteria
+and required evidence IDs to proof indices and a fixed Gate C entry selector.
+The output is immutable-on-first-write, diagnostic, and never scoreable.
+
+The probe re-captures pinned files into disposable host state and checks exact
+snapshot fingerprint plus real source evidence link digests and lines. It
+tests permissible 1–3 capability combinations within the fixed host budgets.
+It never observes or simulates an agent's actual selection or provider delivery.
+No matching host view means **undetermined**, not `unavailable`. Source and
+review files remain read-only; output paths within input roots are refused.
+See the architecture document for safeguards and an input shape.
