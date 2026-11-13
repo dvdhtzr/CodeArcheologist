@@ -236,6 +236,10 @@ public static class V2SourceReview
                 errors.Add("foreign answer case");
         }
         if (errors.Count > 0) return Fail(errors, log);
+        // A valid review must have a nonempty manifest. Preserve this invariant
+        // explicitly instead of assuming the earlier error accumulation narrows nullability.
+        if (manifest.Cases is not { Count: > 0 } reviewedCases)
+            return Fail(["review manifest contains no cases"], log);
         var target = Path.Combine(folder, "review-import.json");
         try
         {
@@ -245,7 +249,7 @@ public static class V2SourceReview
             var bytes = JsonSerializer.SerializeToUtf8Bytes(receipt, V2Schemas.Json);
             stream.Write(bytes);
             stream.Flush(flushToDisk: true);
-            log.WriteLine($"GREEN: independent source review imported for {manifest.Cases.Count} cases.");
+            log.WriteLine($"GREEN: independent source review imported for {reviewedCases.Count} cases.");
             log.WriteLine("Review record is immutable on first import; NOT READY FOR SCORING.");
             return 0;
         }
