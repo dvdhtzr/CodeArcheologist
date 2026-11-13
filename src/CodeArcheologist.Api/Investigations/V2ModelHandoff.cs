@@ -98,33 +98,69 @@ public static class V2ModelHandoff
                 V2HandoffContract.Prepared, promptHash, linksJson, receiptIdsJson,
                 execution.Run.Scope.FingerprintSha256);
             current.CallOrdinal = ordinal;
-            // This is recorded immediately before calling the adapter.
-            // "adapter-entered" is still NOT provider acknowledgement.
-            store.RecordV2Handoff(execution.Fence, execution.Attempt.AttemptId,
-                execution.Run.RunId, role, callId, ordinal, stage,
-                V2HandoffContract.Entered, promptHash, linksJson, receiptIdsJson,
-                execution.Run.Scope.FingerprintSha256);
         }
         catch (Exception failure) when (failure is not OutOfMemoryException)
         {
-            // No provider invocation may occur after failed provenance commit.
+            // No provider invocation may occur after failed preparation.
             throw new StagePersistenceException(failure);
+        }
+
+        // Start the actual adapter invocation only AFTER the prepared record
+        // has committed. A subsequent event is written AFTER the delegate was
+        // called, never on the strength of preparation alone.
+        Task<T> inFlight;
+        try
+        {
+            inFlight = invoke();
+        }
+        catch (Exception)
+        {
+            MarkEntered();
+            Finish(V2HandoffContract.Faulted);
+            throw;
+        }
+
+        try
+        {
+            MarkEntered();
+        }
+        catch (StagePersistenceException)
+        {
+            // The operation may already be in flight. The OS execution slot
+            // must remain held until the task is actually finished, even if
+            // its observation receipt could not be committed.
+            try { await inFlight; }
+            catch (Exception) { /* Preserve the persistence failure. */ }
+            throw;
         }
 
         T answer;
         try
         {
-            answer = await invoke();
+            answer = await inFlight;
         }
         catch (Exception)
         {
-            // The call has already started; persist failure before returning
-            // to the worker. If that write fails, halt rather than relabel it.
             Finish(V2HandoffContract.Faulted);
             throw;
         }
         Finish(V2HandoffContract.Completed);
         return answer;
+
+        void MarkEntered()
+        {
+            try
+            {
+                store.RecordV2Handoff(execution.Fence, execution.Attempt.AttemptId,
+                    execution.Run.RunId, role, callId, ordinal, stage,
+                    V2HandoffContract.Entered, promptHash, linksJson, receiptIdsJson,
+                    execution.Run.Scope.FingerprintSha256);
+            }
+            catch (Exception failure) when (failure is not OutOfMemoryException)
+            {
+                throw new StagePersistenceException(failure);
+            }
+        }
 
         void Finish(string kind)
         {
