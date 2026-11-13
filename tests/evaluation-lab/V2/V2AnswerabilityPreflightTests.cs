@@ -227,7 +227,7 @@ public static class V2AnswerabilityPreflightTests
                     [HttpGet("{id}")]
                     public int Get(int id)
                     {
-                        return id;
+                        return Math.Abs(id);
                     }
                 }
                 """);
