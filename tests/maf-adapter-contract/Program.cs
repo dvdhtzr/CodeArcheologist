@@ -64,6 +64,18 @@ if (args.Length > 0 && args[0] is "--gate-b-run" or "--gate-b-diagnose" or "--ga
     return;
 }
 
+if (args.Length > 0 && args[0] == "--v2-handoff-run")
+{
+    Environment.ExitCode = await R3AdaptiveLocalRun.RunAsync(args, observed: true);
+    return;
+}
+
+if (args.Length == 1 && args[0] == "--v2-handoff-self-test")
+{
+    await V2HandoffSelfTests.RunAsync();
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--r3-adaptive-run")
 {
     Environment.ExitCode = await R3AdaptiveLocalRun.RunAsync(args);
