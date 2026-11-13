@@ -121,6 +121,42 @@ internal static class V2HandoffSelfTests
             Require(afterFault.Count == 0, "Failed transaction published an event");
         });
 
+        await SetupAsync(async (store, _, execution, session) =>
+        {
+            // Adapter entry is attempted only AFTER prepared has committed.
+            // If recording actual entry fails, the in-flight model call is
+            // still awaited before the stage fails closed.
+            GateC6bSelfTests.Exec(store, """
+                CREATE TRIGGER v2_model_entry_fault BEFORE INSERT ON v2_handoff_events
+                WHEN NEW.event_kind='adapter-entered'
+                BEGIN SELECT RAISE(ABORT,'v2 injected adapter-entry failure'); END;
+                """);
+            var inFlight = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var calls = 0;
+            using var observer = V2ModelHandoff.BeginIfEnabled(
+                store, execution, session.Role, session);
+            var pending = V2ModelHandoff.InvokeAsync("selection",
+                "GateCDiscoverySelection", () =>
+                {
+                    calls++;
+                    return inFlight.Task;
+                });
+            Require(calls == 1 && !pending.IsCompleted,
+                "In-flight task was not awaited after failed entry persistence");
+            inFlight.TrySetResult("completed remotely");
+            try
+            {
+                await pending;
+                throw new InvalidOperationException("Missing adapter-entry record was ignored");
+            }
+            catch (StagePersistenceException) { }
+            var rows = store.ListV2HandoffEvents(execution.Run.RunId,
+                execution.Attempt.AttemptId);
+            Require(rows.Count == 1 && rows[0].EventKind == V2HandoffContract.Prepared,
+                "Failed adapter entry falsely appeared as completed or entered");
+        });
+
         await SetupAsync(async (store, fence, execution, session) =>
         {
             // Retry history is owned by the original attempt, never duplicated.
