@@ -90,13 +90,17 @@ internal static class V2HandoffSelfTests
                     "UPDATE v2_handoff_events SET event_kind='faulted';");
             }
 
+        });
+
+        await SetupAsync(async (store, _, execution, session) =>
+        {
             // Genuine SQLite rejection in PREPARED phase means zero calls.
             GateC6bSelfTests.Exec(store, """
                 CREATE TRIGGER v2_model_fault BEFORE INSERT ON v2_handoff_events
                 WHEN NEW.event_kind='prepared'
                 BEGIN SELECT RAISE(ABORT,'v2 injected prepare failure'); END;
                 """);
-            var beforeFault = invoked;
+            var invoked = 0;
             try
             {
                 using var observing = V2ModelHandoff.BeginIfEnabled(
@@ -110,11 +114,11 @@ internal static class V2HandoffSelfTests
                 throw new InvalidOperationException("Failed pre-handoff write reached model");
             }
             catch (StagePersistenceException) { }
-            Require(invoked == beforeFault,
+            Require(invoked == 0,
                 "A model was invoked despite an injected precommit failure");
             var afterFault = store.ListV2HandoffEvents(
                 execution.Run.RunId, execution.Attempt.AttemptId);
-            Require(afterFault.Count == 6, "Failed transaction published an event");
+            Require(afterFault.Count == 0, "Failed transaction published an event");
         });
 
         await SetupAsync(async (store, fence, execution, session) =>
