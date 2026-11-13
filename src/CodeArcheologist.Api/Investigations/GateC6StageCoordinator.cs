@@ -160,6 +160,8 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
         {
             Persist(() => store.AppendStageEvent(fence, attempt.AttemptId, "role-started", "reviewer",
                 "reviewer-started"));
+            using var reviewerObservation = V2ModelHandoff.BeginIfEnabled(
+                store, context, GateCRole.Reviewer, null);
             reviewer = await roles.ReviewAsync(investigator.Assessment!, skeptic.Assessment!,
                 runId, scope, ct);
             if (reviewer.Status == GateCRoleStatus.CompletedValidated)
@@ -211,6 +213,8 @@ public sealed class GateC6StageCoordinator(WorkspaceStore store,
         var role = session.Role;
         var stage = GateC6CheckpointContract.RoleName(role);
         var (_, run, attempt, fence) = context;
+        using var observation = V2ModelHandoff.BeginIfEnabled(
+            store, context, role, session);
         Persist(() => store.AppendStageEvent(fence, attempt.AttemptId, "role-started", stage,
             stage + "-started"));
         var outcome = isAdaptive
