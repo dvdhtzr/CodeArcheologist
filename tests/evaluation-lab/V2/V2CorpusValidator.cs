@@ -141,13 +141,20 @@ public static class V2CorpusValidator
         if (truth.Criteria.Any(c => c is null || !ValidId(c.Id)) ||
             truth.Criteria.Select(c => c?.Id).Distinct(StringComparer.Ordinal).Count() != truth.Criteria.Count)
             Fail("ground-truth criterion IDs must be valid and unique");
+        // A null criterion is invalid input, not permission to crash the validator.
+        if (truth.Criteria.Any(c => c is null))
+        {
+            Fail("ground truth contains a null criterion");
+            return;
+        }
         if (item.CriterionIds is not null &&
             !truth.Criteria.Select(c => c.Id).Order(StringComparer.Ordinal)
                 .SequenceEqual(item.CriterionIds.Order(StringComparer.Ordinal)))
             Fail("case and ground-truth criterion IDs differ");
         foreach (var c in truth.Criteria)
         {
-            if (c is null) continue;
+            if (item.Task != V2TaskFamily.ChangeImpact && c.Kind == V2CriterionKind.ChangeObservation)
+                Fail($"criterion {c.Id}: historical change observations require a change-impact task");
             if (!Enum.IsDefined(c.Kind) || !Enum.IsDefined(c.Materiality) ||
                 !Enum.IsDefined(c.ReviewStatus))
                 Fail($"criterion {c.Id}: invalid enum value");
