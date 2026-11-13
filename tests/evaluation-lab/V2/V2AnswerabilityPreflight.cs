@@ -179,27 +179,37 @@ public static class V2AnswerabilityPreflight
         var answer = receipt.Answers.Cases.SingleOrDefault(x => x.CaseId == plan.CaseId);
         if (reviewedCase is null || answer is null ||
             reviewedCase.CaseSha256 != caseHash || reviewedCase.GroundTruthSha256 != truthHash ||
+            string.IsNullOrWhiteSpace(receipt.Answers.ReviewerId) ||
             string.Equals(receipt.Answers.ReviewerId, reviewedCase.AuthorId, StringComparison.OrdinalIgnoreCase))
             problems.Add("case is not bound to an independently reviewed source packet");
         else
         {
-            if (answer.Criteria is null || answer.Criteria.Count != truth.Criteria.Count ||
-                answer.Criteria.Any(x => x is null) ||
-                answer.Criteria.Select(x => x.CriterionId).Distinct(StringComparer.Ordinal).Count() !=
+            var grades = answer.Criteria;
+            if (grades is null || grades.Count != truth.Criteria.Count ||
+                grades.Any(x => x is null) ||
+                grades.Select(x => x.CriterionId).Distinct(StringComparer.Ordinal).Count() !=
                     truth.Criteria.Count ||
-                answer.Criteria.Any(x => x.Verdict != V2SourceVerdict.Supported))
+                grades.Any(x => x.Verdict != V2SourceVerdict.Supported))
                 problems.Add("source review contains an unresolved, contradicted or missing criterion");
-            if (answer.Criteria.Any(x => !criteria.ContainsKey(x.CriterionId)) ||
-                truth.Criteria.Any(x => !answer.Criteria.Any(y => y.CriterionId == x.Id)))
-                problems.Add("source review criterion identities do not match ground truth");
-            // The exported packet and review instructions may not be modified after acceptance.
-            var packetPath = Path.Combine(review, reviewedCase.PacketFile);
-            var instructionPath = Path.Combine(review, "INSTRUCTIONS.txt");
-            if (!SafeReviewFile(reviewedCase.PacketFile) || !File.Exists(packetPath) ||
-                Hash(File.ReadAllBytes(packetPath)) != reviewedCase.PacketSha256 ||
-                !File.Exists(instructionPath) ||
-                Hash(File.ReadAllBytes(instructionPath)) != manifest.InstructionsSha256)
-                problems.Add("source review packet or instructions changed after import");
+            else if (grades.Any(x => !criteria.ContainsKey(x.CriterionId)) ||
+                truth.Criteria.Any(x => !grades.Any(y => y.CriterionId == x.Id)) ||
+                grades.Any(x => string.IsNullOrWhiteSpace(x.Reason) ||
+                    x.ProofRefs is null || x.ProofRefs.Count == 0))
+                problems.Add("source review criterion identity, rationale or proof citations are incomplete");
+            // Validate the packet path before constructing or opening any file path.
+            if (!SafeReviewFile(reviewedCase.PacketFile) ||
+                reviewedCase.PacketFile != reviewedCase.CaseId + ".txt")
+                problems.Add("source review packet filename is unsafe");
+            else
+            {
+                var packetPath = Path.Combine(review, reviewedCase.PacketFile);
+                var instructionPath = Path.Combine(review, "INSTRUCTIONS.txt");
+                if (!File.Exists(packetPath) ||
+                    Hash(File.ReadAllBytes(packetPath)) != reviewedCase.PacketSha256 ||
+                    !File.Exists(instructionPath) ||
+                    Hash(File.ReadAllBytes(instructionPath)) != manifest.InstructionsSha256)
+                    problems.Add("source review packet or instructions changed after import");
+            }
         }
         if (problems.Count > 0) return Reject(problems, log);
         // Preflight input roots must never become output destinations.
