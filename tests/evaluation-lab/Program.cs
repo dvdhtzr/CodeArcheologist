@@ -12,6 +12,17 @@ try
 {
     switch (args.FirstOrDefault())
     {
+        case "--v2-self-test" when args.Length == 1:
+            return CodeArcheologist.EvaluationLab.V2.V2SelfTests.Run();
+        case "--v2-validate" when args.Length == 3 && args[1] == "--root":
+        {
+            var v2 = CodeArcheologist.EvaluationLab.V2.V2CorpusValidator.Validate(Path.GetFullPath(args[2]));
+            foreach (var error in v2.Errors) Console.Error.WriteLine("  V2 error: " + error);
+            Console.WriteLine(v2.Valid
+                ? $"GREEN: V2 structural validation passed: {v2.CaseCount} case(s); NOT READY FOR SCORING."
+                : $"RED: V2 structural validation failed: {v2.Errors.Count} error(s); NOT READY FOR SCORING.");
+            return v2.Valid ? 0 : 1;
+        }
         case "--validate-corpus":
             return Validate(evalRoot, out _) ? 0 : 1;
         case "--describe" when args.Length is 2 or 4:
@@ -117,6 +128,8 @@ try
         default:
             Console.Error.WriteLine("""
                 Usage:
+                  --v2-validate --root <dir>            V2 structural validation only; NOT READY FOR SCORING (model-free)
+                  --v2-self-test                      V2 isolated contract negative tests (model-free)
                   --validate-corpus                    static corpus + budget checks (model-free)
                   --self-test                          harness, comparators, scoring (model-free)
                   --survey <dir>                       read-only capture survey: fingerprint, size, HTTP candidates
