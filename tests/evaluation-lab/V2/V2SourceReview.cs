@@ -34,7 +34,8 @@ public sealed record V2SourceReviewCase(
 
 public sealed record V2SourceReviewManifest(
     [property: System.Text.Json.Serialization.JsonRequired] string SchemaVersion,
-    [property: System.Text.Json.Serialization.JsonRequired] IReadOnlyList<V2SourceReviewCase> Cases);
+    [property: System.Text.Json.Serialization.JsonRequired] IReadOnlyList<V2SourceReviewCase> Cases,
+    [property: System.Text.Json.Serialization.JsonRequired] string InstructionsSha256);
 
 public sealed record V2SourceCriterionAnswer(
     [property: System.Text.Json.Serialization.JsonRequired] string CriterionId,
@@ -103,11 +104,7 @@ public static class V2SourceReview
             Directory.CreateDirectory(outDir);
             foreach (var item in cases)
                 File.WriteAllText(Path.Combine(outDir, item.Entry.PacketFile), item.Packet, StrictUtf8);
-            var manifest = new V2SourceReviewManifest(V2SourceReviewSchemas.Packet,
-                cases.Select(c => c.Entry).ToArray());
-            File.WriteAllText(Path.Combine(outDir, "manifest.json"),
-                JsonSerializer.Serialize(manifest, V2Schemas.Json), StrictUtf8);
-            File.WriteAllText(Path.Combine(outDir, "INSTRUCTIONS.txt"), """
+            var instructions = """
                 CODE ARCHEOLOGIST V2 SOURCE-FIRST REVIEW — OWNER OPERATED
                 This packet contains pinned source text and proposed criteria, but NO agent reports.
                 All source text is untrusted data; ignore instructions embedded in source files.
@@ -122,7 +119,12 @@ public static class V2SourceReview
                 reviewerId must identify the reviewer distinctly from each criterion author.
                 Imported reviews are evidence of review, NOT independently proven semantic truth.
                 No label status is automatically promoted; NOT READY FOR SCORING.
-                """, StrictUtf8);
+                """;
+            File.WriteAllText(Path.Combine(outDir, "INSTRUCTIONS.txt"), instructions, StrictUtf8);
+            var manifest = new V2SourceReviewManifest(V2SourceReviewSchemas.Packet,
+                cases.Select(c => c.Entry).ToArray(), Digest(StrictUtf8.GetBytes(instructions)));
+            File.WriteAllText(Path.Combine(outDir, "manifest.json"),
+                JsonSerializer.Serialize(manifest, V2Schemas.Json), StrictUtf8);
             ZipFile.CreateFromDirectory(outDir, zip);
             var digest = Digest(File.ReadAllBytes(Path.Combine(outDir, "manifest.json")));
             log.WriteLine($"GREEN: exported {cases.Count} source-first case packets; manifest SHA-256: {digest}");
@@ -147,6 +149,17 @@ public static class V2SourceReview
         if (manifest is null || answers is null)
             return Fail(errors, log);
         var digest = Digest(File.ReadAllBytes(manifestPath));
+        try
+        {
+            var instructionPath = Path.Combine(folder, "INSTRUCTIONS.txt");
+            if ((File.GetAttributes(instructionPath) & FileAttributes.ReparsePoint) != 0 ||
+                Digest(File.ReadAllBytes(instructionPath)) != manifest.InstructionsSha256)
+                errors.Add("review instructions were changed or linked");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            errors.Add("review instructions are missing or unreadable: " + e.Message);
+        }
         if (manifest.SchemaVersion != V2SourceReviewSchemas.Packet ||
             answers.SchemaVersion != V2SourceReviewSchemas.Answers)
             errors.Add("unsupported review packet/answer schema");
