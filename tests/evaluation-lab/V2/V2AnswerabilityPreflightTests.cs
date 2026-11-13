@@ -91,9 +91,16 @@ public static class V2AnswerabilityPreflightTests
         Check("no host evidence is undetermined, not unavailable", () =>
             Assert(Classify([]) == V2AnswerabilityState.Undetermined,
                 "missing evidence was mislabeled unavailable"));
-        Check("missing canonical line cannot establish retrievability", () =>
-            Assert(Classify([View(["inspect_entry_point"], [Link(10), Link(41)])]) ==
-                V2AnswerabilityState.Undetermined, "wrong anchor line accepted"));
+        Check("proof range boundaries are inclusive", () =>
+        {
+            Assert(Classify([View(["inspect_entry_point"], [Link(8), Link(40)])]) ==
+                V2AnswerabilityState.Retrievable, "valid lower boundaries rejected");
+            Assert(Classify([View(["inspect_entry_point"], [Link(12), Link(44)])]) ==
+                V2AnswerabilityState.Retrievable, "valid upper boundaries rejected");
+        });
+        Check("source line outside proof range cannot establish retrievability", () =>
+            Assert(Classify([View(["inspect_entry_point"], [Link(10), Link(45)])]) ==
+                V2AnswerabilityState.Undetermined, "line outside proof range accepted"));
         Check("source digest mismatch cannot establish retrievability", () =>
             Assert(Classify([View(["inspect_entry_point"],
                 [Link(10, shaB), Link(42)])]) ==
@@ -277,8 +284,10 @@ public static class V2AnswerabilityPreflightTests
                 JsonSerializer.Serialize(item, V2Schemas.Json));
             File.WriteAllText(Path.Combine(caseDir, "ground-truth.json"),
                 JsonSerializer.Serialize(truth, V2Schemas.Json));
-            if (V2SourceReview.Export(root, sources, reviewDir, TextWriter.Null) != 0)
-                throw new InvalidOperationException("synthetic independent source export refused");
+            using var exportLog = new StringWriter();
+            if (V2SourceReview.Export(root, sources, reviewDir, exportLog) != 0)
+                throw new InvalidOperationException("synthetic independent source export refused: " +
+                    exportLog);
             var manifest = Path.Combine(reviewDir, "manifest.json");
             var manifestHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(manifest)))
                 .ToLowerInvariant();
@@ -288,8 +297,10 @@ public static class V2AnswerabilityPreflightTests
                         "The pinned source anchor is present at the cited line.", ["OBS-01:P1"])])]);
             var answersPath = Path.Combine(temp, "answers.json");
             File.WriteAllText(answersPath, JsonSerializer.Serialize(answers, V2Schemas.Json));
-            if (V2SourceReview.Import(reviewDir, answersPath, TextWriter.Null) != 0)
-                throw new InvalidOperationException("synthetic source review import refused");
+            using var importLog = new StringWriter();
+            if (V2SourceReview.Import(reviewDir, answersPath, importLog) != 0)
+                throw new InvalidOperationException("synthetic source review import refused: " +
+                    importLog);
             var receiptHash = Convert.ToHexString(SHA256.HashData(
                 File.ReadAllBytes(Path.Combine(reviewDir, "review-import.json")))).ToLowerInvariant();
             var plan = new V2AnswerabilityPreflight.Plan(
@@ -301,9 +312,11 @@ public static class V2AnswerabilityPreflightTests
             await services.DisposeAsync();
             services = null;
             SqliteConnection.ClearAllPools();
+            using var preflightLog = new StringWriter();
             if (await V2AnswerabilityPreflight.RunAsync(root, sources,
-                    reviewDir, planPath, output, TextWriter.Null) != 0)
-                throw new InvalidOperationException("real model-free host preflight rejected");
+                    reviewDir, planPath, output, preflightLog) != 0)
+                throw new InvalidOperationException("real model-free host preflight rejected: " +
+                    preflightLog);
             var readErrors = new List<string>();
             var result = V2CorpusValidator.ReadStrict<V2AnswerabilityPreflight.Record>(output, readErrors);
             if (result?.Answerability.Criteria is not { Count: 1 } criteria ||
