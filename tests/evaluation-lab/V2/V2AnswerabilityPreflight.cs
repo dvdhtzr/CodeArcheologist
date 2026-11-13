@@ -135,6 +135,7 @@ public static class V2AnswerabilityPreflight
         if (item is null || truth is null) return Reject(problems, log);
         var structural = V2CorpusValidator.Validate(root);
         problems.AddRange(structural.Errors);
+        if (problems.Count > 0) return Reject(problems, log);
         if (item.Id != plan.CaseId || truth.CaseId != plan.CaseId ||
             item.Partition != V2CorpusPartition.Diagnostic ||
             item.Task == V2TaskFamily.ChangeImpact)
@@ -143,6 +144,7 @@ public static class V2AnswerabilityPreflight
             problems.Add("entry-point selector is outside case-authorized paths");
         if (plan.Bindings.GroupBy(x => (x.CriterionId, x.EvidenceId)).Any(g => g.Count() != 1))
             problems.Add("duplicate evidence-to-criterion mapping");
+        if (problems.Count > 0) return Reject(problems, log);
         var criteria = truth.Criteria.ToDictionary(x => x.Id, StringComparer.Ordinal);
         foreach (var binding in plan.Bindings)
         {
@@ -157,6 +159,13 @@ public static class V2AnswerabilityPreflight
         var receipt = V2CorpusValidator.ReadStrict<V2SourceReviewImport>(importPath, problems);
         var manifest = V2CorpusValidator.ReadStrict<V2SourceReviewManifest>(manifestPath, problems);
         if (receipt is null || manifest is null) return Reject(problems, log);
+        if (receipt.Answers?.Cases is null || manifest.Cases is null ||
+            manifest.Cases.Count == 0 || receipt.Answers.Cases.Count == 0 ||
+            manifest.Cases.Any(x => x is null) || receipt.Answers.Cases.Any(x => x is null))
+            return Reject(["incomplete source-review import or manifest"], log);
+        if (manifest.Cases.GroupBy(x => x.CaseId, StringComparer.Ordinal).Any(g => g.Count() > 1) ||
+            receipt.Answers.Cases.GroupBy(x => x.CaseId, StringComparer.Ordinal).Any(g => g.Count() > 1))
+            return Reject(["duplicate source-review case identities"], log);
         var caseHash = Hash(File.ReadAllBytes(casePath));
         var truthHash = Hash(File.ReadAllBytes(truthPath));
         var importHash = Hash(File.ReadAllBytes(importPath));
@@ -166,19 +175,19 @@ public static class V2AnswerabilityPreflight
             receipt.ExportSha256 != Hash(File.ReadAllBytes(manifestPath)) ||
             receipt.Answers.ExportSha256 != receipt.ExportSha256)
             problems.Add("review record/plan/manifest digest mismatch");
-        var reviewedCase = manifest.Cases?.SingleOrDefault(x => x.CaseId == plan.CaseId);
-        var answer = receipt.Answers.Cases?.SingleOrDefault(x => x.CaseId == plan.CaseId);
+        var reviewedCase = manifest.Cases.SingleOrDefault(x => x.CaseId == plan.CaseId);
+        var answer = receipt.Answers.Cases.SingleOrDefault(x => x.CaseId == plan.CaseId);
         if (reviewedCase is null || answer is null ||
             reviewedCase.CaseSha256 != caseHash || reviewedCase.GroundTruthSha256 != truthHash ||
             string.Equals(receipt.Answers.ReviewerId, reviewedCase.AuthorId, StringComparison.OrdinalIgnoreCase))
             problems.Add("case is not bound to an independently reviewed source packet");
         else
         {
-            if (answer.Criteria.Count != truth.Criteria.Count ||
+            if (answer.Criteria is null || answer.Criteria.Count != truth.Criteria.Count ||
+                answer.Criteria.Any(x => x is null) ||
                 answer.Criteria.Select(x => x.CriterionId).Distinct(StringComparer.Ordinal).Count() !=
                     truth.Criteria.Count ||
-                answer.Criteria.Any(x => x.Verdict != V2SourceVerdict.Supported &&
-                    x.Verdict != V2SourceVerdict.Nonmaterial))
+                answer.Criteria.Any(x => x.Verdict != V2SourceVerdict.Supported))
                 problems.Add("source review contains an unresolved, contradicted or missing criterion");
             if (answer.Criteria.Any(x => !criteria.ContainsKey(x.CriterionId)) ||
                 truth.Criteria.Any(x => !answer.Criteria.Any(y => y.CriterionId == x.Id)))
@@ -193,6 +202,12 @@ public static class V2AnswerabilityPreflight
                 problems.Add("source review packet or instructions changed after import");
         }
         if (problems.Count > 0) return Reject(problems, log);
+        // Preflight input roots must never become output destinations.
+        var outPath = Path.GetFullPath(outputFile);
+        if (Inside(outPath, root) || Inside(outPath, sources) || Inside(outPath, review) ||
+            string.Equals(outPath, Path.GetFullPath(planFile), StringComparison.OrdinalIgnoreCase) ||
+            File.Exists(outPath))
+            return Reject(["output path overlaps a source/review input or already exists"], log);
         var sourceCheck = V2SourceReview.Preflight(root, sources);
         problems.AddRange(sourceCheck.Errors);
         if (problems.Count > 0 || sourceCheck.CaseCount == 0) return Reject(
@@ -257,7 +272,8 @@ public static class V2AnswerabilityPreflight
             var digest = Hash(Encoding.UTF8.GetBytes(string.Join("\n",
                 "v2-answerability-digest-v1", caseHash, truthHash, importHash,
                 planHash, snapshot.FingerprintSha256,
-                GateCEvidenceRegistry.Version, SnapshotEvidenceTools.Version)));
+                GateCEvidenceRegistry.Version, SnapshotEvidenceTools.Version,
+                JsonSerializer.Serialize(outcomes, V2Schemas.Json))));
             var answerability = new V2Answerability(V2Schemas.Answerability,
                 plan.CaseId, plan.Comparator, digest, outcomes);
             var record = new Record(RecordSchema, caseHash, truthHash, planHash,
@@ -297,6 +313,16 @@ public static class V2AnswerabilityPreflight
                 .Where(bit => (i & (1 << bit)) != 0).Select(bit => source[bit]).ToArray();
             if (chosen.Length == size) yield return chosen;
         }
+    }
+
+    private static bool Inside(string path, string root)
+    {
+        var normalizedPath = Path.GetFullPath(path);
+        var normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar);
+        return normalizedPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalizedPath, normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool SafeReviewFile(string? value) =>
