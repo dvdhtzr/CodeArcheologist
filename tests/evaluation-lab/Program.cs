@@ -12,6 +12,25 @@ try
 {
     switch (args.FirstOrDefault())
     {
+        case "--v2-pr2-self-test" when args.Length == 1:
+            return CodeArcheologist.EvaluationLab.V2.V2SourceReviewTests.Run();
+        case "--v2-source-preflight" when args.Length == 5 && args[1] == "--root" && args[3] == "--sources":
+        {
+            var preflight = CodeArcheologist.EvaluationLab.V2.V2SourceReview.Preflight(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]));
+            foreach (var error in preflight.Errors) Console.Error.WriteLine("  V2 source error: " + error);
+            Console.WriteLine(preflight.Valid
+                ? $"GREEN: V2 pinned source preflight: {preflight.CaseCount} diagnostic case(s); NOT READY FOR SCORING."
+                : $"RED: V2 source preflight: {preflight.Errors.Count} error(s); NOT READY FOR SCORING.");
+            return preflight.Valid && preflight.CaseCount > 0 ? 0 : 1;
+        }
+        case "--v2-review-export" when args.Length == 7 && args[1] == "--root" &&
+            args[3] == "--sources" && args[5] == "--out":
+            return CodeArcheologist.EvaluationLab.V2.V2SourceReview.Export(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]), Path.GetFullPath(args[6]), Console.Out);
+        case "--v2-review-import" when args.Length == 5 && args[1] == "--export" && args[3] == "--answers":
+            return CodeArcheologist.EvaluationLab.V2.V2SourceReview.Import(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]), Console.Out);
         case "--v2-self-test" when args.Length == 1:
             return CodeArcheologist.EvaluationLab.V2.V2SelfTests.Run();
         case "--v2-validate" when args.Length == 3 && args[1] == "--root":
@@ -128,6 +147,10 @@ try
         default:
             Console.Error.WriteLine("""
                 Usage:
+                  --v2-pr2-self-test                   PR2 source-first review negative tests (model-free)
+                  --v2-source-preflight --root <dir> --sources <dir>    verify declared source bytes/spans (model-free)
+                  --v2-review-export --root <dir> --sources <dir> --out <new-dir>   owner-operated review ZIP
+                  --v2-review-import --export <dir> --answers <file>     strict first review import
                   --v2-validate --root <dir>            V2 structural validation only; NOT READY FOR SCORING (model-free)
                   --v2-self-test                      V2 isolated contract negative tests (model-free)
                   --validate-corpus                    static corpus + budget checks (model-free)
