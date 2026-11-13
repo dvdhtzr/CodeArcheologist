@@ -12,12 +12,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 /// </summary>
 internal static class R3AdaptiveLocalRun
 {
-    public static async Task<int> RunAsync(string[] args)
+    public static async Task<int> RunAsync(string[] args, bool observed = false)
     {
         if (args.Length != 2 || !int.TryParse(args[1], out var trials) ||
             trials is < 1 or > 3)
         {
-            Console.Error.WriteLine("Usage: --r3-adaptive-run <trials 1..3>");
+            Console.Error.WriteLine("Usage: " + (observed
+                ? "--v2-handoff-run" : "--r3-adaptive-run") + " <trials 1..3>");
             return 2;
         }
 
@@ -44,7 +45,7 @@ internal static class R3AdaptiveLocalRun
             {
                 Environment.SetEnvironmentVariable("CODE_ARCHEOLOGIST_DATA_DIR",
                     Path.Combine(root, "data-" + i));
-                var result = await TrialAsync(source);
+                var result = await TrialAsync(source, observed);
                 Console.WriteLine($"adaptive trial {i}/{trials}: {result}");
                 if (result == "GREEN") pass++;
             }
@@ -61,7 +62,8 @@ internal static class R3AdaptiveLocalRun
             }
         }
         Console.WriteLine(pass == trials
-            ? $"GREEN: {pass}/{trials} real adaptive Ollama trials; all receipts and v3 checkpoints replayed."
+            ? $"GREEN: {pass}/{trials} real adaptive Ollama trials; all receipts and v3 checkpoints replayed." +
+                (observed ? " V2 fenced model-handoff events also verified; NOT READY FOR SCORING." : "")
             : $"RED: only {pass}/{trials} real adaptive Ollama trials completed and revalidated.");
         return pass == trials ? 0 : 1;
     }
@@ -90,7 +92,7 @@ internal static class R3AdaptiveLocalRun
                 ValidateScopes = true
             });
 
-    private static async Task<string> TrialAsync(string source)
+    private static async Task<string> TrialAsync(string source, bool observed)
     {
         await using var services = BuildEvidenceServices();
         var store = services.GetRequiredService<WorkspaceStore>();
@@ -126,13 +128,20 @@ internal static class R3AdaptiveLocalRun
             NullLogger<InvestigationWorker>.Instance);
         try
         {
-            await worker.StartAsync(CancellationToken.None);
+            // For V2, admit and explicitly opt in BEFORE the managed worker
+            // can claim the queued attempt. Legacy adaptive smoke is unchanged.
+            if (!observed) await worker.StartAsync(CancellationToken.None);
             var admitted = new InvestigationAdmissionService(store, ownership, signal)
                 .AdmitAdaptive(scope, Guid.NewGuid(), candidate.Kind);
             if (admitted.Outcome != InvestigationAdmissionOutcome.Admitted ||
                 admitted.Record is null)
                 return "RED: adaptive question admission rejected";
             var runId = admitted.Record.RunId;
+            if (observed)
+            {
+                store.EnableV2Handoff(runId, ownership.Fence!);
+                await worker.StartAsync(CancellationToken.None);
+            }
             if (store.GetAdaptiveContext(workspace.Id, repository.Id, snapshot.Id,
                     runId) is not { } question ||
                 !AdaptiveQuestionContract.Verify(question))
@@ -172,9 +181,34 @@ internal static class R3AdaptiveLocalRun
             var restored = revalidator.Revalidate(snapshot, admitted.Record,
                 checkpoints, store.ListAcceptedCheckpointEventIds(runId),
                 CancellationToken.None);
-            return restored.Accepted && restored.Investigator is not null &&
-                restored.Skeptic is not null && restored.Reviewer is not null
-                ? "GREEN" : "RED: v3 checkpoint/receipt replay " + restored.Diagnostic;
+            if (!restored.Accepted || restored.Investigator is null ||
+                restored.Skeptic is null || restored.Reviewer is null)
+                return "RED: v3 checkpoint/receipt replay " + restored.Diagnostic;
+
+            if (observed)
+            {
+                var events = store.ListV2HandoffEvents(runId, attempt.AttemptId);
+                var perRole = events.GroupBy(e => e.Role, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
+                foreach (var role in new[] { "investigator", "skeptic", "reviewer" })
+                    if (!perRole.TryGetValue(role, out var roleEvents) ||
+                        roleEvents.Length < 3 ||
+                        roleEvents.Length % 3 != 0 ||
+                        roleEvents.Any(e => e.EventKind == V2HandoffContract.Faulted))
+                        return "RED: V2 missing or unsuccessful live model handoff for " + role;
+                var modelCalls = events.Count(e => e.EventKind == V2HandoffContract.Entered);
+                var citedReceipts = events.Count(e =>
+                    e.EventKind == V2HandoffContract.Entered &&
+                    e.ReceiptIdsJson != "[]");
+                if (modelCalls < 5 || citedReceipts < 2 ||
+                    perRole["reviewer"].Any(e =>
+                        e.ReceiptIdsJson != "[]" || e.EvidenceLinksJson != "[]"))
+                    return "RED: V2 live observed handoff count or source-role isolation invalid";
+                Console.WriteLine($"  V2 observed: adapter calls={modelCalls}; " +
+                    $"receipt-bound calls={citedReceipts}; " +
+                    "prompt bytes=SHA-256 only; NOT READY FOR SCORING.");
+            }
+            return "GREEN";
         }
         finally
         {
