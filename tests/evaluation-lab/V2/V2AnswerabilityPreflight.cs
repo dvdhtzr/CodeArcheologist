@@ -119,13 +119,14 @@ public static class V2AnswerabilityPreflight
         if (plan.SchemaVersion != PlanSchema || plan.Comparator != "gate-c" ||
             plan.Role is not (GateCRole.Investigator or GateCRole.Skeptic) ||
             string.IsNullOrWhiteSpace(plan.EntryKind) ||
-            string.IsNullOrWhiteSpace(plan.EntryPath) || plan.EntryLine < 1 ||
-            plan.Bindings is null)
-            problems.Add("invalid fixed Gate C preflight plan, role, selector, or schema");
-        if (plan.CaseId is null || !System.Text.RegularExpressions.Regex.IsMatch(
-            plan.CaseId, "^[A-Za-z][A-Za-z0-9-]{2,80}$"))
-            problems.Add("invalid case identity");
-        if (problems.Count > 0) return Reject(problems, log);
+            string.IsNullOrWhiteSpace(plan.EntryPath) || plan.EntryLine < 1)
+            return Reject(["invalid fixed Gate C preflight plan, role, selector, or schema"], log);
+        if (string.IsNullOrWhiteSpace(plan.CaseId) ||
+            !System.Text.RegularExpressions.Regex.IsMatch(
+                plan.CaseId, "^[A-Za-z][A-Za-z0-9-]{2,80}$"))
+            return Reject(["invalid case identity"], log);
+        if (plan.Bindings is not { } bindings)
+            return Reject(["evidence-to-criterion bindings are missing"], log);
         // Never interpret a case ID or path as an unrestricted filesystem location.
         var caseFolder = Path.Combine(root, "cases", plan.CaseId);
         var casePath = Path.Combine(caseFolder, "case.json");
@@ -142,11 +143,11 @@ public static class V2AnswerabilityPreflight
             problems.Add("PR3a permits only current-code or boundary diagnostic cases; no change-impact scoring");
         if (!item.AuthorizedPaths.Contains(plan.EntryPath, StringComparer.Ordinal))
             problems.Add("entry-point selector is outside case-authorized paths");
-        if (plan.Bindings.GroupBy(x => (x.CriterionId, x.EvidenceId)).Any(g => g.Count() != 1))
+        if (bindings.GroupBy(x => (x.CriterionId, x.EvidenceId)).Any(g => g.Count() != 1))
             problems.Add("duplicate evidence-to-criterion mapping");
         if (problems.Count > 0) return Reject(problems, log);
         var criteria = truth.Criteria.ToDictionary(x => x.Id, StringComparer.Ordinal);
-        foreach (var binding in plan.Bindings)
+        foreach (var binding in bindings)
         {
             if (!criteria.TryGetValue(binding.CriterionId, out var criterion) ||
                 !criterion.RequiredEvidenceIds.Contains(binding.EvidenceId, StringComparer.Ordinal) ||
