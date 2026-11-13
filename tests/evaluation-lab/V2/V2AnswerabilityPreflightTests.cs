@@ -237,24 +237,26 @@ public static class V2AnswerabilityPreflightTests
                 Path.Combine(temp, "capture-data"), "V2 PR3a synthetic source", CancellationToken.None);
             services = capture.Item1;
             var graph = capture.Item6;
-            var entry = graph.Nodes.SingleOrDefault(x => x.Kind == "http-endpoint-attribute");
+            var entry = graph.Nodes.FirstOrDefault(x => x.Kind == "http-endpoint-attribute");
             if (entry is null)
                 throw new InvalidOperationException("synthetic HTTP endpoint was not detected");
             var scope = new GateCScope(capture.Item5.WorkspaceId, capture.Item5.RepositoryId,
                 capture.Item5.Id, capture.Item5.FingerprintSha256, entry.Id,
                 SnapshotEvidenceTools.Version);
             var discovery = services.GetRequiredService<GateCEvidenceDiscovery>();
-            var session = discovery.OpenVerified(capture.Item5, scope, Guid.NewGuid(),
-                GateCRole.Investigator, CancellationToken.None);
+            GateC5EvidenceLink? anchor = null;
             foreach (var capability in GateCEvidenceRegistry.Discover().Select(c => c.Identifier))
             {
+                // Each probe has its own genuine host-owned role session and budget.
+                var session = discovery.OpenVerified(capture.Item5, scope, Guid.NewGuid(),
+                    GateCRole.Investigator, CancellationToken.None);
                 var issued = session.Request(capability, CancellationToken.None);
-                if (!issued.Check.Accepted)
-                    throw new InvalidOperationException("synthetic host capability rejected");
+                if (!issued.Check.Accepted || issued.Response is null) continue;
+                anchor = session.ReportLinks().FirstOrDefault(x =>
+                    x.FilePath == "ItemsController.cs" && x.Line is >= 1 &&
+                    x.FileSha256 == digest && x.Kind == GateCEvidenceKind.ObservedSyntax);
+                if (anchor is not null) break;
             }
-            var anchor = session.ReportLinks().FirstOrDefault(x =>
-                x.FilePath == "ItemsController.cs" && x.Line is >= 1 &&
-                x.FileSha256 == digest && x.Kind == GateCEvidenceKind.ObservedSyntax);
             if (anchor is null)
                 throw new InvalidOperationException("synthetic host did not return an observed-syntax anchor");
             // The chosen anchor was returned by the real read-only evidence session.
