@@ -72,4 +72,4 @@ public sealed record V2Pr4bJudgeRecord(
     string JudgeSlot, string JudgeId, string SessionId,
     long ImportedAtUnixMs, int CalibrationDecisions, int CalibrationAgreements,
     IReadOnlyList<V2Pr4bCalibrationDifference> CalibrationDifferences,
-    string Qualification, V2Pr4bSubmission Submission);
+    string Qualification, V2Pr4bSubmission Submission, string ContentSha256);
