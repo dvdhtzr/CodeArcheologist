@@ -161,8 +161,11 @@ public static class V2Pr4bSelfTests
 
             Check("PR4a real-source exports mix calibration without revealing key", () =>
             {
-                Expect(Prepare(output, official.ExportDir, calibration.ExportDir) == 0,
-                    "Valid PR4b batch rejected.");
+                using var prepareDiagnostics = new StringWriter();
+                var prepared = V2Pr4bBatch.Prepare(root, review, official.ExportDir,
+                    calibration.ExportDir, calibrationLabels, output, prepareDiagnostics);
+                Expect(prepared == 0,
+                    "Valid PR4b batch rejected: " + prepareDiagnostics);
                 var batch = V2Pr4bBatch.ReadVerifiedBatch(output);
                 Expect(batch.Packets.Count == 2 &&
                     batch.ExpectedCalibration.Count == 1 &&
@@ -188,6 +191,11 @@ public static class V2Pr4bSelfTests
                 Expect(Prepare(output, official.ExportDir, calibration.ExportDir) != 0,
                     "Original batch was overwritten.");
             });
+            // Later test phases depend on an actual verified batch. Stop at
+            // the FIRST failure rather than burying the cause in a missing-key
+            // exception during downstream setup.
+            Expect(failed == 0,
+                "PR4b batch fixture failed; see the preceding FAIL diagnostic.");
             Check("calibration and official source cases may not overlap", () =>
                 Expect(Prepare(Path.Combine(temp, "invalid-same"),
                     official.ExportDir, official.ExportDir) != 0,
