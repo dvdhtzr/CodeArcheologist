@@ -86,6 +86,29 @@ public static class V2Pr4cSelfTests
         Check(identical.Disputes.Count == 0 &&
             identical.CriticalFlags.Count == 1,
             "Matching judge values were misrepresented as adjudicated source truth.");
+        Check(V2Pr4cComparison.EqualSet(["OBS-01:P1", "OBS-01:P2"],
+            ["OBS-01:P2", "OBS-01:P1"]),
+            "Proof-set permutation created a false semantic dispute.");
+        var reasonOnly = aAsB with
+        {
+            Submission = aAsB.Submission with
+            {
+                Assessments = aAsB.Submission.Assessments.Select((x, i) =>
+                    i != 0 ? x : x with
+                    {
+                        Grades = x.Grades.Select((g, j) =>
+                            j != 0 ? g : g with
+                            {
+                                Reason = "Different words, same substantive structured judgment."
+                            }).ToArray()
+                    }).ToArray()
+            }
+        };
+        var reasonCompared = V2Pr4cComparison.Build(batch, recordA, reasonOnly,
+            sourceKey, aSha, bSha);
+        Check(reasonCompared.Disputes.Count == 0 &&
+            reasonCompared.ReasonVariations.Count >= 1,
+            "Reason text changes were incorrectly scored as semantic disagreements.");
 
         var keySha = V2Pr4bValidation.ShaFile(
             Path.Combine(output, V2Pr4cSchemas.KeyFile));
