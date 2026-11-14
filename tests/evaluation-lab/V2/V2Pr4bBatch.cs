@@ -212,6 +212,32 @@ public static class V2Pr4bBatch
                     packet.PacketSha256,
                 "Tampered, missing or malformed PR4b packet.");
         }
+        // Verify the bytes of the ACTUAL shareable ZIP, not just the
+        // unpacked directory. Extra entries could reveal a private key.
+        using (var archive = ZipFile.OpenRead(Path.Combine(batchDir,
+            "upload-these-to-judge.zip")))
+        {
+            var expected = batch.Packets.Select(x => x.PacketFile)
+                .Append("INSTRUCTIONS.txt").ToHashSet(StringComparer.Ordinal);
+            V2Pr4bValidation.Require(archive.Entries.Count == expected.Count &&
+                archive.Entries.All(x => expected.Contains(x.FullName)) &&
+                archive.Entries.Select(x => x.FullName)
+                    .Distinct(StringComparer.Ordinal).Count() == expected.Count,
+                "Shareable ZIP has missing, duplicated or unexpected entries.");
+            foreach (var entry in archive.Entries)
+            {
+                V2Pr4bValidation.Require(entry.Length > 0 &&
+                    entry.Length <= 768 * 1024, "ZIP member size invalid.");
+                using var member = entry.Open();
+                using var bytes = new MemoryStream();
+                member.CopyTo(bytes);
+                var localFile = Path.Combine(upload, entry.FullName);
+                V2Pr4bValidation.Require(
+                    V2Pr4bValidation.Sha(bytes.ToArray()) ==
+                        V2Pr4bValidation.ShaFile(localFile),
+                    "Shareable ZIP content differs from pinned packet bytes.");
+            }
+        }
         V2Pr4bValidation.Require(batch.ExpectedCalibration.Count ==
             batch.Packets.Count(x => x.Origin == "calibration") &&
             batch.ExpectedCalibration.Select(x => x.PacketId)
