@@ -158,7 +158,9 @@ public static class V2BlindJudgingExport
             var packetFiles = new List<(string File, string Text)>();
             var packetKeys = new List<V2Pr4aPacketKey>();
 
-            foreach (var selection in plan.Items.OrderBy(x => x.CaseId, StringComparer.Ordinal))
+            var shuffleSeed = Sha(File.ReadAllBytes(planFile));
+            foreach (var selection in plan.Items.OrderBy(x =>
+                Sha(Utf8.GetBytes(shuffleSeed + ":" + x.CaseId)), StringComparer.Ordinal))
             {
                 var caseFile = Path.Combine(root, "cases", selection.CaseId, "case.json");
                 var truthFile = Path.Combine(root, "cases", selection.CaseId, "ground-truth.json");
@@ -282,7 +284,9 @@ public static class V2BlindJudgingExport
             report.CaseId != item.Id || report.SnapshotFingerprint != item.After.SnapshotSha256 ||
             report.Attribution != V2Pr4aSchemas.Attribution ||
             report.RunId == Guid.Empty || report.AttemptId == Guid.Empty ||
-            !IsId(report.Comparator) || !Enum.IsDefined(report.Outcome) ||
+            report.Comparator is not ("deterministic-baseline" or "gate-b" or
+                "gate-c" or "gate-c-adaptive") ||
+            !Enum.IsDefined(report.Outcome) ||
             report.Claims is null || report.Claims.Count > 128 ||
             (report.Outcome == V2Pr4aOutcome.Completed && report.Claims.Count == 0) ||
             (report.Outcome == V2Pr4aOutcome.NotProduced && report.Claims.Count != 0) ||
