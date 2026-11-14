@@ -12,6 +12,22 @@ try
 {
     switch (args.FirstOrDefault())
     {
+        case "--v2-pr4c-self-test" when args.Length == 1:
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4cSelfTests.Run();
+        case "--v2-pr4c-export" when args.Length == 5 &&
+            args[1] == "--batch" && args[3] == "--out":
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4cExport.Export(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]), Console.Out);
+        case "--v2-pr4c-import" when args.Length == 7 &&
+            args[1] == "--batch" && args[3] == "--export" &&
+            args[5] == "--answers":
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4cAdjudication.Import(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]),
+                Path.GetFullPath(args[6]), Console.Out);
+        case "--v2-pr4c-audit" when args.Length == 5 &&
+            args[1] == "--batch" && args[3] == "--export":
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4cAdjudication.Audit(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]), Console.Out);
         case "--v2-pr4b-self-test" when args.Length == 1:
             return CodeArcheologist.EvaluationLab.V2.V2Pr4bSelfTests.Run();
         case "--v2-pr4b-prepare" when args.Length == 13 &&
@@ -189,6 +205,13 @@ try
         default:
             Console.Error.WriteLine("""
                 Usage:
+                  --v2-pr4c-self-test                 PR4c full dispute/adjudication/audit fault tests (model-free)
+                  --v2-pr4c-export --batch <PR4b-batch> --out <new-export>
+                      Reaudit A/B, freeze disputed criteria and claims, output source-first adjudication packets
+                  --v2-pr4c-import --batch <PR4b-batch> --export <PR4c-export> --answers <adjudicator.json>
+                      Strict first complete source-based adjudication; unresolved answers permitted
+                  --v2-pr4c-audit --batch <PR4b-batch> --export <PR4c-export>
+                      Revalidate original judges, private dispute census, public ZIP and adjudication record
                   --v2-pr4b-self-test                 PR4b mixed calibration + independent judge import tests (model-free)
                   --v2-pr4b-prepare --root <v2-root> --review <PR2-review> --official <PR4a-export> --calibration <PR4a-export> --labels <pre-approved-calibration-key> --out <new-batch>
                       Prepare anonymous mixed packet batch; calibration answers remain private
