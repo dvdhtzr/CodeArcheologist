@@ -190,6 +190,22 @@ public static class V2BlindJudgingTests
                     Items = [original.Items[0] with { ReportSha256 = DigestFile(reportFile) }]
                 });
             }, () => { SaveReport(captured); SavePlan(original); });
+            Reject("unknown comparator cannot be mislabeled a known workflow", () =>
+            {
+                SaveReport(captured with { Comparator = "made-up-engine" });
+                SavePlan(original with
+                {
+                    Items = [original.Items[0] with { ReportSha256 = DigestFile(reportFile) }]
+                });
+            }, () => { SaveReport(captured); SavePlan(original); });
+            Reject("duplicate original claim identities are not anonymized into two valid claims", () =>
+            {
+                SaveReport(captured with { Claims = [captured.Claims[0], captured.Claims[0]] });
+                SavePlan(original with
+                {
+                    Items = [original.Items[0] with { ReportSha256 = DigestFile(reportFile) }]
+                });
+            }, () => { SaveReport(captured); SavePlan(original); });
             Reject("completed report with empty claims is invalid", () =>
             {
                 SaveReport(captured with { Claims = [] });
