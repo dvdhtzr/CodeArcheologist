@@ -96,13 +96,29 @@ public static class V2Pr4bJudging
                 submission.SessionId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 total, agreement, results,
                 "diagnostic-only-calibration-disclosed-not-qualified-for-scoring",
-                submission);
+                submission, "");
+            record = record with { ContentSha256 = RecordDigest(record) };
             // Do not write ANY record until packet identity, both complete censuses,
             // original judge identity, and the frozen calibration key pass checks.
-            using var stream = new FileStream(target, FileMode.CreateNew,
-                FileAccess.Write, FileShare.None);
-            JsonSerializer.Serialize(stream, record, V2Schemas.Json);
-            stream.Flush(flushToDisk: true);
+            // Write+flush an independent temporary file before an atomic same-dir
+            // rename to the first and only accepted record name. A crash before
+            // rename leaves no falsely accepted judgment-of-record.
+            var temporary = target + ".pending-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                using (var stream = new FileStream(temporary, FileMode.CreateNew,
+                    FileAccess.Write, FileShare.None))
+                {
+                    JsonSerializer.Serialize(stream, record, V2Schemas.Json);
+                    stream.Flush(flushToDisk: true);
+                }
+                File.Move(temporary, target);
+            }
+            finally
+            {
+                try { if (File.Exists(temporary)) File.Delete(temporary); }
+                catch (IOException) { /* Orphaned pending file is not accepted. */ }
+            }
             log.WriteLine("GREEN: first complete V2 PR4b judgment recorded for slot " +
                 slot + ", " + batch.Packets.Count + " packets.");
             log.WriteLine("Calibration matched " + agreement + "/" + total +
@@ -154,12 +170,17 @@ public static class V2Pr4bJudging
         }
     }
 
+    private static string RecordDigest(V2Pr4bJudgeRecord record) =>
+        V2Pr4bValidation.Sha(JsonSerializer.SerializeToUtf8Bytes(
+            record with { ContentSha256 = "" }, V2Schemas.Json));
+
     private static void VerifyRecord(string dir, V2Pr4bBatchKey batch,
         V2Pr4bJudgeRecord record, string recordFile)
     {
         var keyHash = V2Pr4bValidation.ShaFile(
             Path.Combine(dir, V2Pr4bSchemas.KeyFile));
         V2Pr4bValidation.Require(record.SchemaVersion == V2Pr4bSchemas.Record &&
+            record.ContentSha256 == RecordDigest(record) &&
             record.BatchKeySha256 == keyHash &&
             record.Submission is not null &&
             record.Submission.SchemaVersion == V2Pr4bSchemas.Submission &&
