@@ -30,6 +30,7 @@ public sealed record V2Pr5aHostReceipt(
     string SchemaVersion, Guid RunId, Guid WorkspaceId, Guid RepositoryId,
     Guid SnapshotId, string SnapshotFingerprint, string SnapshotManifestSha256,
     string SnapshotCapturePolicy, string ReportContractVersion, string RunStatus,
+    string HostDiagnostic, string HostCautionStatus,
     Guid? TerminalAttemptId, string? OriginalReportSha256,
     bool HasHostStoredReport, bool V2ObservationEnabled,
     IReadOnlyList<V2Pr5aAttempt> Attempts,
@@ -84,6 +85,7 @@ public static class V2Pr5aHostBridge
             string fingerprint, manifest, policy, entry, contract, reportContract,
                 status, diagnostic;
             string? reportText;
+            string hostCautionStatus = "no-host-stored-report";
             using (var cmd = Cmd(db, tx, """
                 SELECT r.workspace_id,r.repository_id,r.snapshot_id,
                        r.fingerprint_sha256,r.entry_point_id,r.evidence_contract_version,
@@ -140,6 +142,11 @@ public static class V2Pr5aHostBridge
                     "Stored C5 report's actual identity or required roles differ from run.");
                 // Host-injected cautions are separate and must never become
                 // attributed model claims by this export.
+                hostCautionStatus = parsed.HostCautionStatus;
+                V2Pr4bValidation.Require(
+                    hostCautionStatus is "not-evaluated" or "verified" or
+                        "unavailable" or "failed",
+                    "Unknown host-only caution provenance classification.");
             }
             var attempts = new List<V2Pr5aAttempt>();
             using (var cmd = Cmd(db, tx, """
@@ -163,7 +170,7 @@ public static class V2Pr5aHostBridge
             var last = attempts[^1];
             if (status == "completed" && last.Status != "completed")
                 blockers.Add("terminal-run-attempt-status-mismatch");
-            if (status != "completed" && last.Status is "queued" or "running")
+            if (status != "completed" && (last.Status is "queued" or "running"))
                 blockers.Add("attempt-not-terminal");
             foreach (var item in attempts.Where(x => x.ContinuesAttemptId is not null))
                 V2Pr4bValidation.Require(
@@ -317,6 +324,7 @@ public static class V2Pr5aHostBridge
             // report_json string, never a user-authored PR4a report.
             var receipt=new V2Pr5aHostReceipt(V2Pr5aContract.Version,runId,ws,repo,
                 snapshot,fingerprint,manifest,policy,reportContract,status,
+                diagnostic,hostCautionStatus,
                 last.AttemptId,reportText is null?null:Sha(reportText),
                 reportText is not null,observed,attempts,checkpoints,handoffs,
                 blockers.Distinct(StringComparer.Ordinal).ToArray(),
