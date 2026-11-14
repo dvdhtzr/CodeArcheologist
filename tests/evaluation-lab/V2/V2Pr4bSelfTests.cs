@@ -16,7 +16,7 @@ public static class V2Pr4bSelfTests
         Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static string HashFile(string file) => Hash(File.ReadAllBytes(file));
 
-    public static int Run()
+    public static int Run(bool withAdjudication = false)
     {
         var passed = 0;
         var failed = 0;
@@ -145,7 +145,7 @@ public static class V2Pr4bSelfTests
                     "The source explicitly adds one before return.",
                     ["CLM-001"], [criterionControl + ":P1"])],
                 [new V2Pr4bClaimGrade("CLM-001", V2GroundingStatus.Contradicted,
-                    V2Materiality.Material,
+                    withAdjudication ? V2Materiality.Critical : V2Materiality.Material,
                     "The report falsely claims the addition is absent.",
                     [criterionControl + ":P1"])]);
             var labelKey = new V2Pr4bCalibrationKey(V2Pr4bSchemas.Calibration,
@@ -337,7 +337,17 @@ public static class V2Pr4bSelfTests
                     Grades = [calibrationAnswer.Grades[0] with { Grade = 1 }]
                 };
                 var judgments = baseline.Assessments.Select(x =>
-                    x.PacketId == altered.PacketId ? altered : x).ToArray();
+                    x.PacketId == altered.PacketId ? altered :
+                    withAdjudication
+                        ? x with
+                        {
+                            Grades = [x.Grades[0] with { Grade = 2 }],
+                            Claims = [x.Claims[0] with
+                            {
+                                Materiality = V2Materiality.Critical
+                            }]
+                        }
+                        : x).ToArray();
                 Write(secondFile, baseline with { Assessments = judgments });
                 Expect(V2Pr4bJudging.Import(output, "B", secondFile,
                     TextWriter.Null) == 0, "Diagnostic calibration disagreement was suppressed.");
@@ -420,6 +430,9 @@ public static class V2Pr4bSelfTests
                 Expect(V2Pr4bJudging.Audit(output, TextWriter.Null) == 0,
                     "Restored judgments no longer pass audit.");
             });
+            if (withAdjudication)
+                Check("PR4c end-to-end frozen dispute and adjudication workflow", () =>
+                    V2Pr4cSelfTests.Exercise(output, temp));
         }
         catch (Exception e)
         {
