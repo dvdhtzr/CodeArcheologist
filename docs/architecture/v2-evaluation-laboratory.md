@@ -1,7 +1,7 @@
 # Evaluation Laboratory V2 — Approved Design and PR1 Boundary
 
 Status: V2-D1, D2, D3 and D4 architecture approved by the repository owner.
-Implementation status: **PR1, PR2, PR3a, PR3b, PR4a and PR4b merged; PR4c source-grounded adjudication pending local verification**. This document
+Implementation status: **PR1–PR4c merged; PR5a host-report provenance bridge under owner-local verification.** This document
 does not attest that a V2 corpus is semantically reviewed or ready for scoring.
 
 ## Why V2 exists
@@ -340,3 +340,31 @@ See `docs/architecture/v2-pr4c-adjudication.md`.
 This preserves unresolved calibration disagreements and **NOT READY FOR
 SCORING** status. Genuine model-report-to-PR3b attribution remains unproven;
 PR5–PR7 must explicitly gate all scored eligibility.
+
+## PR5a — read-only host-stored report provenance, not scoring
+
+PR5a adds one **read-only** evaluation-lab export of the actual SQLite
+`investigation_reports.report_json` bytes (no user transcription), exact
+host snapshot identity, attempt/continuation lineage, accepted role
+checkpoint digests, original attempts, and v9 PR3b provider-adapter
+handoff event digests. Missing instrumentation, source identity, original
+handoff events or incomplete reports are explicit provenance blockers.
+The bridge cannot assert that Ollama processed a prompt or recover the
+**raw provider response** checksum from PR3b (which only recorded prompt
+digests). Model-validated checkpoint assessment != raw provider output.
+Host-generated caution fields remain distinct from model-authored claims.
+
+The export is **private**, read-only, diagnostics only; it never creates
+PR4a claims, semantic judgments or any score. Input database is opened in
+SQLite read-only mode with a single consistent transaction; no migrations,
+fences, worker calls or source execution. Original PR2/PR4c contracts stay
+unchanged. See `docs/architecture/original-product-path-checkpoint-pr5a.md`
+for the explicit alignment gate against the unchanged v0.1/v0.2 product
+designs: the lab serves the developer-facing architecture explorer, not
+the other way around.
+
+Commands: `--v2-pr5a-self-test` in `check.ps1`; 
+`--v2-pr5a-export --database <existing-v9-db> --run <run-guid> --out <new-private-folder>`.
+All results remain **NOT READY FOR SCORING**. After PR5a local GREEN,
+run one owner-observed genuine developer-answer journey through Mission
+Control and review product value before prioritizing PR5b/PR5c.
