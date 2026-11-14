@@ -126,8 +126,9 @@ public static class V2BlindJudgingTests
                 Assert(Export(folder) == 0, "Valid review + report rejected.");
                 var keyFile = Path.Combine(folder, V2Pr4aSchemas.KeyName);
                 var key = JsonSerializer.Deserialize<V2Pr4aPrivateKey>(
-                    File.ReadAllText(keyFile), V2Schemas.Json);
-                Assert(key is not null && key.Packets.Count == 1 &&
+                    File.ReadAllText(keyFile), V2Schemas.Json)
+                    ?? throw new InvalidDataException("Missing private key.");
+                Assert(key.Packets.Count == 1 &&
                     key.Qualification.Contains("not-scoreable", StringComparison.Ordinal),
                     "Private key/census missing.");
                 var packet = key.Packets[0];
