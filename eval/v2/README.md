@@ -1,6 +1,6 @@
 # Evaluation Laboratory V2
 
-**PR1, PR2, PR3a and PR3b merged; PR4a diagnostic blind export pending GREEN. NOT READY FOR SCORING.**
+**PR1, PR2, PR3a, PR3b and PR4a merged; PR4b offline judging under review. NOT READY FOR SCORING.**
 
 This directory is a separate V2 input namespace. Nothing here replaces the
 historical `eval/cases`, `eval/lab-config.json`, C6c/C7 labels, or frozen PR4
@@ -97,3 +97,25 @@ compute scores. Its owner-supplied report format is **not a genuine
 provider-output attestation**, even when its SHA-256 matches. See
 `docs/architecture/v2-pr4a-blind-judging.md` for this limitation,
 the exact input schema, example plan and command.
+
+## PR4b: Unmarked calibration and two independent judging imports
+
+The owner can create a mixed batch using two already-frozen, disjoint PR4a
+diagnostic exports and a pre-written owner/independent-reviewer calibration
+key. Only `upload-these-to-judge.zip` may be shared externally.
+The private key binds source, rubric, report, calibration expectations,
+packet IDs and original claim IDs.
+
+`--v2-pr4b-prepare` makes the mixed blind archive,
+`--v2-pr4b-import` records one complete judgment for slot A or B, and
+`--v2-pr4b-audit` verifies both, including all calibration disagreements,
+full report-claim coverage and ZIP membership. No model is called in this
+application. Each judging pass must be run independently by the owner.
+
+The calibration bank uses **new independent source-reviewed cases**,
+not historical C6c left/right guesses. Two ChatGPT sessions are not
+statistically independent and the identity fields are not authenticated.
+The imported diagnostic reports remain owner-supplied, not provider-attested.
+Passing the calibration test does not establish scoring eligibility.
+
+See `docs/architecture/v2-pr4b-independent-judging.md`.
