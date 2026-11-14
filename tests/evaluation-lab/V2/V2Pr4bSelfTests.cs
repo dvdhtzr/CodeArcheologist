@@ -340,6 +340,48 @@ public static class V2Pr4bSelfTests
                 }
                 finally { File.WriteAllBytes(file, original); }
             });
+            Check("tampered official judgment fails content-digest audit", () =>
+            {
+                var file = Path.Combine(output, V2Pr4bSchemas.RecordA);
+                var original = File.ReadAllBytes(file);
+                try
+                {
+                    var record = V2Pr4bValidation.Read<V2Pr4bJudgeRecord>(file);
+                    var officialId = frozen.Packets.Single(x =>
+                        x.Origin == "official").PacketId;
+                    var changed = record.Submission.Assessments.Select(x =>
+                        x.PacketId == officialId ? x with
+                        {
+                            Grades = [x.Grades[0] with { Grade = 1 }]
+                        } : x).ToArray();
+                    var invalid = record with
+                    {
+                        Submission = record.Submission with { Assessments = changed }
+                    };
+                    File.WriteAllText(file, JsonSerializer.Serialize(invalid, V2Schemas.Json));
+                    Expect(V2Pr4bJudging.Audit(output, TextWriter.Null) != 0,
+                        "Non-calibration grade was modified without detection.");
+                }
+                finally { File.WriteAllBytes(file, original); }
+            });
+            Check("unapproved bytes in shareable ZIP fail audit", () =>
+            {
+                var file = Path.Combine(output, "upload-these-to-judge.zip");
+                var original = File.ReadAllBytes(file);
+                try
+                {
+                    using (var zip = ZipFile.Open(file, ZipArchiveMode.Update))
+                    {
+                        using var unexpected = zip.CreateEntry(
+                            "DO-NOT-UPLOAD-pr4b-private-key.json").Open();
+                        var bytes = Encoding.UTF8.GetBytes("secret not allowed");
+                        unexpected.Write(bytes);
+                    }
+                    Expect(V2Pr4bJudging.Audit(output, TextWriter.Null) != 0,
+                        "A private ZIP member passed the release audit.");
+                }
+                finally { File.WriteAllBytes(file, original); }
+            });
             Check("modified blinded packet blocks further judging audit", () =>
             {
                 var packet = frozen.Packets[0];
