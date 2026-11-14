@@ -12,6 +12,18 @@ try
 {
     switch (args.FirstOrDefault())
     {
+        case "--v2-pr4a-self-test" when args.Length == 1:
+            return CodeArcheologist.EvaluationLab.V2.V2BlindJudgingTests.Run();
+        case "--v2-pr4a-export" when args.Length == 15 &&
+            args[1] == "--root" && args[3] == "--sources" &&
+            args[5] == "--review" && args[7] == "--reports" &&
+            args[9] == "--plan" && args[11] == "--rubric" &&
+            args[13] == "--out":
+            return CodeArcheologist.EvaluationLab.V2.V2BlindJudgingExport.Export(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]),
+                Path.GetFullPath(args[6]), Path.GetFullPath(args[8]),
+                Path.GetFullPath(args[10]), Path.GetFullPath(args[12]),
+                Path.GetFullPath(args[14]), Console.Out);
         case "--v2-answerability-self-test" when args.Length == 1:
             return await CodeArcheologist.EvaluationLab.V2.V2AnswerabilityPreflightTests.RunAsync();
         case "--v2-answerability-preflight" when args.Length == 11 &&
@@ -156,6 +168,9 @@ try
         default:
             Console.Error.WriteLine("""
                 Usage:
+                  --v2-pr4a-self-test                 PR4a source-grounded blind packet tests (model-free)
+                  --v2-pr4a-export --root <dir> --sources <dir> --review <dir> --reports <dir> --plan <file> --rubric <file> --out <new-dir>
+                      PR4a frozen blind diagnostic packets and private key; NOT READY FOR SCORING
                   --v2-answerability-self-test         PR3a host-scoped preflight tests (model-free)
                   --v2-answerability-preflight --root <dir> --sources <dir> --review <dir> --plan <file> --out <new-file>
                       PR3a source-first retrievability preflight; NOT READY FOR SCORING (model-free)
