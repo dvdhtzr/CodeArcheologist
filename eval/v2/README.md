@@ -1,6 +1,6 @@
 # Evaluation Laboratory V2
 
-**PR1 merged; PR2 source-first review implemented on a draft branch. NOT READY FOR SCORING.**
+**PR1, PR2, PR3a and PR3b merged; PR4a diagnostic blind export pending GREEN. NOT READY FOR SCORING.**
 
 This directory is a separate V2 input namespace. Nothing here replaces the
 historical `eval/cases`, `eval/lab-config.json`, C6c/C7 labels, or frozen PR4
@@ -77,3 +77,23 @@ It never observes or simulates an agent's actual selection or provider delivery.
 No matching host view means **undetermined**, not `unavailable`. Source and
 review files remain read-only; output paths within input roots are refused.
 See the architecture document for safeguards and an input shape.
+
+## PR4a: Frozen rubric and anonymous source-grounded packets
+
+`--v2-pr4a-self-test` uses a disposable synthetic source, genuine PR2
+export/import, an owner-supplied diagnostic report and tampering cases.
+`--v2-pr4a-export` accepts explicit `--root`, `--sources`,
+`--review`, `--reports`, `--plan`, `--rubric` and `--out`.
+
+It creates `upload-these-to-judge.zip` containing only anonymized
+source-first packets and instructions, plus a separate
+`DO-NOT-UPLOAD-private-key.json` binding report, case, source and
+rubric hashes to anonymous claim IDs. Do not upload the private key.
+Source code and reports may be confidential; explicitly choose what
+you send to an external judge.
+
+PR4a deliberately does NOT import judgments, assess calibration, or
+compute scores. Its owner-supplied report format is **not a genuine
+provider-output attestation**, even when its SHA-256 matches. See
+`docs/architecture/v2-pr4a-blind-judging.md` for this limitation,
+the exact input schema, example plan and command.
