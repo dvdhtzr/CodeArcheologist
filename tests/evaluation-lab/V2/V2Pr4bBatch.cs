@@ -59,7 +59,10 @@ public static class V2Pr4bBatch
             {
                 var scopes = V2Pr4bValidation.ReadScopes(root, review, item,
                     manifestHash, importHash);
-                var scope = ToPacket(item, "calibration", "cal", "cal",
+                // The private calibration key is frozen against the original
+                // PR4a packet identity. Rebinding to BPK-nnn occurs only
+                // AFTER this independent source-grounded validation succeeds.
+                var scope = ToPacket(item, "calibration", item.PacketId, item.PacketFile,
                     scopes, item.ClaimBindings.Select(x => x.AnonymousId).ToArray());
                 V2Pr4bValidation.ValidateAssessment(expected[item.PacketId], scope);
             }
