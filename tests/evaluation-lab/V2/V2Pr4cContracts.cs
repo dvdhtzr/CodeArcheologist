@@ -26,6 +26,7 @@ public sealed record V2Pr4cOpinion(
 
 public sealed record V2Pr4cDispute(
     string DisputeId, string PacketId, V2Pr4cItemKind Kind, string ItemId,
+    V2CriterionKind? CriterionKind,
     IReadOnlyList<string> Dimensions, V2Pr4cOpinion First, V2Pr4cOpinion Second,
     IReadOnlyList<string> AllowedProofRefs, IReadOnlyList<string> AllowedClaimRefs,
     bool FirstIsJudgeA);
