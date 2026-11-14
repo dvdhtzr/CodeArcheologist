@@ -152,7 +152,7 @@ public static class V2Pr4cAdjudication
             ValidateDecision(decision, disputes[decision.DisputeId]);
     }
 
-    private static void ValidateDecision(V2Pr4cDecision decision,
+    internal static void ValidateDecision(V2Pr4cDecision decision,
         V2Pr4cDispute dispute)
     {
         V2Pr4bValidation.Require(
@@ -210,8 +210,18 @@ public static class V2Pr4cAdjudication
                 decision.Disposition == V2AdjudicationDisposition.Revised &&
                 decision.ResolutionSource == V2Pr4cResolutionSource.Independent,
                 "Revised disposition requires an independently stated resolution.");
+        // Follow PR4b's preapproved rubric exceptions: correctly expressed
+        // uncertainty and avoiding forbidden assertions may merit full credit
+        // without a positive source-supported statement. This NEVER makes an
+        // arbitrary source observation scoreable by assertion.
         V2Pr4bValidation.Require(
-            decision.Grade != 3 || decision.Grounding == V2GroundingStatus.Supported,
-            "Full credit cannot be promoted without supported grounding.");
+            decision.Grade != 3 ||
+            decision.Grounding == V2GroundingStatus.Supported ||
+            (dispute.Kind == V2Pr4cItemKind.Criterion &&
+                dispute.CriterionKind is
+                    (V2CriterionKind.RequiredUncertainty or
+                     V2CriterionKind.ForbiddenAssertion)),
+            "Full credit requires supported grounding, unless the frozen " +
+            "criterion is required uncertainty or a forbidden assertion.");
     }
 }
