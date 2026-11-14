@@ -119,3 +119,25 @@ The imported diagnostic reports remain owner-supplied, not provider-attested.
 Passing the calibration test does not establish scoring eligibility.
 
 See `docs/architecture/v2-pr4b-independent-judging.md`.
+
+## PR4c — source-grounded dispute and adjudication audit
+
+`--v2-pr4c-export --batch <PR4b-batch> --out <new-export>` verifies the
+two complete PR4b original judgments, computes every criterion/claim
+difference and publishes anonymous source-first dispute packets. Its
+private census records the original judge orientation, exact A/B
+record SHA-256, calibration discrepancies, and unreviewed agreed
+critical claims. Only `upload-these-to-adjudicator.zip` may be shared.
+
+`--v2-pr4c-import --batch <PR4b-batch> --export <PR4c-export> --answers <file>`
+first-write imports a complete adjudication with confirmed/revised/
+unresolved dispositions for every dispute, strict authorized source
+references and no overwritten judge records.
+
+`--v2-pr4c-audit --batch <PR4b-batch> --export <PR4c-export>`
+independently rederives the dispute census and checks all source packet,
+ZIP, original judge and adjudication record digests. Model-free
+`--v2-pr4c-self-test` is included in the full local check gate.
+All V2 diagnostic results remain **NOT READY FOR SCORING**.
+
+See `docs/architecture/v2-pr4c-adjudication.md` for the full protocol.
