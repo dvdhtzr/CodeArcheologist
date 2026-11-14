@@ -138,6 +138,15 @@ Three disposition rules are enforced:
   Authorized source proof references may be listed to explain why
   evidence was insufficient. A substantive explanation is mandatory.
 
+For full credit, the resolved criterion normally requires
+`supported` grounding. There are two **frozen PR4b rubric exceptions**:
+`required-uncertainty` and `forbidden-assertion` criteria may receive
+grade 3 for correctly acknowledging a source limit or avoiding an
+unwarranted claim. This exception applies only to those exact
+independently reviewed criterion kinds, never to an ordinary source
+observation or developer finding. Resolved adjudications still require
+authorized source proof references and substantive reasoning.
+
 A third judge cannot provide foreign proof IDs, omit a dispute,
 duplicate an ID, silently replace an A/B answer under `confirmed`,
 or overwrite an already accepted answer.
