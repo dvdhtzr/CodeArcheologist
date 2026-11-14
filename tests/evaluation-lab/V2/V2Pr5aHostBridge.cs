@@ -291,6 +291,8 @@ public static class V2Pr5aHostBridge
                 }
             }
             var handoffs=new List<V2Pr5aHandoff>();
+            if (events.Count > 0 && !observed)
+                blockers.Add("handoff-events-without-explicit-opt-in");
             foreach(var group in events.GroupBy(x=>x.CallId))
             {
                 var steps=group.ToArray();
@@ -304,6 +306,12 @@ public static class V2Pr5aHostBridge
                         x.EvidenceLinksJson==steps[0].EvidenceLinksJson &&
                         x.ReceiptIdsJson==steps[0].ReceiptIdsJson),
                     "Broken model-adapter call lifecycle.");
+                if (steps[^1].EventKind == V2HandoffContract.Prepared)
+                    blockers.Add("adapter-call-only-prepared:" + steps[0].Role);
+                else if (steps[^1].EventKind == V2HandoffContract.Entered)
+                    blockers.Add("adapter-terminal-unknown:" + steps[0].Role);
+                else if (steps[^1].EventKind == V2HandoffContract.Faulted)
+                    blockers.Add("adapter-call-faulted:" + steps[0].Role);
                 var receiptIds=JsonSerializer.Deserialize<Guid[]>(steps[0].ReceiptIdsJson)
                     ?? throw new InvalidDataException("Null adaptive receipt list.");
                 handoffs.Add(new(steps[0].CallId,steps[0].AttemptId,
