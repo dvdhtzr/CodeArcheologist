@@ -89,6 +89,48 @@ public static class V2Pr4cSelfTests
         Check(V2Pr4cComparison.EqualSet(["OBS-01:P1", "OBS-01:P2"],
             ["OBS-01:P2", "OBS-01:P1"]),
             "Proof-set permutation created a false semantic dispute.");
+        // PR4b permits full credit for correctly recognized uncertainty
+        // and forbidden assertions even without positive "supported"
+        // grounding. PR4c must preserve that frozen rubric distinction.
+        var exampleCriterion = census.Disputes.First(x =>
+            x.Kind == V2Pr4cItemKind.Criterion);
+        var uncertainty = exampleCriterion with
+        {
+            CriterionKind = V2CriterionKind.RequiredUncertainty,
+            First = exampleCriterion.First with
+            {
+                Grade = 3,
+                Grounding = V2GroundingStatus.NotDemonstrated
+            }
+        };
+        var sourceScoped = new V2Pr4cDecision(
+            uncertainty.DisputeId, V2AdjudicationDisposition.Confirmed,
+            V2Pr4cResolutionSource.First, 3,
+            V2GroundingStatus.NotDemonstrated, null,
+            uncertainty.First.SourceProofRefs,
+            uncertainty.First.ReportClaimRefs,
+            "Recognizes exactly the source-evidence boundary required by this uncertainty criterion.");
+        Check(sourceScoped.SourceProofRefs.Count > 0,
+            "Criterion fixture lacks independently reviewed source proofs.");
+        V2Pr4cAdjudication.ValidateDecision(sourceScoped, uncertainty);
+        V2Pr4cAdjudication.ValidateDecision(sourceScoped, uncertainty with
+        {
+            CriterionKind = V2CriterionKind.ForbiddenAssertion
+        });
+        var rejectedObservation = false;
+        try
+        {
+            V2Pr4cAdjudication.ValidateDecision(sourceScoped, uncertainty with
+            {
+                CriterionKind = V2CriterionKind.SourceObservation
+            });
+        }
+        catch (InvalidDataException)
+        {
+            rejectedObservation = true;
+        }
+        Check(rejectedObservation,
+            "Ordinary source-observation full credit incorrectly bypassed source grounding.");
         var reasonOnly = aAsB with
         {
             Submission = aAsB.Submission with
