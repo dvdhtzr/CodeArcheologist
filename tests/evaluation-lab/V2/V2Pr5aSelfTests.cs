@@ -31,6 +31,8 @@ public static class V2Pr5aSelfTests
         static string ShaFile(string file) => Sha(File.ReadAllBytes(file));
         var root = Path.Combine(Path.GetTempPath(),
             "code-archeologist-v2-pr5a-" + Guid.NewGuid().ToString("N"));
+        var exportsRoot = Path.Combine(Path.GetTempPath(),
+            "code-archeologist-v2-pr5a-exports-" + Guid.NewGuid().ToString("N"));
         var dbFile = Path.Combine(root, "disposable.sqlite3");
         var run = Guid.NewGuid();
         var ws = Guid.NewGuid();
@@ -40,7 +42,7 @@ public static class V2Pr5aSelfTests
         var fingerprint = new string('a', 64);
         var manifest = new string('b', 64);
         var outputNum = 0;
-        string Output() => Path.Combine(root, "output-" + (++outputNum));
+        string Output() => Path.Combine(exportsRoot, "output-" + (++outputNum));
         try
         {
             Directory.CreateDirectory(root);
@@ -141,8 +143,7 @@ public static class V2Pr5aSelfTests
                     "Data-directory export was allowed to contaminate a host DB."));
             // Output located next to (not beneath) the database input data
             // directory, so it cannot accidentally modify production data.
-            var safe = Path.Combine(Path.GetTempPath(),"ca-pr5a-export-"+
-                Guid.NewGuid().ToString("N"));
+            var safe = Output();
             Check("accept exact host-serialized incomplete C5 report bytes", () =>
             {
                 var scope=new GateCScope(ws,repo,snapshot,fingerprint,
@@ -198,7 +199,6 @@ public static class V2Pr5aSelfTests
                 read.CommandText="SELECT report_json FROM investigation_reports WHERE run_id=$run;";
                 read.Parameters.AddWithValue("$run",run.ToString("D"));
                 var original=(string)read.ExecuteScalar()!;
-                using var parsed=JsonDocument.Parse(original);
                 var corrupted=original.Replace(run.ToString("D"),
                     Guid.NewGuid().ToString("D"),StringComparison.OrdinalIgnoreCase);
                 using(var update=db.CreateCommand())
@@ -211,8 +211,7 @@ public static class V2Pr5aSelfTests
                 try
                 {
                     Require(V2Pr5aHostBridge.Export(dbFile,run,
-                        Path.Combine(Path.GetTempPath(),"ca-pr5a-reject-"+
-                            Guid.NewGuid().ToString("N")),TextWriter.Null)!=0,
+                        Output(),TextWriter.Null)!=0,
                         "Foreign report RunId passed host identity checks.");
                 }
                 finally
@@ -232,14 +231,10 @@ public static class V2Pr5aSelfTests
         }
         finally
         {
-            try{Directory.Delete(root,true);}catch(IOException){}
-            try
-            {
-                // The first truly external export must not be under the fixture
-                // input root, and is removed only if it was created by this test.
-                // (Its isolated temp name is not reused by production.)
-            }
-            catch(IOException){}
+            try { Directory.Delete(root, true); } catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            try { Directory.Delete(exportsRoot, true); } catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
         Console.WriteLine(fail==0
             ? $"GREEN: {pass} V2 PR5a host-report provenance tests; NOT READY FOR SCORING."
