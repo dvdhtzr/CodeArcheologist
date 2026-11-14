@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CodeArcheologist.Api.Investigations;
+using CodeArcheologist.Api.Workspaces;
 using Microsoft.Data.Sqlite;
 
 namespace CodeArcheologist.EvaluationLab.V2;
@@ -187,6 +188,82 @@ public static class V2Pr5aSelfTests
                     receipt.Blockers.Contains("run-not-completed:incomplete") &&
                     receipt.Qualification.Contains("not-scoreable",StringComparison.Ordinal),
                     "Exact raw host report bytes or failed outcome were not preserved.");
+            });
+            Check("prepared-only adapter record is not credited as delivered", () =>
+            {
+                var prepared = new V2HandoffEvent(Guid.NewGuid(), Guid.NewGuid(),
+                    run, attempt, "investigator", 1, "GateCDiscoverySelection",
+                    V2HandoffContract.Prepared, new string('c',64),
+                    "[]", "[]", fingerprint, 1,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), "");
+                prepared = prepared with { ContentSha256 = prepared.ComputeDigest() };
+                using var db = new SqliteConnection(new SqliteConnectionStringBuilder
+                {
+                    DataSource=dbFile,Mode=SqliteOpenMode.ReadWrite,Pooling=false
+                }.ToString());
+                db.Open();
+                using(var insert=db.CreateCommand())
+                {
+                    insert.CommandText = """
+                        INSERT INTO v2_handoff_events VALUES
+                        ($event,$call,$run,$attempt,$role,$ordinal,$stage,$kind,
+                         $prompt,$links,$receipts,$fingerprint,$epoch,$at,$sha);
+                        """;
+                    foreach(var (name,value) in new (string,object)[]
+                    {
+                        ("$event",prepared.EventId.ToString("D")),
+                        ("$call",prepared.CallId.ToString("D")),
+                        ("$run",run.ToString("D")),
+                        ("$attempt",attempt.ToString("D")),
+                        ("$role",prepared.Role),
+                        ("$ordinal",prepared.CallOrdinal),
+                        ("$stage",prepared.Stage),
+                        ("$kind",prepared.EventKind),
+                        ("$prompt",prepared.PromptSha256),
+                        ("$links",prepared.EvidenceLinksJson),
+                        ("$receipts",prepared.ReceiptIdsJson),
+                        ("$fingerprint",prepared.SnapshotFingerprint),
+                        ("$epoch",prepared.OwnershipEpoch),
+                        ("$at",prepared.CreatedAtUnixMs),
+                        ("$sha",prepared.ContentSha256)
+                    }) insert.Parameters.AddWithValue(name,value);
+                    Require(insert.ExecuteNonQuery()==1,"V2 prepared fixture missing.");
+                }
+                try
+                {
+                    var outDir=Output();
+                    Require(V2Pr5aHostBridge.Export(dbFile,run,outDir,
+                        TextWriter.Null)==0,"Valid prepared-only observation rejected.");
+                    var result=V2Pr4bValidation.Read<V2Pr5aHostReceipt>(
+                        Path.Combine(outDir,V2Pr5aContract.ProvenanceFile));
+                    Require(result.Handoffs.Count==1 &&
+                        result.Handoffs[0].TerminalState==V2HandoffContract.Prepared &&
+                        result.Blockers.Contains("adapter-call-only-prepared:investigator") &&
+                        result.Blockers.Contains("handoff-events-without-explicit-opt-in"),
+                        "Prepared event falsely credited with model invocation.");
+
+                    using(var tamper=db.CreateCommand())
+                    {
+                        tamper.CommandText = """
+                            UPDATE v2_handoff_events
+                            SET content_sha256=$bad WHERE event_id=$event;
+                            """;
+                        tamper.Parameters.AddWithValue("$bad",new string('f',64));
+                        tamper.Parameters.AddWithValue("$event",prepared.EventId.ToString("D"));
+                        tamper.ExecuteNonQuery();
+                    }
+                    var rejected=Output();
+                    Require(V2Pr5aHostBridge.Export(dbFile,run,rejected,
+                        TextWriter.Null)!=0 && !Directory.Exists(rejected),
+                        "Tampered adapter event was accepted or an output was published.");
+                }
+                finally
+                {
+                    using var cleanup=db.CreateCommand();
+                    cleanup.CommandText="DELETE FROM v2_handoff_events WHERE event_id=$event;";
+                    cleanup.Parameters.AddWithValue("$event",prepared.EventId.ToString("D"));
+                    cleanup.ExecuteNonQuery();
+                }
             });
             Check("reject fabricated report-to-run identity", () =>
             {
