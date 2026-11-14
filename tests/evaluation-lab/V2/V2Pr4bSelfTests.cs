@@ -269,6 +269,21 @@ public static class V2Pr4bSelfTests
                     TextWriter.Null) != 0, "Same session identity reused.");
                 Write(secondFile, Submission("chatgpt-pass-B", "fresh-session-B"));
             });
+            Check("duplicate JSON properties in a submitted judgment are rejected", () =>
+            {
+                var baseline = Submission("chatgpt-pass-B", "fresh-session-B");
+                var json = JsonSerializer.Serialize(baseline, V2Schemas.Json);
+                Expect(json.Contains("\"judgeId\":", StringComparison.Ordinal),
+                    "Expected strict judgeId property missing.");
+                File.WriteAllText(secondFile, json.Replace(
+                    "\"judgeId\":", "\"judgeId\":\"forged-judge\",\"judgeId\":",
+                    StringComparison.Ordinal));
+                Expect(V2Pr4bJudging.Import(output, "B", secondFile,
+                    TextWriter.Null) != 0, "Repeated JSON judge identity accepted.");
+                Expect(!File.Exists(Path.Combine(output, V2Pr4bSchemas.RecordB)),
+                    "Invalid duplicate-property JSON published a judge record.");
+                Write(secondFile, baseline);
+            });
             Check("missing claim, packet and foreign proof abort entire import", () =>
             {
                 var baseline = Submission("chatgpt-pass-B", "fresh-session-B");
