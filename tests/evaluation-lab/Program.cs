@@ -12,6 +12,14 @@ try
 {
     switch (args.FirstOrDefault())
     {
+        case "--v2-pr5a-self-test" when args.Length == 1:
+            return CodeArcheologist.EvaluationLab.V2.V2Pr5aSelfTests.Run();
+        case "--v2-pr5a-export" when args.Length == 7 &&
+            args[1] == "--database" && args[3] == "--run" &&
+            args[5] == "--out" && Guid.TryParse(args[4], out var pr5aRun):
+            return CodeArcheologist.EvaluationLab.V2.V2Pr5aHostBridge.Export(
+                Path.GetFullPath(args[2]), pr5aRun, Path.GetFullPath(args[6]),
+                Console.Out);
         case "--v2-pr4c-self-test" when args.Length == 1:
             return CodeArcheologist.EvaluationLab.V2.V2Pr4cSelfTests.Run();
         case "--v2-pr4c-export" when args.Length == 5 &&
@@ -205,6 +213,9 @@ try
         default:
             Console.Error.WriteLine("""
                 Usage:
+                  --v2-pr5a-self-test                 PR5a read-only authentic host-report snapshot tests (model-free)
+                  --v2-pr5a-export --database <existing-v9-workspaces.sqlite3> --run <guid> --out <new-external-private-dir>
+                      Export exact host-stored report and provenance; never score or attribute raw provider output
                   --v2-pr4c-self-test                 PR4c full dispute/adjudication/audit fault tests (model-free)
                   --v2-pr4c-export --batch <PR4b-batch> --out <new-export>
                       Reaudit A/B, freeze disputed criteria and claims, output source-first adjudication packets

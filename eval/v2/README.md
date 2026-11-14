@@ -141,3 +141,37 @@ ZIP, original judge and adjudication record digests. Model-free
 All V2 diagnostic results remain **NOT READY FOR SCORING**.
 
 See `docs/architecture/v2-pr4c-adjudication.md` for the full protocol.
+
+## PR5a — inspect actual persisted host report (read-only, private)
+
+The `--v2-pr5a-export` command reads an **existing SQLite v9** database
+without migrations or writes. It outputs the host's exact stored
+`GateC5Report` text plus a private identity/digest receipt for
+source snapshot, attempts, checkpoint lineage and PR3b model-adapter
+events. This avoids replacing the original report with an
+owner-transcribed PR4a diagnostic report.
+
+```powershell
+dotnet run --project .\tests\evaluation-lab\EvaluationLab.csproj --configuration Release -- --v2-pr5a-self-test
+dotnet run --project .\tests\evaluation-lab\EvaluationLab.csproj --configuration Release -- --v2-pr5a-export --database <existing-workspaces.sqlite3> --run <guid> --out <new-private-folder-outside-DB-data-root>
+```
+
+Output (PRIVATE, not uploaded to external judges):
+
+```text
+<out>/
+  PRIVATE-host-stored-report.json
+  PRIVATE-host-provenance.json
+```
+
+If no report exists, only the provenance file is written, with explicit
+blockers. Report and checkpoint hashes detect altered local data, not
+adversarial forgery or semantic truth. PR3b adapter entry is not Ollama
+acknowledgment; the exact **raw model response** was not retained by PR3b.
+Host cautions are never model claims. PR5a does not produce public PR4a
+judging packets, score actual developer answers, or change production.
+All results remain **NOT READY FOR SCORING**.
+
+See `docs/architecture/original-product-path-checkpoint-pr5a.md`
+for the original vision, scope cap and mandatory post-PR5a owner-observed
+developer-facing workflow before PR5b/PR5c work is prioritized.

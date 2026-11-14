@@ -52,6 +52,8 @@ if ($LASTEXITCODE -ne 0) { throw 'V2 PR4a blind source-grounded judging self-tes
 if ($LASTEXITCODE -ne 0) { throw 'V2 PR4b blinded calibration and two-judge import self-tests failed.' }
 & dotnet run --project $labProject --configuration Release --no-build -- --v2-pr4c-self-test
 if ($LASTEXITCODE -ne 0) { throw 'V2 PR4c source-grounded dispute/adjudication model-free self-tests failed.' }
+& dotnet run --project $labProject --configuration Release --no-build -- --v2-pr5a-self-test
+if ($LASTEXITCODE -ne 0) { throw 'V2 PR5a read-only host-report provenance tests failed.' }
 & dotnet run --project $labProject --configuration Release --no-build -- --v2-validate --root (Join-Path $root 'eval/v2')
 if ($LASTEXITCODE -ne 0) { throw 'V2 PR1 structural validation failed.' }
 & npm ci --prefix $client --no-audit --no-fund
