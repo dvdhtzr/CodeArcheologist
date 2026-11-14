@@ -18,7 +18,11 @@ internal static class V2Pr4bValidation
     internal static string ShaFile(string path) => Sha(File.ReadAllBytes(path));
     internal static bool IsHash(string? h) => h is not null && ShaPattern.IsMatch(h);
     internal static bool IsId(string? id) => id is not null && IdPattern.IsMatch(id);
-    internal static void Require(bool condition, string detail)
+    // A failed contract check always throws. Tell nullable flow analysis that
+    // successful validation establishes the predicates used in subsequent code.
+    internal static void Require(
+        [System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition,
+        string detail)
     {
         if (!condition) throw new InvalidDataException(detail);
     }
@@ -89,7 +93,8 @@ internal static class V2Pr4bValidation
         foreach (var packet in key.Packets)
         {
             Require(IsId(packet.CaseId) && packet.PacketId.StartsWith("PKT-", StringComparison.Ordinal) &&
-                Regex.IsMatch(packet.PacketFile ?? "", "^packet-[0-9]{3}\\.txt$") &&
+                packet.PacketFile is not null &&
+                Regex.IsMatch(packet.PacketFile, "^packet-[0-9]{3}\\.txt$") &&
                 IsHash(packet.PacketSha256) && IsHash(packet.ReportSha256) &&
                 IsHash(packet.CaseSha256) && IsHash(packet.GroundTruthSha256) &&
                 IsHash(packet.SourcePacketSha256) &&
