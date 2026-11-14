@@ -12,6 +12,27 @@ try
 {
     switch (args.FirstOrDefault())
     {
+        case "--v2-pr4b-self-test" when args.Length == 1:
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4bSelfTests.Run();
+        case "--v2-pr4b-prepare" when args.Length == 13 &&
+            args[1] == "--root" && args[3] == "--review" &&
+            args[5] == "--official" && args[7] == "--calibration" &&
+            args[9] == "--labels" && args[11] == "--out":
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4bBatch.Prepare(
+                Path.GetFullPath(args[2]), Path.GetFullPath(args[4]),
+                Path.GetFullPath(args[6]), Path.GetFullPath(args[8]),
+                Path.GetFullPath(args[10]), Path.GetFullPath(args[12]),
+                Console.Out);
+        case "--v2-pr4b-import" when args.Length == 7 &&
+            args[1] == "--batch" && args[3] == "--slot" &&
+            args[5] == "--answers":
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4bJudging.Import(
+                Path.GetFullPath(args[2]), args[4], Path.GetFullPath(args[6]),
+                Console.Out);
+        case "--v2-pr4b-audit" when args.Length == 3 &&
+            args[1] == "--batch":
+            return CodeArcheologist.EvaluationLab.V2.V2Pr4bJudging.Audit(
+                Path.GetFullPath(args[2]), Console.Out);
         case "--v2-pr4a-self-test" when args.Length == 1:
             return CodeArcheologist.EvaluationLab.V2.V2BlindJudgingTests.Run();
         case "--v2-pr4a-export" when args.Length == 15 &&
@@ -168,6 +189,12 @@ try
         default:
             Console.Error.WriteLine("""
                 Usage:
+                  --v2-pr4b-self-test                 PR4b mixed calibration + independent judge import tests (model-free)
+                  --v2-pr4b-prepare --root <v2-root> --review <PR2-review> --official <PR4a-export> --calibration <PR4a-export> --labels <pre-approved-calibration-key> --out <new-batch>
+                      Prepare anonymous mixed packet batch; calibration answers remain private
+                  --v2-pr4b-import --batch <batch> --slot A|B --answers <judge-submission.json>
+                      Strict first complete import per independent judge; NOT READY FOR SCORING
+                  --v2-pr4b-audit --batch <batch>       Revalidate two independent judgments and calibration disclosure
                   --v2-pr4a-self-test                 PR4a source-grounded blind packet tests (model-free)
                   --v2-pr4a-export --root <dir> --sources <dir> --review <dir> --reports <dir> --plan <file> --rubric <file> --out <new-dir>
                       PR4a frozen blind diagnostic packets and private key; NOT READY FOR SCORING
