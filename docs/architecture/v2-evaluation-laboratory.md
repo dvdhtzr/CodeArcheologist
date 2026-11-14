@@ -1,7 +1,7 @@
 # Evaluation Laboratory V2 — Approved Design and PR1 Boundary
 
 Status: V2-D1, D2, D3 and D4 architecture approved by the repository owner.
-Implementation status: **PR1, PR2, PR3a, PR3b and PR4a merged; PR4b independent judging under local verification**. This document
+Implementation status: **PR1, PR2, PR3a, PR3b, PR4a and PR4b merged; PR4c source-grounded adjudication pending local verification**. This document
 does not attest that a V2 corpus is semantically reviewed or ready for scoring.
 
 ## Why V2 exists
@@ -313,3 +313,30 @@ review and actual provider-output attribution remain distinct.
 
 See `docs/architecture/v2-pr4b-independent-judging.md` for contracts,
 owner-operated flow, risks and acceptance gates.
+
+## PR4c — immutable dispute census and source-grounded adjudication
+
+PR4c adds an evaluation-only deterministic comparison of the **two original
+archived PR4b judge records**, binding a complete criterion/claim dispute
+census to exact private batch and A/B record SHA-256 digests. Reference-set
+order does not manufacture disputes. Explanation prose differences stay
+separate, explicitly **unclassified** for semantic significance. Two
+judges agreeing on a critical claim is marked as **unreviewed critical
+consensus**, not independently verified truth.
+
+Adjudication packets are source-first and shuffle the two opinions as
+`First` and `Second` while keeping original judge slots, calibration
+identities and answer keys private. The offline owner-operated import
+requires **every** dispute to be confirmed, revised with source-based
+justification, or explicitly unresolved. Confirmation cannot silently
+change the selected A/B opinion. Records publish once, with complete
+digests and re-audited PR4b provenance. No models are invoked by the
+application, and no PR1, PR4a or PR4b contracts are rewritten.
+
+Commands: `--v2-pr4c-export`, `--v2-pr4c-import`,
+`--v2-pr4c-audit` and model-free `--v2-pr4c-self-test`.
+See `docs/architecture/v2-pr4c-adjudication.md`.
+
+This preserves unresolved calibration disagreements and **NOT READY FOR
+SCORING** status. Genuine model-report-to-PR3b attribution remains unproven;
+PR5–PR7 must explicitly gate all scored eligibility.
