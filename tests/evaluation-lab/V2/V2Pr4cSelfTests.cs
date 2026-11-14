@@ -231,5 +231,50 @@ public static class V2Pr4cSelfTests
         finally { File.WriteAllBytes(zipPath, originalZip); }
         Check(V2Pr4cAdjudication.Audit(batchDir, output, TextWriter.Null) == 0,
             "Valid restored PR4c chain could not be audited.");
+
+        // Exercise the real zero-dispute export/import path, not just the
+        // pure comparator. The original PR4b A/B records remain unchanged.
+        var zeroBatch = Path.Combine(temp, "pr4c-zero-dispute-batch");
+        Directory.CreateDirectory(zeroBatch);
+        foreach (var file in Directory.GetFiles(batchDir, "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(zeroBatch, Path.GetRelativePath(batchDir, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination);
+        }
+        File.Delete(Path.Combine(zeroBatch, V2Pr4bSchemas.RecordB));
+        var zeroKey = V2Pr4bValidation.ShaFile(
+            Path.Combine(zeroBatch, V2Pr4bSchemas.KeyFile));
+        var zeroSubmission = recordA.Submission with
+        {
+            BatchKeySha256 = zeroKey,
+            JudgeId = "different-third-judge",
+            SessionId = "different-third-session"
+        };
+        var zeroJudgeFile = Path.Combine(temp, "zero-judge-B.json");
+        File.WriteAllText(zeroJudgeFile,
+            JsonSerializer.Serialize(zeroSubmission, V2Schemas.Json));
+        Check(V2Pr4bJudging.Import(zeroBatch, "B", zeroJudgeFile, TextWriter.Null) == 0 &&
+            V2Pr4bJudging.Audit(zeroBatch, TextWriter.Null) == 0,
+            "Two identical source-scoped judgment passes did not pass PR4b audit.");
+        var zeroExport = Path.Combine(temp, "pr4c-zero-dispute-export");
+        Check(V2Pr4cExport.Export(zeroBatch, zeroExport, TextWriter.Null) == 0,
+            "Zero-dispute source-first export failed.");
+        var zeroCensus = V2Pr4cExport.ReadVerified(zeroBatch, zeroExport);
+        Check(zeroCensus.Disputes.Count == 0 &&
+            zeroCensus.PublicPackets.Count == 0 &&
+            zeroCensus.CriticalConsensusFlags.Count == 1,
+            "Zero-dispute run lost the outstanding critical-consensus flag.");
+        var noDecisions = new V2Pr4cSubmission(V2Pr4cSchemas.Submission,
+            V2Pr4bValidation.ShaFile(Path.Combine(zeroExport, V2Pr4cSchemas.KeyFile)),
+            "adjudicator-no-disputes", "adjudication-independent-session", []);
+        var noAnswer = Path.Combine(temp, "zero-dispute-answer.json");
+        File.WriteAllText(noAnswer,
+            JsonSerializer.Serialize(noDecisions, V2Schemas.Json));
+        Check(V2Pr4cAdjudication.Import(zeroBatch, zeroExport, noAnswer,
+                TextWriter.Null) == 0 &&
+            V2Pr4cAdjudication.Audit(zeroBatch, zeroExport,
+                TextWriter.Null) == 0,
+            "Zero disputes must still produce a separately audited no-decision record.");
     }
 }
