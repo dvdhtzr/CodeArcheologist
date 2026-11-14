@@ -30,7 +30,7 @@ public sealed record CreateWorkspaceResult(
 /// </summary>
 public sealed partial class WorkspaceStore
 {
-    private const int CurrentSchemaVersion = 8;
+    private const int CurrentSchemaVersion = 9;
     private readonly string _connectionString;
 
     public WorkspaceStore()
@@ -324,6 +324,8 @@ public sealed partial class WorkspaceStore
             MigrateToV7(connection, transaction);
         if (current < 8 && targetVersion >= 8)
             MigrateToV8(connection, transaction);
+        if (current < 9 && targetVersion >= 9)
+            MigrateToV9(connection, transaction);
 
         using (var check = connection.CreateCommand())
         {

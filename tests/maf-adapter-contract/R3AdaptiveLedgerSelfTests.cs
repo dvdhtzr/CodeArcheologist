@@ -16,8 +16,8 @@ internal static class R3AdaptiveLedgerSelfTests
             f =>
             {
                 f.Store.Initialize();
-                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 8,
-                    "Additive v8 migration not applied.");
+                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 9,
+                    "Additive v9 migration not applied.");
                 var scope = GateC6bSelfTests.SeedSnapshot(f.Store);
                 using var owner = new ExecutionOwnershipState();
                 Expect(owner.TryAcquire(f.Store), "Test must own execution lock and epoch.");
@@ -234,8 +234,8 @@ internal static class R3AdaptiveLedgerSelfTests
                 Expect(f.Store.GetAdaptiveContext(scope.WorkspaceId, scope.RepositoryId,
                     scope.SnapshotId, run) is null,
                     "Historical v1 question gained an adaptive execution identity.");
-                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 8,
-                    "v7-to-v8 migration failed.");
+                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 9,
+                    "v7-to-v9 migration failed.");
                 Expect(f.Store.GetQuestionContext(scope.WorkspaceId, scope.RepositoryId,
                     scope.SnapshotId, run) is not null,
                     "Historical v1 question context was mutated.");

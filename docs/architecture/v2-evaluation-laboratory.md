@@ -1,7 +1,7 @@
 # Evaluation Laboratory V2 — Approved Design and PR1 Boundary
 
 Status: V2-D1, D2, D3 and D4 architecture approved by the repository owner.
-Implementation status: **PR1 and PR2 merged; PR3a answerability preflight proposed in a draft PR**. This document
+Implementation status: **PR1, PR2 and PR3a merged; PR3b observational instrumentation under local verification**. This document
 does not attest that a V2 corpus is semantically reviewed or ready for scoring.
 
 ## Why V2 exists
@@ -244,3 +244,24 @@ No held-out or historical change-impact cases are eligible at PR3a. Passing
 `check.ps1` does not certify a real corpus's answerability; the synthetic
 self-tests verify the contracts while case-level preflight must be run separately.
 All outputs remain **NOT READY FOR SCORING**.
+
+## PR3b — observed model handoff (opt-in diagnostic)
+
+PR3b adds an isolated, fenced v9 model-handoff observation ledger, without
+modifying existing R3 adaptive receipt authority or checkpoint formats.
+The optional diagnostic records `prepared`, `adapter-entered`,
+`completed` and `faulted` as distinct host events.
+
+**Prepared is not invoked. Entered is not proof the local provider received
+or understood any source bytes.** Adaptive handoffs reference existing
+fenced receipt IDs, and the fixed path records only authorized host evidence
+links. Reviewer handoffs remain derived-assessment-only. No raw prompt or
+provider response is persisted.
+
+Run `--v2-handoff-self-test` during the full local `check.ps1`, followed
+by one real Ollama trial `--v2-handoff-run 1` after local GREEN. The
+historical `--r3-adaptive-run` remains unmodified and unobserved.
+Both paths are diagnostic only. No scored experiment is authorized.
+
+See `docs/architecture/v2-pr3b-model-handoff.md` for the exact authority
+boundary, failure handling, live command and remaining limitations.

@@ -98,8 +98,8 @@ internal static class R3QuestionContextSelfTests
                 }
                 f.Store.Initialize();
                 f.Store.Initialize();
-                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 8,
-                    "forward migration must reach schema v8");
+                Expect(GateC6bSelfTests.Scalar(f.Store, "PRAGMA user_version;") == 9,
+                    "forward migration must reach schema v9");
                 var prior = f.Store.GetInvestigation(scope.WorkspaceId, scope.RepositoryId,
                     scope.SnapshotId, legacyRun);
                 Expect(prior is not null && prior.Summary.Status == "running",

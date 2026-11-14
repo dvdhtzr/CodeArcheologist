@@ -218,8 +218,10 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
                 "Choose only enum names from this application-owned, read-only " +
                 "capability list: " + catalog +
                 ". No other tools, file paths or URLs are available.";
-            var selectionText = await AskAsync(agent, selectionPrompt,
-                SelectionSchema, "GateCDiscoverySelection", limit.Token);
+            var selectionText = await V2ModelHandoff.InvokeAsync(
+                selectionPrompt, "GateCDiscoverySelection",
+                () => AskAsync(agent, selectionPrompt,
+                    SelectionSchema, "GateCDiscoverySelection", limit.Token));
             if (!TrySelectCapabilities(selectionText, out var capabilities))
                 return Failure("invalid-capability-selection");
             capability = string.Join(",", capabilities);
@@ -260,9 +262,11 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             var prompt = basePrompt;
             for (var attempt = 0; attempt < AssessmentAttempts; attempt++)
             {
-                var text = await AskAsync(agent, prompt,
-                    role == GateCRole.Investigator ? InvestigatorSchema : SkepticSchema,
-                    "GateCIndependentAssessment", limit.Token);
+                var text = await V2ModelHandoff.InvokeAsync(
+                    prompt, "GateCIndependentAssessment",
+                    () => AskAsync(agent, prompt,
+                        role == GateCRole.Investigator ? InvestigatorSchema : SkepticSchema,
+                        "GateCIndependentAssessment", limit.Token));
                 var parsed = ParseAssessment(text, runId, scope, role);
                 var diagnostic = parsed is null
                     ? DiagnoseAssessmentShape(text, role)
@@ -281,6 +285,7 @@ public sealed class GateC3IndependentRunner(GateCEvidenceDiscovery evidenceDisco
             }
             return Failure("assessment-attempt-budget-exhausted");
         }
+        catch (StagePersistenceException) { throw; }
         catch (OperationCanceledException)
         {
             return new(role, callerCancellation.IsCancellationRequested
