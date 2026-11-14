@@ -46,6 +46,8 @@ if ($LASTEXITCODE -ne 0) { throw 'V2 PR1 model-free contract self-tests failed.'
 if ($LASTEXITCODE -ne 0) { throw 'V2 PR2 source-first validation self-tests failed.' }
 & dotnet run --project $labProject --configuration Release --no-build -- --v2-answerability-self-test
 if ($LASTEXITCODE -ne 0) { throw 'V2 PR3a model-free answerability preflight self-tests failed.' }
+& dotnet run --project $labProject --configuration Release --no-build -- --v2-pr4a-self-test
+if ($LASTEXITCODE -ne 0) { throw 'V2 PR4a blind source-grounded judging self-tests failed.' }
 & dotnet run --project $labProject --configuration Release --no-build -- --v2-validate --root (Join-Path $root 'eval/v2')
 if ($LASTEXITCODE -ne 0) { throw 'V2 PR1 structural validation failed.' }
 & npm ci --prefix $client --no-audit --no-fund
