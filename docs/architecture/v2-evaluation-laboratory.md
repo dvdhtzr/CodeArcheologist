@@ -1,7 +1,7 @@
 # Evaluation Laboratory V2 — Approved Design and PR1 Boundary
 
 Status: V2-D1, D2, D3 and D4 architecture approved by the repository owner.
-Implementation status: **PR1, PR2 and PR3a merged; PR3b observational instrumentation under local verification**. This document
+Implementation status: **PR1, PR2, PR3a and PR3b merged; PR4a diagnostic blind export under local verification**. This document
 does not attest that a V2 corpus is semantically reviewed or ready for scoring.
 
 ## Why V2 exists
@@ -265,3 +265,23 @@ Both paths are diagnostic only. No scored experiment is authorized.
 
 See `docs/architecture/v2-pr3b-model-handoff.md` for the exact authority
 boundary, failure handling, live command and remaining limitations.
+
+## PR4a — source-first blind diagnostic packets
+
+A frozen, source-grounded rubric and `v2-pr4a-export-plan-v1` support
+model-free anonymous packet exports for owner-supplied diagnostic reports.
+The plan pins source-review import, rubric and exact report hashes. The
+exporter re-verifies the PR2 source-review manifest and all selected supported
+criteria, checks source copies and exact report case/snapshot identity,
+refuses held-out/change-impact inputs, and outputs shareable anonymous
+packets plus a private non-uploadable comparator/claim map. It preserves
+noncompleted outcomes and untrusted, potentially forged model citations.
+It does not judge, calibrate, adjudicate, or score.
+
+Crucial: current PR4a report attribution is owner-supplied, **not
+host-attested**. The merged PR3b smoke probe did not preserve a
+V2-scored report artifact. PR4a does not fill that gap by assertion.
+PR5/PR6 must qualify genuine report-to-handoff provenance before scoring.
+
+See `docs/architecture/v2-pr4a-blind-judging.md` for input schemas,
+CLI commands, privacy limits, tests and PR4b handoff.
