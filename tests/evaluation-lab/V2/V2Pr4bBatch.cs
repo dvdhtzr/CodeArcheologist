@@ -20,8 +20,7 @@ public static class V2Pr4bBatch
             var paths = new[] { root, review, officialExport, calibrationExport };
             if (Directory.Exists(output) || File.Exists(output) ||
                 paths.Any(p => V2Pr4bValidation.Overlap(p, output)) ||
-                V2Pr4bValidation.Overlap(Path.GetDirectoryName(
-                    Path.GetFullPath(labelsFile))!, output))
+                V2Pr4bValidation.Overlap(Path.GetFullPath(labelsFile), output))
                 return Reject("Output must be new and outside inputs/label directory.", log);
             var corpus = V2CorpusValidator.Validate(root);
             V2Pr4bValidation.Require(corpus.Valid && corpus.CaseCount >= 2,
