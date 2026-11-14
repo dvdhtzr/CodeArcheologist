@@ -50,7 +50,7 @@ internal static class V2Pr4cComparison
                 if (!EqualSet(ga.ReportClaimRefs, gb.ReportClaimRefs))
                     dimensions.Add("report-claim-refs");
                 Add(packet.PacketId, V2Pr4cItemKind.Criterion,
-                    criterion.CriterionId, first, second, dimensions,
+                    criterion.CriterionId, criterion.Kind, first, second, dimensions,
                     criterion.ProofRefs, packet.ClaimIds, firstIsA);
             }
             var allProofs = packet.Criteria.SelectMany(x => x.ProofRefs)
@@ -74,7 +74,7 @@ internal static class V2Pr4cComparison
                     critical.Add(new(packet.PacketId, claimId, ca.Grounding,
                         "unreviewed-critical-consensus-not-source-truth"));
                 Add(packet.PacketId, V2Pr4cItemKind.Claim, claimId,
-                    first, second, dimensions, allProofs, [], firstIsA);
+                    null, first, second, dimensions, allProofs, [], firstIsA);
             }
         }
         V2Pr4bValidation.Require(disputes.Select(x => x.DisputeId)
@@ -83,6 +83,7 @@ internal static class V2Pr4cComparison
         return new(disputes, critical, variations);
 
         void Add(string packetId, V2Pr4cItemKind kind, string itemId,
+            V2CriterionKind? criterionKind,
             V2Pr4cOpinion first, V2Pr4cOpinion second,
             List<string> dimensions, IReadOnlyList<string> proofRefs,
             IReadOnlyList<string> reportClaimRefs, bool firstIsA)
@@ -96,7 +97,7 @@ internal static class V2Pr4cComparison
                 packetId + "|" + kind + "|" + itemId + "|" +
                 string.Join(",", dimensions)));
             disputes.Add(new("DSP-" + identity[..20], packetId, kind, itemId,
-                dimensions.ToArray(), first, second,
+                criterionKind, dimensions.ToArray(), first, second,
                 proofRefs.OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                 reportClaimRefs.OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                 firstIsA));
