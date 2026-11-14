@@ -1,7 +1,7 @@
 # Evaluation Laboratory V2 — Approved Design and PR1 Boundary
 
 Status: V2-D1, D2, D3 and D4 architecture approved by the repository owner.
-Implementation status: **PR1, PR2, PR3a and PR3b merged; PR4a diagnostic blind export under local verification**. This document
+Implementation status: **PR1, PR2, PR3a, PR3b and PR4a merged; PR4b independent judging under local verification**. This document
 does not attest that a V2 corpus is semantically reviewed or ready for scoring.
 
 ## Why V2 exists
@@ -285,3 +285,31 @@ PR5/PR6 must qualify genuine report-to-handoff provenance before scoring.
 
 See `docs/architecture/v2-pr4a-blind-judging.md` for input schemas,
 CLI commands, privacy limits, tests and PR4b handoff.
+
+## PR4b — owner-operated independent judge imports (diagnostic)
+
+PR4b extends the merged PR4a blind export with a **separate, offline**
+mixed calibration/diagnostic batch: `--v2-pr4b-prepare`, 
+`--v2-pr4b-import`, and `--v2-pr4b-audit` plus model-free
+`--v2-pr4b-self-test`. A frozen private calibration key is checked
+against disjoint PR4a source-reviewed calibration packets, then
+hash-shuffled together with target diagnostics. The full public ZIP is
+re-hashed; it never contains labels or comparator/private run mappings.
+
+Two distinct judge/session identities are required for the two complete
+first-write import slots. They are **owner declarations**, not verified
+human/LLM identities. Each packet requires every expected criterion and
+every model claim to be judged, including unanticipated unsupported
+claims. Imported judgments retain exact answer-file hashes, a whole-record
+digest and calibration agreement/disagreements. Import is atomic and
+non-overwriting. Neither calibration nor a completed report is
+automatically qualified for scoring.
+
+The application makes **no** external model calls. The owner is responsible
+for source-sharing authorization and running separate judging sessions.
+No adjudication, statistical scoring or ground-truth promotion is
+implemented. PR4c and PR5–PR7 retain those responsibilities. Source
+review and actual provider-output attribution remain distinct.
+
+See `docs/architecture/v2-pr4b-independent-judging.md` for contracts,
+owner-operated flow, risks and acceptance gates.
