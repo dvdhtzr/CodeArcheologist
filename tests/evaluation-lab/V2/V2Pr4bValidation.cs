@@ -28,9 +28,28 @@ internal static class V2Pr4bValidation
             "Missing or linked input: " + Path.GetFileName(path));
         var length = new FileInfo(path).Length;
         Require(length > 0 && length <= maxBytes, "Invalid input size: " + Path.GetFileName(path));
-        var document = JsonSerializer.Deserialize<T>(Utf8.GetString(File.ReadAllBytes(path)),
-            V2Schemas.Json);
-        return document ?? throw new InvalidDataException("Null document: " + Path.GetFileName(path));
+        var text = Utf8.GetString(File.ReadAllBytes(path));
+        using (var document = JsonDocument.Parse(text))
+            Require(!HasDuplicateJsonKeys(document.RootElement),
+                "Duplicated JSON property in input: " + Path.GetFileName(path));
+        var value = JsonSerializer.Deserialize<T>(text, V2Schemas.Json);
+        return value ?? throw new InvalidDataException(
+            "Null document: " + Path.GetFileName(path));
+    }
+
+    private static bool HasDuplicateJsonKeys(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in value.EnumerateObject())
+                if (!seen.Add(property.Name) || HasDuplicateJsonKeys(property.Value))
+                    return true;
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+            foreach (var item in value.EnumerateArray())
+                if (HasDuplicateJsonKeys(item)) return true;
+        return false;
     }
     internal static bool Overlap(string a, string b)
     {
